@@ -283,30 +283,10 @@ impl LuminaApp {
                 .flex()
                 .flex_col()
                 .justify_end()
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_baseline()
-                        .gap(px(9.0))
-                        // ponytail: the design's -0.2 tracking is skipped; GPUI
-                        // 0.3.11 has no letter-spacing style.
-                        .child(
-                            div()
-                                .font_family(theme::FONT_DISPLAY)
-                                .text_size(px(15.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::t1())
-                                .child(month_title(year, month)),
-                        )
-                        .children(count.map(|label| {
-                            div()
-                                .font_family(theme::FONT_MONO)
-                                .text_size(px(10.0))
-                                .text_color(theme::t3())
-                                .child(label)
-                        })),
-                )
+                .child(super::title_row(
+                    month_title(year, month),
+                    count.map(Into::into),
+                ))
                 .into_any_element(),
         )
     }

@@ -90,7 +90,9 @@ pub(crate) fn parse_edited_timestamp(input: &str, current_epoch_ms: i64) -> Opti
             .checked_add(delta)
             .filter(|&ms| chrono::DateTime::from_timestamp_millis(ms).is_some());
     }
-    if let Ok(datetime) = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
+    if let Ok(datetime) =
+        chrono::NaiveDateTime::parse_from_str(trimmed, crate::app::types::EDIT_TIMESTAMP_FORMAT)
+    {
         return Some(datetime.and_utc().timestamp_millis());
     }
     if let Ok(date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {

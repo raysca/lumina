@@ -23,9 +23,7 @@ impl LuminaApp {
             .as_ref()
             .map(|item| item.timestamp_epoch_ms)
             .unwrap_or(0);
-        let buffer = chrono::DateTime::from_timestamp_millis(current)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_default();
+        let buffer = crate::app::types::format_edit_timestamp(current);
         self.caption.date_input_active = true;
         self.caption.date_input_buffer = buffer;
         cx.notify();

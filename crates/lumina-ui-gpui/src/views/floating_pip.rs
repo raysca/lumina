@@ -1,3 +1,4 @@
+use crate::app::types::format_clock;
 use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -18,12 +19,6 @@ fn scrub_progress_fraction(current_time: f64, duration: f64) -> f32 {
     } else {
         0.0
     }
-}
-
-/// "m:ss" for the PiP time readouts.
-fn clock(seconds: f64) -> String {
-    let s = seconds.max(0.0) as u64;
-    format!("{}:{:02}", s / 60, s % 60)
 }
 
 #[cfg(test)]
@@ -508,9 +503,9 @@ impl Render for FloatingPipPlayerView {
                                 )
                                 .on_click(on_app(|app, cx| app.jump_chapter(true, cx))),
                             )
-                            .child(mono(clock(current_time), 1.0))
+                            .child(mono(format_clock(current_time, false), 1.0))
                             .child(scrub_track)
-                            .child(mono(clock(duration), 0.7))
+                            .child(mono(format_clock(duration, false), 0.7))
                             .child(
                                 pip_button(
                                     "pip-mute",
@@ -539,7 +534,8 @@ impl Render for FloatingPipPlayerView {
 mod tests {
     // Explicit imports only: a glob import of gpui would bring gpui's `test`
     // proc-macro attribute into scope and shadow the builtin test harness.
-    use super::{clock, scrub_progress_fraction};
+    use super::scrub_progress_fraction;
+    use crate::app::types::format_clock;
 
     #[test]
     fn scrub_progress_fraction_clamps_and_handles_zero_duration() {
@@ -550,9 +546,12 @@ mod tests {
     }
 
     #[test]
-    fn clock_reads_minutes_and_seconds() {
-        assert_eq!(clock(0.0), "0:00");
-        assert_eq!(clock(78.9), "1:18");
-        assert_eq!(clock(-3.0), "0:00");
+    fn clock_reads_minutes_seconds_and_hours() {
+        assert_eq!(format_clock(0.0, false), "0:00");
+        assert_eq!(format_clock(78.9, false), "1:18");
+        assert_eq!(format_clock(-3.0, false), "0:00");
+        // The old local helper dropped the hours branch: a 90-minute clip
+        // read "90:00" instead of "1:30:00".
+        assert_eq!(format_clock(5400.0, false), "1:30:00");
     }
 }

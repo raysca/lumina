@@ -14,6 +14,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/lib/common.sh
+. "$ROOT_DIR/scripts/lib/common.sh"
 
 BIN="${LUMINA_UI_BIN:-${CARGO_TARGET_DIR:-target}/debug/Lumina}"
 OUT_DIR="${LUMINA_SMOKE_OUT_DIR:-target/ui-smoke}"
@@ -205,14 +207,7 @@ APP_LOG="$OUT_DIR/app.log"
 WINDOW_PID=""
 
 cleanup() {
-    if [[ -n "$WINDOW_PID" ]]; then
-        kill "$WINDOW_PID" 2>/dev/null || true
-        for _ in $(seq 1 20); do
-            kill -0 "$WINDOW_PID" 2>/dev/null || break
-            sleep 0.2
-        done
-        kill -9 "$WINDOW_PID" 2>/dev/null || true
-    fi
+    stop_pid "$WINDOW_PID"
     rm -rf "$SMOKE_HOME"
 }
 trap cleanup EXIT

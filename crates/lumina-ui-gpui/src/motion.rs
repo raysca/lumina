@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use gpui::*;
 
 /// Menus, dialogs, sheets and the palette.
-pub const OVERLAY_IN: Duration = Duration::from_millis(160);
+const OVERLAY_IN: Duration = Duration::from_millis(160);
 /// A toast rises 8px while it fades in.
 pub const TOAST_IN: Duration = Duration::from_millis(180);
 /// A freshly decoded grid thumbnail; cached ones appear at once.
@@ -17,7 +17,7 @@ pub const THUMB_IN: Duration = Duration::from_millis(120);
 /// The immersive viewer HUD coming back.
 pub const HUD_IN: Duration = Duration::from_millis(120);
 /// The star or heart the user just set.
-pub const POP: Duration = Duration::from_millis(140);
+const POP: Duration = Duration::from_millis(140);
 /// How long a just-set mark still pops. Tests get a generous window: a
 /// loaded parallel run can spend longer than `POP * 2` on one render.
 const POP_LIVE: Duration = if cfg!(test) {

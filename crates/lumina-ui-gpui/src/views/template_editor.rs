@@ -1,6 +1,6 @@
 //! Metadata Templates sheet: the saved templates down the side, one
 //! template's name, rights fields and keywords beside them, Save / Cancel /
-//! Delete. Keys are in `keymap/modals.rs`.
+//! Delete. Keys are in `app/keymap/modals/`.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

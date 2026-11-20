@@ -101,6 +101,8 @@ pub struct DeleteConfirmState {
     pub preview_ids: Vec<MediaId>,
 }
 
+// Decoded frames ride this channel on the UI path; boxing them would add an
+// allocation per thumbnail to save a few stack bytes.
 #[allow(clippy::large_enum_variant)]
 pub enum UiMessage {
     Engine(EngineEvent),
@@ -229,6 +231,19 @@ pub fn format_duration_badge(secs: f64) -> String {
     let m = (secs as u64) / 60;
     let s = (secs as u64) % 60;
     format!("{}:{:02}", m, s)
+}
+
+/// The inspector's editable timestamp syntax (`YYYY-MM-DD HH:MM:SS`), shared
+/// by the batch row, the single-item editor and the parser so they cannot
+/// drift apart.
+pub(crate) const EDIT_TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+/// Formats an epoch timestamp in [`EDIT_TIMESTAMP_FORMAT`]; out-of-range reads
+/// empty, matching the editor's "nothing to edit" state.
+pub(crate) fn format_edit_timestamp(epoch_ms: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(epoch_ms)
+        .map(|dt| dt.format(EDIT_TIMESTAMP_FORMAT).to_string())
+        .unwrap_or_default()
 }
 
 /// "1:18", or "2:02:02" from an hour up: the transport's clock readout.

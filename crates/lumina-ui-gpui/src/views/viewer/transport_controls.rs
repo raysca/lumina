@@ -138,24 +138,12 @@ pub(super) fn render(
     let speed = div()
         .relative()
         .child(
-            div()
-                .id("video-speed-btn")
-                .debug_selector(|| "video-speed".to_string())
-                .role(Role::Button)
-                .aria_label(t("video.speed"))
+            hud_pill("video-speed-btn", "video-speed", t("video.speed"))
                 .aria_expanded(video.speed_menu_open)
-                .tooltip(theme::tooltip_label(t("video.speed")))
-                .h(px(28.0))
-                .px(px(10.0))
-                .rounded(px(7.0))
                 .bg(theme::bg_2())
                 .border_1()
                 .border_color(theme::line())
-                .flex()
-                .items_center()
                 .when(video.speed_menu_open, |b| b.bg(theme::bg_3()))
-                .hover(|s| s.bg(theme::bg_3()))
-                .cursor_pointer()
                 .font_family(theme::FONT_MONO)
                 .text_size(px(10.5))
                 .text_color(theme::t2())
@@ -372,28 +360,42 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
 
 /// The Audio menu button; shown only when the file offers a choice. Its
 /// keyboard path is the palette's "Audio Track: {name}" rows.
-fn render_audio_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+/// The HUD's 28px pill: speed and audio share this shape.
+fn hud_pill(
+    id: &'static str,
+    selector: &'static str,
+    label: impl Into<SharedString>,
+) -> Stateful<Div> {
+    let label: SharedString = label.into();
     div()
-        .id("video-audio-btn")
-        .debug_selector(|| "video-audio".to_string())
+        .id(id)
+        .debug_selector(move || selector.to_string())
         .role(Role::Button)
-        .aria_label(t("video.audio_menu_tooltip"))
-        .aria_expanded(this.video.tracks.audio_menu_open)
-        .tooltip(theme::tooltip_label(t("video.audio_menu_tooltip")))
+        .aria_label(label.clone())
+        .tooltip(theme::tooltip_label(label))
         .h(px(28.0))
         .px(px(10.0))
         .rounded(px(7.0))
         .flex()
         .items_center()
-        .when(this.video.tracks.audio_menu_open, |b| b.bg(theme::bg_3()))
         .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
-        .text_xs()
-        .text_color(theme::t1())
-        .child(t("video.audio_menu"))
-        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.toggle_audio_menu(cx);
-        }))
+}
+
+fn render_audio_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    hud_pill(
+        "video-audio-btn",
+        "video-audio",
+        t("video.audio_menu_tooltip"),
+    )
+    .aria_expanded(this.video.tracks.audio_menu_open)
+    .when(this.video.tracks.audio_menu_open, |b| b.bg(theme::bg_3()))
+    .text_xs()
+    .text_color(theme::t1())
+    .child(t("video.audio_menu"))
+    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        this.toggle_audio_menu(cx);
+    }))
 }
 
 /// Audio track menu, hanging above the Audio button like the speed menu.

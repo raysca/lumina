@@ -2,6 +2,11 @@
 # Launch the installed Debian package under X11 and quit through Ctrl+Q.
 set -euo pipefail
 
+# The installed package smoke runs from anywhere; resolve the repo helper.
+LUMINA_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/common.sh
+. "$LUMINA_SCRIPT_DIR/lib/common.sh"
+
 BIN="${LUMINA_PACKAGE_BIN:-/usr/bin/lumina}"
 TIMEOUT_SECS="${LUMINA_PACKAGE_SMOKE_TIMEOUT:-20}"
 
@@ -28,10 +33,7 @@ printf 'keep this user data\n' > "$SMOKE_HOME/user-library/sentinel.txt"
 APP_LOG="$SMOKE_HOME/app.log"
 APP_PID=""
 cleanup() {
-    if [[ -n "$APP_PID" ]]; then
-        kill "$APP_PID" 2>/dev/null || true
-        wait "$APP_PID" 2>/dev/null || true
-    fi
+    stop_pid "$APP_PID"
     if [[ "$OWN_SMOKE_HOME" == 1 ]]; then
         rm -rf "$SMOKE_HOME"
     fi

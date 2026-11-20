@@ -51,7 +51,7 @@ pub(super) fn render_downloads(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> 
 }
 
 /// 1 / 2 / 3 / 5. A radio group for VoiceOver; ←/→ pick a segment while
-/// Downloads is shown (`app/keymap/modals.rs`).
+/// Downloads is shown (`app/keymap/modals/`).
 fn concurrency_control(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let current = app.config.download_concurrency;
     let mut control = theme::segmented("settings-concurrency")

@@ -272,8 +272,11 @@ impl Catalog {
     }
 
     /// `(path, file_size, mtime_epoch_ms)` for every row, missing and trashed
-    /// included: what deleting a library needs to evict its cached decodes
-    /// before the catalog file goes away.
+    /// included.
+    ///
+    /// Test-only: library removal drops the library's thumbnail folder by id
+    /// (`library::remove_library_at`), so production never enumerates these.
+    #[cfg(test)]
     pub fn all_file_signatures(&self) -> Result<Vec<(PathBuf, u64, i64)>> {
         let conn = self.conn.lock();
         let mut stmt =

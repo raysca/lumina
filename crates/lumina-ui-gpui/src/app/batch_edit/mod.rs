@@ -260,14 +260,30 @@ pub(crate) fn summarize_batch_text<I>(values: I) -> BatchFieldSummary
 where
     I: IntoIterator<Item = Option<String>>,
 {
+    summarize_by(values, |value| value)
+}
+
+/// The shared first/mixed reduction: one value feeds `render`, any disagreement
+/// is `mixed` with no common value. An empty iterator is the "not set" summary.
+fn summarize_by<I, T, F>(values: I, render: F) -> BatchFieldSummary
+where
+    I: IntoIterator<Item = T>,
+    T: PartialEq,
+    F: FnOnce(T) -> Option<String>,
+{
     let mut values = values.into_iter();
     let Some(first) = values.next() else {
         return BatchFieldSummary::default();
     };
-    let mixed = values.any(|value| value != first);
+    if values.any(|value| value != first) {
+        return BatchFieldSummary {
+            mixed: true,
+            common: None,
+        };
+    }
     BatchFieldSummary {
-        mixed,
-        common: if mixed { None } else { first },
+        mixed: false,
+        common: render(first),
     }
 }
 
@@ -289,19 +305,7 @@ pub(crate) fn summarize_batch_timestamps<I>(values: I) -> BatchFieldSummary
 where
     I: IntoIterator<Item = i64>,
 {
-    let mut values = values.into_iter();
-    let Some(first) = values.next() else {
-        return BatchFieldSummary::default();
-    };
-    let mixed = values.any(|value| value != first);
-    BatchFieldSummary {
-        mixed,
-        common: if mixed {
-            None
-        } else {
-            Some(format_batch_timestamp(first))
-        },
-    }
+    summarize_by(values, |first| Some(format_batch_timestamp(first)))
 }
 
 /// Summarizes coordinates across the batch selection using the single-item
@@ -310,25 +314,14 @@ pub(crate) fn summarize_batch_locations<I>(values: I) -> BatchFieldSummary
 where
     I: IntoIterator<Item = (Option<f64>, Option<f64>)>,
 {
-    let mut values = values.into_iter();
-    let Some(first) = values.next() else {
-        return BatchFieldSummary::default();
-    };
-    let mixed = values.any(|value| value != first);
-    let common = match first {
+    summarize_by(values, |first| match first {
         (Some(lat), Some(lon)) => Some(format!("{lat:.6}, {lon:.6}")),
         _ => None,
-    };
-    BatchFieldSummary {
-        mixed,
-        common: if mixed { None } else { common },
-    }
+    })
 }
 
 fn format_batch_timestamp(epoch_ms: i64) -> String {
-    chrono::DateTime::from_timestamp_millis(epoch_ms)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-        .unwrap_or_default()
+    crate::app::types::format_edit_timestamp(epoch_ms)
 }
 
 /// Applies (id, value) writes to a 0-means-unset map.

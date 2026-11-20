@@ -337,7 +337,7 @@ fn section_header(
 
 /// The dismiss backdrop over the list while a row menu is open; the card
 /// hangs from its "…" button, painted above this.
-pub(crate) fn menu_backdrop(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Div> {
+fn menu_backdrop(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Div> {
     app.downloads.row_menu?;
     Some(
         div()

@@ -4,6 +4,8 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/lib/common.sh
+. "$ROOT_DIR/scripts/lib/common.sh"
 
 ./scripts/build_release.sh
 if [[ "${LUMINA_NOTARIZE:-0}" == "1" ]]; then
@@ -13,7 +15,7 @@ else
     echo "      copy and the in-app updater requires notarization (RELEASING.md)" >&2
 fi
 
-VERSION="$(grep -m1 "^version" crates/lumina-ui-gpui/Cargo.toml | sed "s/.*= \"//;s/\"//")"
+VERSION="$(crate_version crates/lumina-ui-gpui/Cargo.toml)"
 OUT="target/release/bundle/osx"
 APP="$OUT/Lumina.app"
 ARCHS="$(lipo -archs "$APP/Contents/MacOS/Lumina")"

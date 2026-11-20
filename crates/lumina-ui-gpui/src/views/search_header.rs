@@ -132,7 +132,7 @@ impl LuminaApp {
     }
 
     /// Drops the tokens behind the bar's chip `index`.
-    pub(crate) fn remove_search_chip(&mut self, index: usize, cx: &mut Context<Self>) {
+    fn remove_search_chip(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(chip) = self.search_bar_parts().0.into_iter().nth(index) else {
             return;
         };

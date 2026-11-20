@@ -304,30 +304,10 @@ impl LuminaApp {
                         well.child(img(texture).size_full().object_fit(ObjectFit::Cover))
                     }),
             )
-            .child(
-                div()
-                    .h(px(CAPTION_H))
-                    .pt(px(8.0))
-                    .flex()
-                    .flex_row()
-                    .items_baseline()
-                    .gap(px(9.0))
-                    .child(
-                        div()
-                            .font_family(theme::FONT_DISPLAY)
-                            .text_size(px(15.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::t1())
-                            .child(card.title.clone()),
-                    )
-                    .child(
-                        div()
-                            .font_family(theme::FONT_MONO)
-                            .text_size(px(10.0))
-                            .text_color(theme::t3())
-                            .child(card.count.clone()),
-                    ),
-            )
+            .child(div().h(px(CAPTION_H)).pt(px(8.0)).child(super::title_row(
+                card.title.clone(),
+                Some(card.count.clone().into()),
+            )))
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                 this.open_bucket_card(offset, cx);
             }))

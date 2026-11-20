@@ -6,6 +6,9 @@
 //! event stream. Recv-timeout loops are used throughout so coalesced or
 //! duplicate filesystem events cannot make the test flaky.
 
+mod common;
+
+use common::write_jpeg;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use lumina_core::{EngineEvent, LuminaEngine, MediaId};
 use std::path::{Path, PathBuf};
@@ -50,13 +53,6 @@ impl Drop for TestLibrary {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
     }
-}
-
-fn write_jpeg(path: &Path) {
-    let image = image::RgbImage::from_fn(16, 16, |x, y| {
-        image::Rgb([(x * 12) as u8, (y * 12) as u8, 96])
-    });
-    image.save(path).expect("write jpeg image");
 }
 
 /// Pulls events until the predicate matches, panicking on timeout.
@@ -140,7 +136,7 @@ fn test_watcher_detects_external_add_and_delete() {
     let media_dir = library.media_dir();
 
     // Seed the library with one real image before the engine opens.
-    write_jpeg(&media_dir.join("seed.jpg"));
+    write_jpeg(&media_dir.join("seed.jpg"), 96);
 
     let (engine, rx) = LuminaEngine::open_with_paths(
         media_dir.clone(),
@@ -155,7 +151,7 @@ fn test_watcher_detects_external_add_and_delete() {
 
     // Create a new image without asking the engine to rescan.
     let added_path = media_dir.join("added_externally.jpg");
-    write_jpeg(&added_path);
+    write_jpeg(&added_path, 96);
 
     let inserted = wait_for_batch_with_path(&rx, &added_path);
     let added_id = inserted
@@ -212,8 +208,8 @@ fn rescan_reconnects_moved_files_and_keeps_deleted_ones() {
     let library = TestLibrary::new("rescan_missing");
     let media = library.media_dir();
     let (moved, deleted) = (media.join("moved.jpg"), media.join("deleted.jpg"));
-    write_jpeg(&moved);
-    write_jpeg(&deleted);
+    write_jpeg(&moved, 96);
+    write_jpeg(&deleted, 96);
     let (moved_id, deleted_id) = {
         let (engine, _rx) = open_scanned(&library);
         let ids = (id_at(&engine, &moved), id_at(&engine, &deleted));
@@ -255,7 +251,7 @@ fn rescan_reconnects_moved_files_and_keeps_deleted_ones() {
 #[test]
 fn scan_of_unavailable_library_marks_nothing() {
     let library = TestLibrary::new("rescan_root_gone");
-    write_jpeg(&library.media_dir().join("a.jpg"));
+    write_jpeg(&library.media_dir().join("a.jpg"), 96);
     drop(open_scanned(&library));
 
     let away = library.root.join("unmounted");
@@ -285,7 +281,7 @@ fn scan_of_unavailable_library_marks_nothing() {
 fn copied_back(name: &str) -> (TestLibrary, std::sync::Arc<LuminaEngine>, MediaId, MediaId) {
     let library = TestLibrary::new(name);
     let media = library.media_dir();
-    write_jpeg(&media.join("a.jpg"));
+    write_jpeg(&media.join("a.jpg"), 96);
     let original = {
         let (engine, _rx) = open_scanned(&library);
         let id = id_at(&engine, &media.join("a.jpg"));
@@ -359,7 +355,7 @@ fn locate_refuses_a_different_photo_and_outside_files() {
     assert!(engine.get_item_by_id(copy).is_some());
 
     let outside = library.root.join("outside.jpg");
-    write_jpeg(&outside);
+    write_jpeg(&outside, 96);
     let err = engine.relink(original, &outside).unwrap_err().to_string();
     assert!(
         err.starts_with("Choose a file inside the library folder"),

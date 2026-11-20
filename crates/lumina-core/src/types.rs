@@ -146,6 +146,8 @@ pub struct DecodedFrame {
 }
 
 #[derive(Debug, Clone)]
+// The batch variants carry `Vec<MediaItem>`; boxing them would add an
+// allocation on every scan batch to save a few stack bytes on the channel.
 #[allow(clippy::large_enum_variant)]
 pub enum EngineEvent {
     BatchDiscovered {

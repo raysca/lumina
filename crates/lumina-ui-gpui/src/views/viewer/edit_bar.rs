@@ -1,7 +1,7 @@
 //! The edit-mode bar that replaces the viewer's top bar: Cancel, rotate,
 //! exposure, Auto, Crop (with the aspect presets while cropping), Revert to
 //! Original and Done. Keys are in
-//! `keymap/modals.rs`; state and actions in `app/quick_edit.rs`.
+//! `app/keymap/modals/`; state and actions in `app/quick_edit.rs`.
 
 use gpui::*;
 

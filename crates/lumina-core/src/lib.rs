@@ -159,7 +159,7 @@ impl LuminaEngine {
         };
         {
             let cache = cache.clone();
-            let _ = std::thread::Builder::new()
+            let spawned = std::thread::Builder::new()
                 .name("lumina-cache-cleanup".to_string())
                 .spawn(move || {
                     match cache.cleanup(
@@ -178,6 +178,9 @@ impl LuminaEngine {
                         Err(err) => log::warn!("thumbnail cache cleanup failed: {err:?}"),
                     }
                 });
+            if let Err(err) = spawned {
+                log::warn!("thumbnail cache cleanup did not start: {err}");
+            }
         }
         // Staging left in Imports/ is from a crash or a quit mid-download:
         // nothing of this library's runs yet. Never clean it per job, since

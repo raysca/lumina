@@ -200,6 +200,22 @@ impl LuminaApp {
             .map(|state| state.engine.catalog().clone())
     }
 
+    /// Removes and returns the queued rows matching `take`, leaving the rest.
+    ///
+    /// Every clear action is "partition the queue, then delete the taken rows
+    /// from the catalog"; sharing the partition keeps the two halves of that
+    /// contract in one place. Which states are taken stays at each call site.
+    pub(crate) fn take_download_entries(
+        &mut self,
+        mut take: impl FnMut(&DownloadEntry) -> bool,
+    ) -> Vec<DownloadEntry> {
+        let (taken, kept) = std::mem::take(&mut self.downloads.entries)
+            .into_iter()
+            .partition(|entry| take(entry));
+        self.downloads.entries = kept;
+        taken
+    }
+
     /// The toolbar badge: downloading, waiting and paused rows, so after a
     /// reopen the icon shows there is unfinished work.
     pub(crate) fn download_badge_count(&self) -> usize {

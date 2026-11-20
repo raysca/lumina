@@ -6,6 +6,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/lib/common.sh
+. "$ROOT_DIR/scripts/lib/common.sh"
 BIN="${LUMINA_UI_BIN:-${CARGO_TARGET_DIR:-target}/debug/Lumina}"
 TIMEOUT_SECS="${LUMINA_WAYLAND_SMOKE_TIMEOUT:-20}"
 
@@ -30,26 +32,9 @@ APP_LOG="$SMOKE_HOME/app.log"
 WESTON_LOG="$SMOKE_HOME/weston.log"
 WESTON_PID=""
 APP_PID=""
-stop_child() {
-    local pid="$1"
-    [[ -n "$pid" ]] || return 0
-    kill "$pid" 2>/dev/null || true
-    for _ in $(seq 1 25); do
-        local state
-        state="$(ps -o stat= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-        [[ -z "$state" || "$state" == Z* ]] && break
-        sleep 0.2
-    done
-    local state
-    state="$(ps -o stat= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-    if [[ -n "$state" && "$state" != Z* ]]; then
-        kill -KILL "$pid" 2>/dev/null || true
-    fi
-    wait "$pid" 2>/dev/null || true
-}
 cleanup() {
-    stop_child "$APP_PID"
-    stop_child "$WESTON_PID"
+    stop_pid "$APP_PID"
+    stop_pid "$WESTON_PID"
     rm -rf "$SMOKE_HOME"
 }
 trap cleanup EXIT

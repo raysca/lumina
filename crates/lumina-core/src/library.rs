@@ -98,14 +98,10 @@ pub struct LibraryRemoval {
 }
 
 /// Removes a library's catalog and its thumbnail folder, leaving every photo
-/// and video where it is. `library_root` is only used to find the catalog.
-pub fn remove_library(library_root: &Path) -> Result<LibraryRemoval> {
-    remove_library_at(&catalog_path_for(library_root), &DiskCache::default_dir())
-}
-
-/// [`remove_library`] with explicit paths: `cache_root` is the thumbnail root
-/// shared by every library. The library's own folder is named by its catalog
-/// file, so a corrupt catalog can still be removed with its thumbnails.
+/// and video where it is. `catalog_db` names the catalog; `cache_root` is the
+/// thumbnail root shared by every library. The library's own folder is named by
+/// its catalog file, so a corrupt catalog can still be removed with its
+/// thumbnails.
 ///
 /// The caller closes the library first. A decode already running may still
 /// write a thumbnail after this returns (the decode pool does not join); it

@@ -8,6 +8,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/lib/common.sh
+. "$ROOT_DIR/scripts/lib/common.sh"
 
 BIN_NAME="Lumina"
 BUNDLE_DIR="target/release/bundle/osx/Lumina.app"
@@ -17,8 +19,8 @@ INTEL_TARGET="x86_64-apple-darwin"
 UNIVERSAL="${LUMINA_UNIVERSAL:-1}"
 SIGN_IDENTITY="${LUMINA_SIGN_IDENTITY:--}"
 
-VERSION="$(grep -m1 "^version" crates/lumina-ui-gpui/Cargo.toml | sed "s/.*= \"//;s/\"//")"
-PLIST_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" resources/Info.plist)"
+VERSION="$(crate_version crates/lumina-ui-gpui/Cargo.toml)"
+PLIST_VERSION="$(plist_version resources/Info.plist)"
 if [[ "$VERSION" != "$PLIST_VERSION" ]]; then
     echo "Version mismatch: Cargo.toml=$VERSION Info.plist=$PLIST_VERSION" >&2
     exit 1

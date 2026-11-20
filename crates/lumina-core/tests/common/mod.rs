@@ -177,3 +177,15 @@ pub fn inline_sql_params(sql: &str, params: &[rusqlite::types::Value]) -> String
         })
         .collect()
 }
+
+/// A small jpeg whose pixels (and so content hash) depend on `shade`.
+///
+/// Shared by the import and watcher suites so the fixture cannot drift.
+pub fn write_jpeg(path: &std::path::Path, shade: u8) {
+    std::fs::create_dir_all(path.parent().expect("a fixture jpeg has a parent")).unwrap();
+    image::RgbImage::from_fn(16, 16, |x, y| {
+        image::Rgb([(x * 12) as u8, (y * 12) as u8, shade])
+    })
+    .save(path)
+    .expect("write fixture jpeg");
+}

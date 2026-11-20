@@ -200,7 +200,6 @@ impl LuminaEngine {
                         file_size: 0,
                         content_hash: None,
                         matched_item_id: None,
-                        matched_item_path: None,
                         is_duplicate: false,
                     };
                 }
@@ -215,7 +214,6 @@ impl LuminaEngine {
                         file_size,
                         content_hash: None,
                         matched_item_id: None,
-                        matched_item_path: None,
                         is_duplicate: false,
                     };
                 }
@@ -228,7 +226,6 @@ impl LuminaEngine {
                             file_size,
                             content_hash: None,
                             matched_item_id: None,
-                            matched_item_path: None,
                             is_duplicate: false,
                         };
                     }
@@ -244,7 +241,6 @@ impl LuminaEngine {
                         file_size,
                         content_hash: Some(content_hash),
                         matched_item_id: Some(existing.id),
-                        matched_item_path: Some(existing.path.clone()),
                         is_duplicate: true,
                     };
                 }
@@ -260,7 +256,6 @@ impl LuminaEngine {
                                 file_size,
                                 content_hash: Some(content_hash),
                                 matched_item_id: Some(cand_id),
-                                matched_item_path: Some(cand_path),
                                 is_duplicate: true,
                             };
                         }
@@ -272,7 +267,6 @@ impl LuminaEngine {
                     file_size,
                     content_hash: Some(content_hash),
                     matched_item_id: None,
-                    matched_item_path: None,
                     is_duplicate: false,
                 }
             })

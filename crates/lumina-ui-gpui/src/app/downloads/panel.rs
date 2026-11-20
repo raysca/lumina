@@ -394,10 +394,7 @@ impl LuminaApp {
         let Some(catalog) = self.download_catalog() else {
             return;
         };
-        let (cleared, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.downloads.entries)
-            .into_iter()
-            .partition(|entry| states.contains(&entry.row.state));
-        self.downloads.entries = kept;
+        let cleared = self.take_download_entries(|entry| states.contains(&entry.row.state));
         if cleared.is_empty() {
             return;
         }

@@ -4,6 +4,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/lib/common.sh
+. "$ROOT_DIR/scripts/lib/common.sh"
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -11,15 +13,10 @@ case "$ARCH" in
     *) echo "Unsupported Debian architecture: $ARCH" >&2; exit 1 ;;
 esac
 
-crate_version() {
-    sed -n 's/^version = "\([^"]*\)"/\1/p' "$1" | head -1
-}
 VERSION="$(crate_version crates/lumina-ui-gpui/Cargo.toml)"
 CORE_VERSION="$(crate_version crates/lumina-core/Cargo.toml)"
 MAKE_VERSION="$(sed -n 's/^VERSION := //p' Makefile | head -1)"
-# No PlistBuddy on Linux: the value is the <string> after the key.
-PLIST_VERSION="$(grep -A1 '<key>CFBundleShortVersionString</key>' resources/Info.plist \
-    | sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p')"
+PLIST_VERSION="$(plist_version resources/Info.plist)"
 if [[ -z "$VERSION" || "$VERSION" != "$CORE_VERSION" || "$VERSION" != "$MAKE_VERSION" \
     || "$VERSION" != "$PLIST_VERSION" ]]; then
     echo "Version mismatch: lumina-ui-gpui=$VERSION lumina-core=$CORE_VERSION Makefile=$MAKE_VERSION Info.plist=$PLIST_VERSION" >&2

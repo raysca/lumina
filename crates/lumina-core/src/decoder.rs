@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use image::{imageops::FilterType, DynamicImage, GenericImageView, ImageDecoder};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::fs;
@@ -721,7 +721,8 @@ impl DecoderPipeline {
     fn decode_via_quicklook(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
         let temp_dir = temp_path(&format!("lumina_thumb_{}", id.0));
         let _guard = TempDir::new(temp_dir.clone());
-        let _ = fs::create_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir)
+            .with_context(|| format!("creating {}", temp_dir.display()))?;
 
         let size_arg = target_size.max(256).to_string();
         let status = run_with_timeout(

@@ -1,6 +1,9 @@
 //! Import by copy: planning (walk, skips, duplicates, destination) and
 //! copying (names, mtime, temp files, cataloguing, cancel, failures).
 
+mod common;
+
+use common::write_jpeg;
 use lumina_core::{LuminaEngine, MediaItem};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -92,16 +95,6 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
     }
-}
-
-/// A small jpeg whose pixels (and so content hash) depend on `seed`.
-fn write_jpeg(path: &Path, seed: u8) {
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    image::RgbImage::from_fn(16, 16, |x, y| {
-        image::Rgb([(x * 12) as u8, (y * 12) as u8, seed])
-    })
-    .save(path)
-    .unwrap();
 }
 
 /// 2024-05-06 12:00 UTC: the same calendar day in every time zone it is

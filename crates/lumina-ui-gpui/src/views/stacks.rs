@@ -1,5 +1,5 @@
 //! The Duplicates destination: an "Exact copies | Similar shots" header over
-//! the merge view (`views/duplicates.rs`) or the stacks review list.
+//! the merge view (`views/duplicates/`) or the stacks review list.
 
 use std::sync::Arc;
 

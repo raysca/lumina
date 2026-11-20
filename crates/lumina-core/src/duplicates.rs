@@ -38,7 +38,6 @@ pub struct DuplicateCandidate {
     pub file_size: u64,
     pub content_hash: Option<String>,
     pub matched_item_id: Option<MediaId>,
-    pub matched_item_path: Option<PathBuf>,
     pub is_duplicate: bool,
 }
 

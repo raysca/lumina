@@ -246,7 +246,7 @@ impl GStreamerPlayer {
     /// Posts a decode error on the loaded pipeline's bus, as a failing
     /// decoder would mid-clip.
     /// The rate of the pipeline's current segment, as the sinks play it.
-    pub(crate) fn segment_rate(&self) -> Option<f64> {
+    fn segment_rate(&self) -> Option<f64> {
         let playbin = self.playbin.as_ref()?;
         let mut query = gst::query::Segment::new(gst::Format::Time);
         playbin.query(&mut query).then(|| query.result().0)

@@ -50,7 +50,7 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
 }
 
 /// Library or Last viewed. A radio group for VoiceOver; ←/→ pick a
-/// segment while General is shown (`app/keymap/modals.rs`).
+/// segment while General is shown (`app/keymap/modals/`).
 fn launch_view_control(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let current = app.config.launch_view;
     theme::segmented("settings-launch-view")

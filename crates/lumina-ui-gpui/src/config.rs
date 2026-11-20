@@ -448,11 +448,11 @@ pub struct AppConfig {
     pub slideshow_loop: bool,
     /// How the browser lays out a view: the uniform Grid (the default) or
     /// justified Mosaic rows. An unknown value reads as Grid.
-    #[serde(default, deserialize_with = "lenient_browse_layout")]
+    #[serde(default, deserialize_with = "lenient")]
     pub browse_layout: BrowseLayout,
     /// The Mosaic's grouping level on the zoom pill: year or month cards,
     /// or the day rows (the default). An unknown value reads as Days.
-    #[serde(default, deserialize_with = "lenient_group_level")]
+    #[serde(default, deserialize_with = "lenient")]
     pub group_level: GroupLevel,
     /// The Albums overview's card order. An unknown value reads as Name.
     #[serde(default, deserialize_with = "lenient")]
@@ -560,19 +560,6 @@ pub enum GroupLevel {
     Days,
 }
 
-/// Reads `group_level` so a hand-edited or future value (such as
-/// "moments") falls back to Days instead of failing the whole config.
-fn lenient_group_level<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> std::result::Result<GroupLevel, D::Error> {
-    let value = serde_json::Value::deserialize(deserializer)?;
-    Ok(match value.as_str() {
-        Some("years") => GroupLevel::Years,
-        Some("months") => GroupLevel::Months,
-        _ => GroupLevel::Days,
-    })
-}
-
 /// The browser body: square tiles in columns, or justified rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -580,18 +567,6 @@ pub enum BrowseLayout {
     #[default]
     Grid,
     Mosaic,
-}
-
-/// Reads `browse_layout` so a hand-edited or future value falls back to
-/// Grid instead of failing the whole config (which would reset it).
-fn lenient_browse_layout<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> std::result::Result<BrowseLayout, D::Error> {
-    let value = serde_json::Value::deserialize(deserializer)?;
-    Ok(match value.as_str() {
-        Some("mosaic") => BrowseLayout::Mosaic,
-        _ => BrowseLayout::Grid,
-    })
 }
 
 /// Video volume before the user sets one.

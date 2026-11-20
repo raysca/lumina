@@ -25,6 +25,36 @@ mod welcome;
 #[cfg(test)]
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 
+/// A section heading with its optional count.
+///
+/// Month bands and Mosaic bucket cards are the same heading in two contexts;
+/// one typography keeps them from drifting on the next design tweak.
+pub(crate) fn title_row(title: impl Into<SharedString>, count: Option<SharedString>) -> Div {
+    let title: SharedString = title.into();
+    div()
+        .flex()
+        .flex_row()
+        .items_baseline()
+        .gap(px(9.0))
+        // ponytail: the design's -0.2 tracking is skipped; GPUI has no
+        // letter-spacing style.
+        .child(
+            div()
+                .font_family(theme::FONT_DISPLAY)
+                .text_size(px(15.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme::t1())
+                .child(title),
+        )
+        .children(count.map(|label| {
+            div()
+                .font_family(theme::FONT_MONO)
+                .text_size(px(10.0))
+                .text_color(theme::t3())
+                .child(label)
+        }))
+}
+
 /// Menu actions every root handles: the welcome screen, "Building your
 /// library" and the library window. Only actions that need no overlay go
 /// here; one whose overlay a root does not paint must not be registered there.
@@ -78,8 +108,8 @@ impl Render for LuminaApp {
         }
         if self.grid_state.is_none() {
             self.check_recent_availability(cx);
-            // Preferences and About paint here (Review Focus 7: never
-            // register an action whose overlay this root does not paint).
+            // Preferences and About paint here: never register an action
+            // whose overlay this root does not paint.
             return self.render_welcome(cx);
         }
 

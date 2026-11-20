@@ -64,10 +64,10 @@ thread_local! {
 }
 
 /// Gap between an open album's tiles, both ways.
-pub(crate) const ALBUM_TILE_GAP: f32 = 10.0;
+const ALBUM_TILE_GAP: f32 = 10.0;
 
 /// Right padding of an open album's grid (frame: 24; the left stays 28).
-pub(crate) const ALBUM_PADDING_RIGHT: f32 = 24.0;
+const ALBUM_PADDING_RIGHT: f32 = 24.0;
 
 /// From the grid's top edge to an open album's first row of tiles (frame: 22).
 pub(crate) const ALBUM_PADDING_TOP: f32 = 22.0;
@@ -92,10 +92,10 @@ pub(crate) const RESIZER_WIDTH: f32 = 4.0;
 pub(crate) const DEFAULT_WINDOW_WIDTH: f32 = 1280.0;
 
 /// Smallest photo well side, so a very narrow window cannot collapse rows.
-pub(crate) const PHOTO_SIDE_MIN: f32 = 48.0;
+const PHOTO_SIDE_MIN: f32 = 48.0;
 
 /// Largest photo well side, so a very wide window cannot produce huge rows.
-pub(crate) const PHOTO_SIDE_MAX: f32 = 640.0;
+const PHOTO_SIDE_MAX: f32 = 640.0;
 
 /// Smallest thumbnail decode, in device pixels on its long edge: the size
 /// the grid used to ask for unconditionally, so a 1x display or a tiny tile
@@ -140,7 +140,7 @@ const TEXTURE_CACHE_BUDGET_BYTES: usize = 800 * 320 * 320 * 4;
 /// Texture-cache entries that fit [`TEXTURE_CACHE_BUDGET_BYTES`] at `size`²
 /// BGRA8, within 48..=800. The floor is a viewport plus its prefetch at the
 /// largest decode.
-pub(crate) fn texture_cache_capacity(size: u32) -> NonZeroUsize {
+fn texture_cache_capacity(size: u32) -> NonZeroUsize {
     let bytes = (size as usize)
         .saturating_mul(size as usize)
         .saturating_mul(4)
@@ -169,7 +169,7 @@ impl CachedThumb {
 }
 
 /// Column gap between Videos tiles.
-pub(crate) const VIDEO_COLUMN_GAP: f32 = 14.0;
+const VIDEO_COLUMN_GAP: f32 = 14.0;
 
 /// Row gap between Videos tiles, caption to next thumb (frame: 22).
 pub(crate) const VIDEO_ROW_GAP: f32 = 22.0;
@@ -297,12 +297,12 @@ pub(crate) fn grid_metrics(
 
 /// Hover tooltip that keeps the full filename reachable now that the card no
 /// longer prints it under the photo.
-pub(crate) struct MediaCardTooltip {
+struct MediaCardTooltip {
     name: SharedString,
 }
 
 impl MediaCardTooltip {
-    pub(crate) fn new(name: impl Into<SharedString>) -> Self {
+    fn new(name: impl Into<SharedString>) -> Self {
         Self { name: name.into() }
     }
 }

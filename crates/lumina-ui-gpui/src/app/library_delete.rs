@@ -53,7 +53,12 @@ impl LuminaApp {
             .as_ref()
             .is_some_and(|grid| same_library(grid.engine.library_root(), &path));
         let (catalog_db, cache_root) = if open {
-            let engine = &self.grid_state.as_ref().expect("open library").engine;
+            // `open` checked the same field, so the grid is present here; the
+            // `let` keeps the borrow local instead of holding an `expect`.
+            let Some(grid) = self.grid_state.as_ref() else {
+                return;
+            };
+            let engine = &grid.engine;
             let Some(db) = engine.catalog_path() else {
                 self.set_error("This library has no catalog file to remove.", cx);
                 return;
