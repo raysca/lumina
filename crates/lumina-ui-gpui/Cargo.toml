@@ -4,10 +4,11 @@ version = "0.2.0"
 edition = "2021"
 # gpui-pre (through gpui-kit) uses std::hint::cold_path, stable since 1.95.
 rust-version = "1.95"
+default-run = "Lumina"
 license = "MIT"
 
 [[bin]]
-name = "lumina-ui-gpui"
+name = "Lumina"
 path = "src/main.rs"
 
 [[bin]]

@@ -382,13 +382,11 @@ mod tests {
     #[test]
     fn bundle_is_found_from_the_executable() {
         assert_eq!(
-            bundle_of(Path::new(
-                "/Applications/Lumina.app/Contents/MacOS/lumina-ui-gpui"
-            ))
-            .expect("an app executable has a bundle"),
+            bundle_of(Path::new("/Applications/Lumina.app/Contents/MacOS/Lumina"))
+                .expect("an app executable has a bundle"),
             PathBuf::from("/Applications/Lumina.app")
         );
-        let dev = bundle_of(Path::new("/src/lumina/target/debug/lumina-ui-gpui"));
+        let dev = bundle_of(Path::new("/src/lumina/target/debug/Lumina"));
         assert_eq!(
             dev.unwrap_err().to_string(),
             NOT_IN_APP,

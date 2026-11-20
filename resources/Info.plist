@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>lumina-ui-gpui</string>
+    <string>Lumina</string>
     <key>CFBundleIconFile</key>
     <string>Lumina.icns</string>
     <key>CFBundleIdentifier</key>

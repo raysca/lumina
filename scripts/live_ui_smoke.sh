@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BIN="${LUMINA_UI_BIN:-${CARGO_TARGET_DIR:-target}/debug/lumina-ui-gpui}"
+BIN="${LUMINA_UI_BIN:-${CARGO_TARGET_DIR:-target}/debug/Lumina}"
 OUT_DIR="${LUMINA_SMOKE_OUT_DIR:-target/ui-smoke}"
 TIMEOUT_SECS="${LUMINA_SMOKE_TIMEOUT:-15}"
 

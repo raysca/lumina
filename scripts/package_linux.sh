@@ -44,9 +44,9 @@ done
 desktop-file-validate "$DESKTOP"
 appstreamcli validate --no-net "$METAINFO"
 
-cargo build --release -p lumina-ui-gpui --bin lumina-ui-gpui
+cargo build --release -p lumina-ui-gpui --bin Lumina
 
-install -Dm755 target/release/lumina-ui-gpui "$PKG_ROOT/usr/bin/lumina"
+install -Dm755 target/release/Lumina "$PKG_ROOT/usr/bin/lumina"
 install -Dm644 resources/app_icon.png \
     "$PKG_ROOT/usr/share/icons/hicolor/512x512/apps/${APP_ID}.png"
 install -Dm644 "$DESKTOP" "$PKG_ROOT/usr/share/applications/${APP_ID}.desktop"

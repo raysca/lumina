@@ -13,7 +13,7 @@ fi
 VERSION="$(grep -m1 "^version" crates/lumina-ui-gpui/Cargo.toml | sed "s/.*= \"//;s/\"//")"
 OUT="target/release/bundle/osx"
 APP="$OUT/Lumina.app"
-ARCHS="$(lipo -archs "$APP/Contents/MacOS/lumina-ui-gpui")"
+ARCHS="$(lipo -archs "$APP/Contents/MacOS/Lumina")"
 if [[ "$ARCHS" == *"x86_64"* && "$ARCHS" == *"arm64"* ]]; then
     SUFFIX="macos-universal"
 else

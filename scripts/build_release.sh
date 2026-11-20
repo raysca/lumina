@@ -9,7 +9,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BIN_NAME="lumina-ui-gpui"
+BIN_NAME="Lumina"
 BUNDLE_DIR="target/release/bundle/osx/Lumina.app"
 APP_BIN="$BUNDLE_DIR/Contents/MacOS/$BIN_NAME"
 ARM_TARGET="aarch64-apple-darwin"
