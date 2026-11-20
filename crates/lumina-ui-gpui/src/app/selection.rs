@@ -530,14 +530,6 @@ impl LuminaApp {
     pub fn get_item_color_label(&self, item: &MediaItem) -> Option<gpui::Rgba> {
         self.item_color_labels
             .get(&item.id)
-            .and_then(|&label| match label {
-                1 => Some(theme::label_red()),
-                2 => Some(theme::label_orange()),
-                3 => Some(theme::label_yellow()),
-                4 => Some(theme::label_green()),
-                5 => Some(theme::label_blue()),
-                6 => Some(theme::label_purple()),
-                _ => None,
-            })
+            .and_then(|&label| theme::label_color(label))
     }
 }

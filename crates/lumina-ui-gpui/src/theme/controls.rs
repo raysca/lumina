@@ -221,12 +221,12 @@ pub fn tooltip_label(
 pub fn label_options() -> [(u8, Option<Rgba>, &'static str); 7] {
     [
         (0, None, "No label"),
-        (1, Some(label_red()), "Red"),
-        (2, Some(label_orange()), "Orange"),
-        (3, Some(label_yellow()), "Yellow"),
-        (4, Some(label_green()), "Green"),
-        (5, Some(label_blue()), "Blue"),
-        (6, Some(label_purple()), "Purple"),
+        (1, label_color(1), "Red"),
+        (2, label_color(2), "Orange"),
+        (3, label_color(3), "Yellow"),
+        (4, label_color(4), "Green"),
+        (5, label_color(5), "Blue"),
+        (6, label_color(6), "Purple"),
     ]
 }
 

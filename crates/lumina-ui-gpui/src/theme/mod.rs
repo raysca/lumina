@@ -135,6 +135,22 @@ tokens! {
     label_purple = 0x8E4EC6;
 }
 
+/// The colour for a metadata label id (1..=6), or `None` for "no label".
+///
+/// The label menu, its swatches and the grid's label dot all read this one
+/// table, so a palette change cannot make them disagree.
+pub fn label_color(id: u8) -> Option<Rgba> {
+    match id {
+        1 => Some(label_red()),
+        2 => Some(label_orange()),
+        3 => Some(label_yellow()),
+        4 => Some(label_green()),
+        5 => Some(label_blue()),
+        6 => Some(label_purple()),
+        _ => None,
+    }
+}
+
 tokens_alpha! {
     /// Hovered `danger_soft` button.
     danger_bg_hover = 0xE8584F33;
@@ -199,6 +215,23 @@ pub const FONT_MONO: &str = "JetBrains Mono";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn label_ids_map_to_the_six_palette_colours() {
+        let expected = [
+            label_red(),
+            label_orange(),
+            label_yellow(),
+            label_green(),
+            label_blue(),
+            label_purple(),
+        ];
+        for (index, colour) in expected.into_iter().enumerate() {
+            assert_eq!(label_color(index as u8 + 1), Some(colour));
+        }
+        assert_eq!(label_color(0), None, "0 is no label");
+        assert_eq!(label_color(7), None, "an unknown id has no colour");
+    }
 
     // WCAG relative luminance contrast, so palette tweaks can't silently break legibility.
     fn contrast(a: Rgba, b: Rgba) -> f32 {
