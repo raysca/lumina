@@ -6,6 +6,7 @@
 //! does work beyond its name (hashing, disk IO) says so in its name and doc.
 
 mod albums;
+mod annotations;
 mod captions;
 mod dims;
 pub use albums::{Album, AlbumCard, AlbumStats};
