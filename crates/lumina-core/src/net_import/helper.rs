@@ -36,6 +36,7 @@ fn find_tool(name: &str) -> Option<PathBuf> {
 
 /// True when `exe` is the executable inside a macOS `.app` bundle. Compared
 /// case-insensitively because Finder treats `.APP` the same as `.app`.
+#[cfg(any(target_os = "macos", test))]
 fn is_app_bundle_exe(exe: &Path) -> bool {
     exe.to_string_lossy()
         .to_ascii_lowercase()

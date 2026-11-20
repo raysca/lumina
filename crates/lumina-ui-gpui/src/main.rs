@@ -22,6 +22,11 @@ pub(crate) use app::*;
 
 use gpui::*;
 
+/// The AppStream/desktop id. Also the window's Wayland app_id and X11
+/// WM_CLASS, so desktops and the Flatpak portal group the window under the
+/// same name as the installed entry.
+const APP_ID: &str = "io.github.raysca.Lumina";
+
 #[cfg(test)]
 mod tests;
 
@@ -85,6 +90,7 @@ fn main() {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     window_min_size: Some(size(px(960.0), px(600.0))),
                     titlebar,
+                    app_id: Some(APP_ID.into()),
                     ..Default::default()
                 },
                 |window, cx| cx.new(|cx| LuminaApp::new_in_window(window, cx)),

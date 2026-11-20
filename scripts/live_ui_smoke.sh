@@ -88,6 +88,13 @@ EOF
         exit 1
     fi
     echo "PASS: Lumina window appeared: $FOUND"
+    # Desktops group the window by WM_CLASS; it must match the desktop entry
+    # and AppStream id, not the binary name.
+    if [[ "$FOUND" != *"io.github.raysca.Lumina"* ]]; then
+        echo "FAIL: the window class is not the app id: $FOUND"
+        exit 1
+    fi
+    echo "PASS: the window class matches the AppStream and desktop id"
     if [[ -z "$VIEWER_READY" ]]; then
         echo "FAIL: the fixture video did not load a viewer frame and GStreamer player"
         if [[ -n "${LUMINA_UI_BIN:-}" ]]; then
