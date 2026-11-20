@@ -23,6 +23,16 @@ fi
 sudo apt-get install -y "$ROOT_DIR/$DEB"
 command -v lumina >/dev/null || { echo "lumina is not on PATH after install" >&2; exit 1; }
 
+APP_ID="io.github.raysca.Lumina"
+DESKTOP="/usr/share/applications/${APP_ID}.desktop"
+METAINFO="/usr/share/metainfo/${APP_ID}.metainfo.xml"
+ICON="/usr/share/icons/hicolor/512x512/apps/${APP_ID}.png"
+for installed in "$DESKTOP" "$METAINFO" "$ICON"; do
+    [[ -e "$installed" ]] || { echo "Package did not install $installed" >&2; exit 1; }
+done
+desktop-file-validate "$DESKTOP"
+appstreamcli validate --no-net "$METAINFO"
+
 SMOKE_HOME="$(mktemp -d "${TMPDIR:-/tmp}/lumina-package-check.XXXXXX")"
 trap 'rm -rf "$SMOKE_HOME"' EXIT
 mkdir -p "$SMOKE_HOME/user-library"
@@ -35,8 +45,9 @@ if command -v lumina >/dev/null; then
     echo "lumina is still on PATH after removal" >&2
     exit 1
 fi
-for leftover in /usr/share/applications/lumina.desktop \
-    /usr/share/icons/hicolor/512x512/apps/lumina.png; do
+for leftover in "/usr/share/applications/${APP_ID}.desktop" \
+    "/usr/share/icons/hicolor/512x512/apps/${APP_ID}.png" \
+    "/usr/share/metainfo/${APP_ID}.metainfo.xml"; do
     if [[ -e "$leftover" ]]; then
         echo "Package removal left $leftover" >&2
         exit 1

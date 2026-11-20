@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.raysca.Lumina</id>
+  <name>Lumina</name>
+  <summary>Local-first photo and video manager</summary>
+  <developer id="io.github.raysca">
+    <name>Lumina maintainers</name>
+  </developer>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Lumina catalogs and manages the photos and videos already on your disk.
+      It has no account, keeps no background network activity, and sends no
+      telemetry.
+    </p>
+    <p>
+      Browse the library as a justified mosaic or a uniform grid, search by
+      date, place, camera, tags or file name, and collect items into albums and
+      smart albums. Ratings, flags, tags, captions and edits are stored in
+      Lumina's catalog, and metadata can be imported from and written to XMP
+      sidecars.
+    </p>
+    <ul>
+      <li>Local catalog with thumbnails and instant timeline seeking</li>
+      <li>Duplicate and similar-shot review</li>
+      <li>Map of where the photos were taken</li>
+      <li>Quick edit: rotate, crop, exposure, captions and metadata</li>
+      <li>Removable libraries: each library's catalog and thumbnails can be deleted without touching the originals</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.raysca.Lumina.desktop</launchable>
+  <provides>
+    <binary>lumina</binary>
+  </provides>
+  <categories>
+    <category>Graphics</category>
+    <category>Photography</category>
+    <category>Viewer</category>
+  </categories>
+  <keywords>
+    <keyword>photo</keyword>
+    <keyword>photos</keyword>
+    <keyword>video</keyword>
+    <keyword>library</keyword>
+    <keyword>catalog</keyword>
+    <keyword>manager</keyword>
+    <keyword>album</keyword>
+    <keyword>tag</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/raysca/lumina</url>
+  <url type="bugtracker">https://github.com/raysca/lumina/issues</url>
+  <url type="vcs-browser">https://github.com/raysca/lumina</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.2.0" date="2026-11-20">
+      <description>
+        <p>First Linux development package.</p>
+      </description>
+    </release>
+  </releases>
+</component>

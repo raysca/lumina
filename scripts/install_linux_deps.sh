@@ -19,4 +19,5 @@ sudo apt-get install -y --no-install-recommends \
     libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav ffmpeg \
+    desktop-file-utils appstream \
     xvfb xauth x11-utils xdotool weston python3

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Lumina
+GenericName=Photo and Video Manager
+Comment=Local-first photo and video manager
+Exec=lumina
+Icon=io.github.raysca.Lumina
+Terminal=false
+Categories=Graphics;Photography;Viewer;
+Keywords=photo;photos;video;library;catalog;album;tag;manager;
+StartupNotify=true

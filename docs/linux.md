@@ -54,6 +54,13 @@ system, install it with:
 sudo apt install ./target/release/bundle/linux/lumina_*.deb
 ```
 
+The package installs the application as `lumina`, with the AppStream app id
+`io.github.raysca.Lumina`: a desktop entry, a 512 px hicolor icon and an
+AppStream metainfo file under `/usr/share`. The bundled font and icon licenses
+ship in `/usr/share/doc/lumina/licenses/`. The package script validates the
+desktop entry and metainfo (`desktop-file-validate`, `appstreamcli validate`)
+before building, and the install check validates them again.
+
 Remove the application files with `sudo apt remove lumina`. The package does
 not own or remove user libraries, catalogs, configuration or caches. Lumina
 stores configuration under `${XDG_CONFIG_HOME:-~/.config}/lumina`, thumbnails

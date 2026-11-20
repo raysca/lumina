@@ -29,21 +29,37 @@ OUT_DIR="target/release/bundle/linux"
 PKG_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/lumina-deb.XXXXXX")"
 trap 'rm -rf "$PKG_ROOT"' EXIT
 
+APP_ID="io.github.raysca.Lumina"
+DESKTOP="resources/linux/${APP_ID}.desktop"
+METAINFO="resources/linux/${APP_ID}.metainfo.xml"
+
+# The desktop entry and AppStream metadata are part of the package contract:
+# validate them here so a broken one never reaches a build artifact.
+for tool in desktop-file-validate appstreamcli; do
+    command -v "$tool" >/dev/null || {
+        echo "Missing $tool; install desktop-file-utils and appstream" >&2
+        exit 1
+    }
+done
+desktop-file-validate "$DESKTOP"
+appstreamcli validate --no-net "$METAINFO"
+
 cargo build --release -p lumina-ui-gpui --bin lumina-ui-gpui
 
 install -Dm755 target/release/lumina-ui-gpui "$PKG_ROOT/usr/bin/lumina"
-install -Dm644 resources/app_icon.png "$PKG_ROOT/usr/share/icons/hicolor/512x512/apps/lumina.png"
+install -Dm644 resources/app_icon.png \
+    "$PKG_ROOT/usr/share/icons/hicolor/512x512/apps/${APP_ID}.png"
+install -Dm644 "$DESKTOP" "$PKG_ROOT/usr/share/applications/${APP_ID}.desktop"
+install -Dm644 "$METAINFO" "$PKG_ROOT/usr/share/metainfo/${APP_ID}.metainfo.xml"
 install -Dm644 LICENSE "$PKG_ROOT/usr/share/doc/lumina/copyright"
-install -Dm644 /dev/stdin "$PKG_ROOT/usr/share/applications/lumina.desktop" <<'EOF'
-[Desktop Entry]
-Name=Lumina
-Comment=Local-first photo and video manager
-Exec=lumina
-Icon=lumina
-Terminal=false
-Type=Application
-Categories=Graphics;Photography;Viewer;
-EOF
+# The bundled fonts and icon set ship beside the app; their licenses must
+# travel with them.
+for license in resources/fonts/Inter-LICENSE.txt \
+    resources/fonts/InterTight-OFL.txt resources/fonts/JetBrainsMono-OFL.txt \
+    resources/icons/LICENSE; do
+    install -Dm644 "$license" \
+        "$PKG_ROOT/usr/share/doc/lumina/licenses/$(basename "$license")"
+done
 
 install -d "$PKG_ROOT/DEBIAN" "$OUT_DIR"
 mkdir -p "$PKG_ROOT/debian"
