@@ -17,7 +17,8 @@ jobs:
     env:
       # `secrets` is not available in `if:`; expose whether it is set.
       HAS_SIGNING_CERT: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
-      LUMINA_NOTARIZE: ${{ (secrets.LUMINA_NOTARY_PROFILE != '' || secrets.APPLE_ID != '') && '1' || '0' }}
+      # An ad-hoc preview must not pick up a stale identity or notary secret.
+      LUMINA_NOTARIZE: ${{ secrets.APPLE_CERTIFICATE_P12 != '' && (secrets.LUMINA_NOTARY_PROFILE != '' || secrets.APPLE_ID != '') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +51,9 @@ jobs:
       - name: Build, sign and package
         env:
           LUMINA_UNIVERSAL: "1"
-          LUMINA_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          # Without the certificate, ignore any leftover identity secret: the
+          # ad-hoc preview must not try to sign with a key the runner lacks.
+          LUMINA_SIGN_IDENTITY: ${{ secrets.APPLE_CERTIFICATE_P12 != '' && secrets.APPLE_SIGN_IDENTITY || '' }}
           LUMINA_NOTARY_PROFILE: ${{ secrets.LUMINA_NOTARY_PROFILE }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
