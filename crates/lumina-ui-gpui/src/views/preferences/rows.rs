@@ -168,10 +168,10 @@ pub(super) fn row_button(
     label: &'static str,
     icon: Option<Icon>,
 ) -> Stateful<Div> {
-    let id = button.id();
+    let id = button.selector();
     div()
-        .id(id)
-        .debug_selector(move || id.to_string())
+        .id(id.clone())
+        .debug_selector(move || button.selector())
         .role(Role::Button)
         .aria_label(SharedString::from(label))
         .h(px(34.0))
@@ -195,7 +195,7 @@ pub(super) fn row_button(
         // Tests read the label as `<id>-text:<label>`.
         .child(
             div()
-                .debug_selector(move || format!("{id}-text:{label}"))
+                .debug_selector(move || format!("{}-text:{label}", button.selector()))
                 .child(label),
         )
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {

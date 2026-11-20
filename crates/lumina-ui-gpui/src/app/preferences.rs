@@ -37,6 +37,9 @@ pub enum SettingsButton {
     StorageCardClear,
     OpenAnother,
     Rescan,
+    /// Removes known library `index` (as listed by `known_libraries`) from
+    /// Lumina, after confirmation.
+    RemoveLibrary(usize),
     RevealDownloads,
     RevealCache,
     ClearCache,
@@ -62,6 +65,9 @@ impl SettingsButton {
             Self::StorageCardClear => "settings-storage-clear-cache",
             Self::OpenAnother => "preferences-change-library",
             Self::Rescan => "preferences-rescan",
+            // The per-library rows share this prefix; `selector` adds the
+            // index so each button keeps a stable debug name.
+            Self::RemoveLibrary(_) => "settings-remove-library",
             Self::RevealDownloads => "settings-downloads-reveal",
             Self::RevealCache => "preferences-reveal-cache",
             Self::ClearCache => "preferences-clear-cache",
@@ -76,6 +82,14 @@ impl SettingsButton {
         }
     }
 
+    /// The per-row selector: the shared id, with the row index when needed.
+    pub fn selector(self) -> String {
+        match self {
+            Self::RemoveLibrary(index) => format!("{}-{index}", self.id()),
+            _ => self.id().to_string(),
+        }
+    }
+
     pub fn press(self, app: &mut LuminaApp, cx: &mut Context<LuminaApp>) {
         match self {
             Self::Reset => app.prompt_reset_preferences(cx),
@@ -83,6 +97,7 @@ impl SettingsButton {
             Self::StorageCardClear | Self::ClearCache => app.clear_thumbnail_cache(cx),
             Self::OpenAnother => app.pick_folder_dialog(cx),
             Self::Rescan => app.rescan_library(cx),
+            Self::RemoveLibrary(index) => app.remove_known_library(index, cx),
             Self::RevealDownloads => app.reveal_downloads_folder(cx),
             Self::RevealCache => app.reveal_cache_directory(cx),
             Self::RevealConfig => app.reveal_config(cx),
@@ -308,6 +323,37 @@ impl LuminaApp {
         }
     }
 
+    /// The libraries Settings lists: the open one first, then every recent,
+    /// one row per folder.
+    pub fn known_libraries(&self) -> Vec<PathBuf> {
+        let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let mut known: Vec<PathBuf> = Vec::new();
+        let mut push = |path: PathBuf| {
+            let path = canonical(&path);
+            if !known.contains(&path) {
+                known.push(path);
+            }
+        };
+        if let Some(root) = self
+            .grid_state
+            .as_ref()
+            .map(|grid| grid.engine.library_root().to_path_buf())
+        {
+            push(root);
+        }
+        for recent in &self.config.recent_libraries {
+            push(recent.clone());
+        }
+        known
+    }
+
+    /// The Remove… button on a known-library row.
+    pub fn remove_known_library(&mut self, index: usize, cx: &mut Context<Self>) {
+        if let Some(path) = self.known_libraries().get(index).cloned() {
+            self.prompt_delete_library(path, cx);
+        }
+    }
+
     pub fn open_preferences(&mut self, cx: &mut Context<Self>) {
         self.open_preferences_at(PreferencesTab::General, cx);
     }
@@ -333,6 +379,7 @@ impl LuminaApp {
         self.refresh_cache_usage(cx);
         if tab == PreferencesTab::Library {
             self.refresh_library_storage(cx);
+            self.check_recent_availability(cx);
         }
         cx.notify();
     }
@@ -348,7 +395,10 @@ impl LuminaApp {
         self.settings_focus = None;
         match tab {
             PreferencesTab::Storage => self.refresh_cache_usage(cx),
-            PreferencesTab::Library => self.refresh_library_storage(cx),
+            PreferencesTab::Library => {
+                self.refresh_library_storage(cx);
+                self.check_recent_availability(cx);
+            }
             _ => {}
         }
         cx.notify();
@@ -363,7 +413,11 @@ impl LuminaApp {
             PreferencesTab::General => vec![Reset, ChooseEditor],
             PreferencesTab::Library => {
                 let card = self.library_storage().map(|_| StorageCardClear);
-                card.into_iter().chain([OpenAnother, Rescan]).collect()
+                let known = (0..self.known_libraries().len()).map(SettingsButton::RemoveLibrary);
+                card.into_iter()
+                    .chain([OpenAnother, Rescan])
+                    .chain(known)
+                    .collect()
             }
             PreferencesTab::Downloads => self
                 .downloads_folder()

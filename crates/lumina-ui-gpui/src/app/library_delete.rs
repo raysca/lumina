@@ -113,6 +113,11 @@ impl LuminaApp {
 
         if open {
             self.close_library_to_welcome(cx);
+            // Settings was covering the library; show the welcome page it
+            // returns to instead of an empty Library tab.
+            if self.preferences_open {
+                self.close_preferences(cx);
+            }
         }
 
         let task = cx

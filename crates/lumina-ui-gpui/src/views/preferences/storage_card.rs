@@ -126,8 +126,8 @@ pub(super) fn render_storage_card(
     let clear_marker = clear_label.clone();
     let button = SettingsButton::StorageCardClear;
     let clear = div()
-        .id(button.id())
-        .debug_selector(move || button.id().to_string())
+        .id(button.selector())
+        .debug_selector(move || button.selector())
         .role(Role::Button)
         .aria_label(SharedString::from(clear_label.clone()))
         .h(px(28.0))

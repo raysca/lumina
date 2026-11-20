@@ -230,3 +230,54 @@ fn delete_library_only_applies_when_one_is_open() {
         );
     });
 }
+
+#[core::prelude::v1::test]
+fn settings_lists_known_libraries_and_deletes_one() {
+    use crate::app::preferences::PreferencesTab;
+
+    let (dir, engine) = seed_library("settings_delete", 1);
+    let library = engine.library_root().to_path_buf();
+    let photo = engine.get_item_slice(0..1)[0].path.clone();
+    let catalog = dir.join("catalog.db");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+
+    view.update(vcx, |app, cx| {
+        app.config.recent_libraries = vec![library.clone()];
+        app.open_preferences_at(PreferencesTab::Library, cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-known-library-0").is_some(),
+        "Settings › Library lists the known library"
+    );
+    assert!(
+        vcx.debug_bounds("settings-remove-library-0").is_some(),
+        "each known library has a Remove action"
+    );
+
+    click(vcx, "settings-remove-library-0");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("library-delete-dialog").is_some(),
+        "Remove asks before deleting the catalog"
+    );
+    keystrokes(vcx, "enter");
+    render_ui(vcx);
+
+    view.update(vcx, |app, _| {
+        assert!(app.library_delete.is_none());
+        assert!(
+            app.grid_state.is_none(),
+            "the removed library closes to the welcome screen"
+        );
+        assert!(
+            !app.preferences_open,
+            "Settings closes rather than showing an empty Library tab"
+        );
+    });
+    assert!(!catalog.exists(), "the catalog is removed");
+    assert!(photo.exists(), "the user's photo stays");
+    drop(view);
+}

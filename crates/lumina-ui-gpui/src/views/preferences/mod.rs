@@ -160,8 +160,8 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
 fn reset_button(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let button = SettingsButton::Reset;
     div()
-        .id(button.id())
-        .debug_selector(move || button.id().to_string())
+        .id(button.selector())
+        .debug_selector(move || button.selector())
         .role(Role::Button)
         .aria_label(SharedString::from("Reset to defaults"))
         .h(px(32.0))

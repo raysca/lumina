@@ -71,6 +71,17 @@ impl LuminaApp {
             return true;
         }
 
+        // 0a. Remove-library confirmation. It is painted above Settings, so
+        // its keys must be taken before the page's.
+        if self.library_delete.is_some() {
+            match key {
+                "escape" => self.cancel_delete_library(cx),
+                "enter" | "return" => self.confirm_delete_library(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 0b. Settings: every other key stays here, so library shortcuts
         // never act on the hidden library. ⌘, toggles it.
         if self.preferences_open {
@@ -81,16 +92,6 @@ impl LuminaApp {
         // 1. Delete confirmation modal
         if self.delete_confirm_state.is_some() {
             self.delete_confirm_key(key, cx);
-            return true;
-        }
-
-        // 1a. Remove-library confirmation
-        if self.library_delete.is_some() {
-            match key {
-                "escape" => self.cancel_delete_library(cx),
-                "enter" | "return" => self.confirm_delete_library(cx),
-                _ => {}
-            }
             return true;
         }
 

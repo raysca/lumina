@@ -298,7 +298,8 @@ other library) and **Use Pictures Folder** (⇧↵). Lumina stores its catalog i
 `~/Library/Caches/lumina/thumbnails/`; UI preferences live in
 `~/Library/Application Support/lumina/config.json`.
 
-**Removing a library** (⌘K › Delete Library…) deletes that library's catalog
+**Removing a library** (⌘K › Delete Library…, the trash action on a welcome
+recent, or Settings › Library › Known Libraries) deletes that library's catalog
 and cached thumbnails and returns to the welcome screen. The library folder and
 every photo and video stay where they are. Media paths are stored relative to
 the library root as well as absolutely, so a library whose volume comes back at
