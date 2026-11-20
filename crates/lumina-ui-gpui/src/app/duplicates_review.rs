@@ -226,7 +226,7 @@ impl LuminaApp {
         #[cfg(test)]
         {
             // In unit/automation tests, run scan_duplicates synchronously so tests don't need async waits.
-            self.set_duplicate_groups(engine.query_duplicate_groups());
+            self.set_duplicate_groups(engine.scan_duplicate_groups());
             self.duplicate_items_count = engine.query_duplicate_count();
         }
 
@@ -237,7 +237,7 @@ impl LuminaApp {
             if let Err(err) = std::thread::Builder::new()
                 .name("lumina-duplicates-scan".into())
                 .spawn(move || {
-                    let groups = engine.query_duplicate_groups();
+                    let groups = engine.scan_duplicate_groups();
                     let items_count = engine.query_duplicate_count();
                     let _ = tx.send_blocking(crate::app::types::UiMessage::DuplicatesLoaded {
                         generation,

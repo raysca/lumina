@@ -46,9 +46,12 @@ impl LuminaEngine {
         })
     }
 
-    /// Queries all duplicate groups. Ensures unhashed candidate items with
-    /// duplicate file sizes are hashed first.
-    pub fn query_duplicate_groups(&self) -> Vec<DuplicateGroup> {
+    /// Scans, then returns all duplicate groups.
+    ///
+    /// The name says `scan` because it hashes unhashed same-size candidates on
+    /// the calling thread; a UI path must use [`Self::get_cached_duplicate_groups`]
+    /// instead when it cannot block.
+    pub fn scan_duplicate_groups(&self) -> Vec<DuplicateGroup> {
         match self.scan_duplicates() {
             Ok(report) => report.groups,
             Err(err) => {

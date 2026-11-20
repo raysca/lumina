@@ -1,3 +1,10 @@
+//! The catalog: schema, rows, queries and the mutations above them.
+//!
+//! Naming convention for `Catalog` methods: `query_*` is a filtered read whose
+//! cost depends on the library (SQL, possibly a scan); `get_*` is a direct
+//! lookup of known rows; `batch_*`/`set_*` write many or one row. A method that
+//! does work beyond its name (hashing, disk IO) says so in its name and doc.
+
 mod albums;
 mod captions;
 mod dims;
