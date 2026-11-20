@@ -265,8 +265,13 @@ pub(crate) fn render_menu_backdrop(app: &LuminaApp, cx: &mut Context<LuminaApp>)
         return Empty.into_any_element();
     }
     div()
+        .id("album-menu-backdrop")
+        .debug_selector(|| "album-menu-backdrop".to_string())
         .absolute()
         .inset_0()
+        // Block the page under the open menu: without this the same click
+        // both dismisses the menu and acts on the chip/card behind it.
+        .occlude()
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(|this, _e: &MouseDownEvent, _w, cx| {

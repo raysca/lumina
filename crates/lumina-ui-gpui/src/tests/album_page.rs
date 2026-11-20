@@ -105,6 +105,57 @@ fn album_header_shows_title_counts_and_actions() {
 }
 
 #[core::prelude::v1::test]
+fn album_menu_backdrop_blocks_the_grid_under_it() {
+    let (_dir, engine, id, _ids) = library_with_album("album_menu_occlude");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_album(&view, vcx, id);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-a");
+    render_ui(vcx);
+
+    click(vcx, "album-more-btn");
+    assert!(
+        vcx.debug_bounds("album-menu").is_some(),
+        "More opens the album menu"
+    );
+    // The leak this guards against is the page under the backdrop acting on
+    // the same click.
+    let before = view.update(vcx, |app, _| {
+        (
+            app.selected_indices.clone(),
+            app.selected_item.as_ref().map(|item| item.id),
+        )
+    });
+    assert!(
+        !before.0.is_empty(),
+        "premise: a tile is selected before the menu opens"
+    );
+    // Click a toolbar control that sits under the full-window backdrop. With
+    // the barrier it must not act; without it the same click closes the menu
+    // and opens the Sort popover.
+    click(vcx, "sort-menu-button");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.albums.page.menu, None,
+            "the backdrop click closes the menu"
+        );
+        assert!(
+            !app.sort_menu_open,
+            "the click must not reach the toolbar control under the menu backdrop"
+        );
+        assert_eq!(
+            (
+                app.selected_indices.clone(),
+                app.selected_item.as_ref().map(|item| item.id)
+            ),
+            before,
+            "the click must not change the selection"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
 fn album_header_more_menu_keys_and_actions() {
     let (_dir, engine, id, _ids) = library_with_album("album_header_menu");
     let mut cx = crate::tests::TestApp::single();

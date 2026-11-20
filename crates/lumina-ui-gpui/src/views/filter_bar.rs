@@ -79,10 +79,12 @@ impl MenuRow {
     fn label_and_icon(&self) -> (String, Icon) {
         match self {
             MenuRow::Remove(chip) => (chip.label.clone(), chip.icon),
-            MenuRow::Toggle(token) => {
-                let (label, icon, _) = filter_label(token).expect("menu tokens are filter tokens");
-                (label, icon)
-            }
+            MenuRow::Toggle(token) => match filter_label(token) {
+                Some((label, icon, _)) => (label, icon),
+                // A static row the label table does not know still gets a row;
+                // showing the raw token beats panicking the render path.
+                None => (token.to_string(), Icon::Sliders),
+            },
             MenuRow::Field(_, key, icon) => (t(key), *icon),
         }
     }
@@ -395,4 +397,20 @@ pub fn filter_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Statefu
                         }))
                 }),
         )
+}
+#[cfg(test)]
+mod tests {
+    use super::{filter_label, MenuRow, FIXED_ROWS};
+
+    #[test]
+    fn every_fixed_menu_row_has_a_label() {
+        for row in FIXED_ROWS {
+            if let MenuRow::Toggle(token) = row {
+                assert!(
+                    filter_label(token).is_some(),
+                    "FIXED_ROWS has {token} but filter_label does not know it"
+                );
+            }
+        }
+    }
 }

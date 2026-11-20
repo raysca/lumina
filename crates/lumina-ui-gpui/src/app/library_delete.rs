@@ -198,21 +198,7 @@ impl LuminaApp {
 
         self.first_scan = None;
         self.pending_restore = None;
-        self.clear_selection_fields();
-        self.selection = crate::views::sidebar::AlbumSelection::AllLibrary;
-        self.stacks.reset();
-        self.map = Default::default();
-        self.album_draft = Default::default();
-        self.albums = Default::default();
-        self.delete_confirm_state = None;
-        self.context_menu_state = None;
-        self.cancel_tag_manager_prompts();
-        self.undo = Default::default();
-        self.search_query.clear();
-        self.search_focused = false;
-        self.active_year = None;
-        self.edits.reset_for_library();
-        self.reset_navigation_history();
+        self.reset_library_state(cx);
         self.welcome.set_missing(None);
         self.welcome.focused_recent = None;
         cx.notify();

@@ -61,6 +61,41 @@ impl LuminaApp {
         self.open_library_inner(path, cx);
     }
 
+    /// Clears every id, texture, draft and trail that belongs to the library
+    /// being left.
+    ///
+    /// Media and album ids restart per library, so an undo entry, dialog or
+    /// import left open would act on the new library's rows (a Delete could
+    /// trash unrelated files). Both the switch and the delete paths call this
+    /// one reset so a new field cannot be missed on one of them.
+    pub(crate) fn reset_library_state(&mut self, cx: &mut Context<Self>) {
+        // Includes the tag-load request, so an in-flight load for the old
+        // library cannot land on the new one.
+        self.clear_selection_fields();
+        self.selection = AlbumSelection::AllLibrary;
+        self.stacks.reset();
+        // The map's points and clusters belong to the old library.
+        self.map = Default::default();
+        self.album_draft = Default::default();
+        self.albums = Default::default();
+        self.delete_confirm_state = None;
+        self.context_menu_state = None;
+        self.cancel_tag_manager_prompts();
+        // Undo entries hold ids from the old library.
+        self.undo = Default::default();
+        // An import, and a link being checked or previewed, belong to the
+        // library they were started in.
+        self.abandon_import(cx);
+        self.close_network_import_dialog(cx);
+        self.search_query.clear();
+        self.search_focused = false;
+        self.active_year = None;
+        self.discard_edit_draft();
+        self.edits.reset_for_library();
+        // A new library is a jump, not user navigation: start a fresh trail.
+        self.reset_navigation_history();
+    }
+
     /// Opens a library without touching the pending startup restore. The
     /// engine opens on the background executor (catalog migrations, an
     /// unmounted volume); the current library stays until it is installed.
@@ -181,37 +216,7 @@ impl LuminaApp {
             }
         }
         self.load_downloads(cx);
-        // A full reset, including the tag-load request, so an in-flight load
-        // for the old library cannot land on the new one (media ids restart
-        // per library, so it could otherwise match an unrelated item).
-        self.clear_selection_fields();
-        self.selection = AlbumSelection::AllLibrary;
-        self.stacks.reset();
-        // The map's points and clusters belong to the old library.
-        self.map = Default::default();
-        // Album and media ids restart with each library: a dialog left open
-        // would act on the new library's rows with the old ids (a Delete
-        // could trash unrelated files), so every id-holding dialog closes.
-        self.album_draft = Default::default();
-        self.albums = Default::default();
-        self.delete_confirm_state = None;
-        self.context_menu_state = None;
-        self.cancel_tag_manager_prompts();
-        // Undo entries hold ids from the old library; replaying them here
-        // would change the wrong rows.
-        self.undo = Default::default();
-        // An import belongs to the library it was started in.
-        self.abandon_import(cx);
-        // So does a link being checked or previewed: a late result would
-        // queue it into this library.
-        self.close_network_import_dialog(cx);
-        self.search_query.clear();
-        self.search_focused = false;
-        self.active_year = None;
-        self.discard_edit_draft();
-        self.edits.reset_for_library();
-        // A new library is a jump, not user navigation: start a fresh trail.
-        self.reset_navigation_history();
+        self.reset_library_state(cx);
 
         // Drop and join the previous event-receiver thread to prevent orphaned threads.
         if let Some(handle) = self.event_receiver_thread.take() {

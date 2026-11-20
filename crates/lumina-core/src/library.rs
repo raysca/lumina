@@ -71,11 +71,21 @@ fn promote_legacy_catalog(catalog_dir: &Path, library_root: &Path, target: &Path
                 "moved the catalog for {} to its current name",
                 library_root.display()
             );
+            // The WAL and shared-memory files belong to the catalog file: if
+            // one stays behind under the old name, frames it holds are not
+            // seen by the promoted database. Never swallow a failed move.
             for suffix in ["-wal", "-shm", ".bak"] {
                 let from = PathBuf::from(format!("{}{suffix}", legacy.display()));
-                if from.exists() {
-                    let to = PathBuf::from(format!("{}{suffix}", target.display()));
-                    let _ = std::fs::rename(from, to);
+                if !from.exists() {
+                    continue;
+                }
+                let to = PathBuf::from(format!("{}{suffix}", target.display()));
+                if let Err(err) = std::fs::rename(&from, &to) {
+                    log::warn!(
+                        "could not move the catalog companion {} to {}: {err:#}",
+                        from.display(),
+                        to.display()
+                    );
                 }
             }
         }
@@ -575,6 +585,10 @@ mod tests {
         let target = catalog_path_in(&base, &root);
         assert_ne!(legacy, target, "the encoded root hashes differently");
         std::fs::write(&legacy, b"catalog").unwrap();
+        // SQLite's sidecars travel with the catalog; a test that only moved
+        // the main file would miss a broken companion rename.
+        let legacy_wal = PathBuf::from(format!("{}-wal", legacy.display()));
+        std::fs::write(&legacy_wal, b"frames").unwrap();
 
         promote_legacy_catalog(&base, &root, &target);
         assert!(
@@ -582,6 +596,14 @@ mod tests {
             "the old catalog is found under the new name"
         );
         assert!(!legacy.exists());
+        assert!(
+            !legacy_wal.exists(),
+            "the WAL moves with the catalog, not left under the old name"
+        );
+        assert!(
+            PathBuf::from(format!("{}-wal", target.display())).exists(),
+            "the WAL is next to the promoted catalog"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 
