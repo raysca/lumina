@@ -170,6 +170,7 @@ Four commits landed on top of `1c27102`:
   (honest duplicate-scan name), CORE-26 part 1 (catalog naming convention).
 - `c61efd1` CORE-09 — one template builds the year/month/day timeline buckets.
 - `7be790d` CORE-15 — Get Info EXIF rows move to scanner/details.rs.
+- `d30f8d9` CORE-13 — annotations split out of catalog/media (media.rs ~313 production lines).
 
 Measured production sizes after the extractions (tests excluded) for the modules still
 listed as oversized: state 1282 · lib 998 · config 923 · decoder 895 (still high because it is
