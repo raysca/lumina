@@ -146,10 +146,12 @@ and keeps two internal build artifacts for 14 days:
 - `bundle-macos`: an ad-hoc signed arm64 `Lumina.app` zip, uploaded as
   `lumina-macos-arm64-adhoc`.
 
-The release workflow also builds and checks the unsigned `.deb` and keeps it
-as a 30-day workflow artifact. None of these is attached to a GitHub release
-or is a distributable release: the `.deb` is unsigned and Linux is not
-supported yet, and the ad-hoc app is not Developer ID signed or notarized.
+The release workflow builds and checks the package too. With the Linux release
+key set it attaches the signed `.deb`, its checksums and the public key to the
+draft release; without it, the files stay a 30-day workflow artifact. An
+unsigned Linux artifact is never attached to a release: it is not a
+distributable package, and Linux is not a supported platform yet. The ad-hoc
+macOS app on CI is likewise not Developer ID signed or notarized.
 
 ### What blocks a Windows/Linux release today
 
@@ -201,9 +203,10 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
      MSIX (or signed NSIS/MSI), sign with Authenticode and timestamping; plan
      SmartScreen reputation.
    - Linux: verify the current x86_64 `.deb` install/uninstall and desktop
-     entry, document required GStreamer plugins and glibc support, then add
-     signing before public distribution. arm64 and other package formats remain
-     future work.
+     entry, document required GStreamer plugins and glibc support, and check the
+     signed release checksums end to end; add a signed apt repository (or make
+     Flathub the delivery path) before public distribution. arm64 and other
+     package formats remain future work.
 6. **CI/release matrix**: one job per platform, native tests, platform archive
    verification, per-platform checksums, and a single draft release containing
    macOS + Windows + Linux artifacts.

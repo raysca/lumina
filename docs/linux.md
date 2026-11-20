@@ -3,7 +3,9 @@
 Linux support is in development and is not a supported release. CI's
 `package-linux` job builds an unsigned `.deb` on pushes to main and on pull
 requests and keeps it as a 14-day workflow artifact for internal verification
-only; it is never attached to a release. The release checklist in
+only; that CI artifact is never attached to a release. The release workflow
+attaches its own versioned, signed copy only when the Linux release key is
+configured. The release checklist in
 [`RELEASING.md`](../RELEASING.md#windows-planned-linux-in-development) lists
 the remaining acceptance work.
 
@@ -95,10 +97,11 @@ gpg --verify SHA256SUMS-linux.txt.asc SHA256SUMS-linux.txt
 sha256sum --check SHA256SUMS-linux.txt
 ```
 
-The key fingerprint is published with the release and is the release key, not
-a personal one. A signed apt repository (signed `Release`/`InRelease`) is the
-next step if Lumina is delivered through `apt`; Flathub signs the Flatpak build
-on its side.
+The public key travels with the release. Compare its fingerprint with the one
+in the release announcement before trusting it: the `.asc` alone only proves
+that the checksums and the key agree, not who owns the key. A signed apt
+repository (signed `Release`/`InRelease`) is the next step if Lumina is
+delivered through `apt`; Flathub signs the Flatpak build on its side.
 
 The manual desktop pass required before Linux is called supported lives in
 [`linux-release-qa.md`](linux-release-qa.md). It is not a substitute for the
