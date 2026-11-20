@@ -83,6 +83,8 @@ impl DiskCache {
     }
 
     /// A single flat cache folder, for tests and tools.
+    /// Test-support entry point: pins the cache to a temp directory.
+    #[doc(hidden)]
     pub fn with_directory<P: AsRef<Path>>(dir: P) -> Result<Self> {
         Self::with_budget(dir, DEFAULT_MAX_CACHE_BYTES)
     }

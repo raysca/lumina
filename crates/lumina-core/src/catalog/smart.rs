@@ -9,6 +9,8 @@ use crate::{MediaItem, SortSpec};
 
 impl Catalog {
     /// Queries a built-in System Smart Album (Favorites, Videos, RAW, Screenshots, Places, etc.).
+    /// Test-support entry point (integration tests build catalogs directly).
+    #[doc(hidden)]
     pub fn query_system_album(
         &self,
         album: SystemAlbum,
@@ -105,6 +107,8 @@ impl Catalog {
         })
     }
 
+    /// Test-support entry point.
+    #[doc(hidden)]
     pub fn get_smart_album(&self, id: i64) -> Result<Option<SmartAlbum>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(

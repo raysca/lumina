@@ -1,3 +1,10 @@
+//! Lumina's UI-free engine: the catalog, scanner, decoder, search, smart
+//! albums, sidecars and caches, reached through [`LuminaEngine`].
+//!
+//! The engine owns no windows and no global config; callers open a library,
+//! drive mutations through the catalog, and receive [`EngineEvent`]s on the
+//! channel returned by `open`.
+
 pub mod cache;
 pub mod catalog;
 pub mod decoder;

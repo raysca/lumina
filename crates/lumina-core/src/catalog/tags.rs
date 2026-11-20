@@ -342,7 +342,7 @@ fn items_by_tag_sql() -> String {
 }
 
 #[cfg(test)]
-mod untagged_media_tests {
+mod tests {
     use super::*;
     use crate::text::MAX_NAME_CHARS;
     use crate::{MediaType, SortDirection, SortField};

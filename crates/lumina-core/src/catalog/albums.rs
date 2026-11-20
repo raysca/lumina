@@ -139,6 +139,8 @@ fn album_title(title: &str) -> Result<String> {
 
 impl Catalog {
     /// Creates an empty album.
+    /// Test-support entry point: production uses [`Self::create_album_with`].
+    #[doc(hidden)]
     pub fn create_album(&self, title: &str) -> Result<Album> {
         self.create_album_with(title, &[])
     }

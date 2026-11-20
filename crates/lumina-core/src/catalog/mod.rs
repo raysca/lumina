@@ -227,6 +227,8 @@ impl Catalog {
     }
 
     /// Returns the schema version stamped in `PRAGMA user_version`.
+    /// Test-support entry point: migration tests assert the pragma.
+    #[doc(hidden)]
     pub fn schema_version(&self) -> Result<i64> {
         let conn = self.conn.lock();
         Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
@@ -282,6 +284,8 @@ impl Catalog {
     }
 
     /// Returns the SQLite EXPLAIN QUERY PLAN rows for `sql`.
+    /// Test-support entry point: plan assertions in the query tests.
+    #[doc(hidden)]
     pub fn explain_query_plan(&self, sql: &str) -> Result<Vec<String>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?;
