@@ -44,7 +44,37 @@ LUMINA_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make release
 The scripts sign the executable and bundle with the hardened runtime and
 `resources/Lumina.entitlements`, then verify with `codesign --verify --deep --strict`.
 
+### Signed without notarization (initial release)
+
+A Developer ID signature without an Apple notarization ticket is supported:
+
+```bash
+LUMINA_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make release
+# No LUMINA_NOTARIZE and no notary credentials.
+```
+
+Two consequences are user-visible and must be in the release notes:
+
+- **Gatekeeper blocks the download on first launch.** The zip and DMG carry
+  the quarantine flag, so macOS reports that it cannot check the app for
+  malware. The user opens **System Settings › Privacy & Security**, clicks
+  **Open Anyway** (on macOS 12–14: right-click the app › **Open**), and
+  confirms. A signed-only build is not a double-click install.
+- **The in-app updater refuses it.** The updater requires the new app to meet
+  the running app's designated requirement **and `notarized`**
+  (`docs/updates.md`). Check for Updates downloads the zip, fails
+  verification, and offers the release page for a manual download, so users
+  update by hand until a notarized release exists.
+
+`spctl --assess` is a notarization check: on a signed-only build it reports
+"rejected" by design and that is not a packaging failure. Verify the signature
+instead.
+
 ## Notarization
+
+Notarization is what makes a download open without the Gatekeeper prompt and
+what the in-app updater requires. It is optional for an initial signed-only
+release (see above), but plan to notarize before relying on auto-update.
 
 Store credentials once (recommended):
 
@@ -68,6 +98,8 @@ DMG contain the stapled app.
 
 ## Verification
 
+### Signed and notarized
+
 ```bash
 codesign --verify --deep --strict --verbose=2 target/release/bundle/osx/Lumina.app
 spctl --assess --type execute --verbose=2 target/release/bundle/osx/Lumina.app
@@ -75,6 +107,18 @@ xcrun stapler validate target/release/bundle/osx/Lumina.app
 hdiutil verify target/release/bundle/osx/Lumina-v*.dmg
 cd target/release/bundle/osx && shasum -a 256 -c SHA256SUMS.txt
 ```
+
+### Signed only
+
+```bash
+codesign --verify --deep --strict --verbose=2 target/release/bundle/osx/Lumina.app
+codesign -dv --verbose=4 target/release/bundle/osx/Lumina.app 2>&1 | grep -E "Authority|TeamIdentifier"
+hdiutil verify target/release/bundle/osx/Lumina-v*.dmg
+cd target/release/bundle/osx && shasum -a 256 -c SHA256SUMS.txt
+```
+
+`spctl --assess` and `xcrun stapler validate` belong to the notarized lane;
+they fail on a signed-only build and that is expected.
 
 ## CI release
 
@@ -130,6 +174,11 @@ gpg --armor --export <fingerprint> > lumina-linux-signing-key.asc
 
 Without signing secrets the workflow still builds ad-hoc artifacts and a draft
 release, clearly unsigned — do not distribute those as a final release.
+
+With a signing certificate but no notary credentials the draft is Developer ID
+signed and not notarized. The workflow warns; that is a valid initial release
+only with the Gatekeeper steps in the release notes, and its users update by
+hand because the updater requires notarization.
 
 ## Windows planned; Linux in development
 

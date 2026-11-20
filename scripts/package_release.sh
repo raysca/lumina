@@ -8,6 +8,9 @@ cd "$ROOT_DIR"
 ./scripts/build_release.sh
 if [[ "${LUMINA_NOTARIZE:-0}" == "1" ]]; then
     ./scripts/notarize_release.sh
+else
+    echo "note: not notarized (LUMINA_NOTARIZE=0); Gatekeeper blocks a downloaded" >&2
+    echo "      copy and the in-app updater requires notarization (RELEASING.md)" >&2
 fi
 
 VERSION="$(grep -m1 "^version" crates/lumina-ui-gpui/Cargo.toml | sed "s/.*= \"//;s/\"//")"

@@ -62,7 +62,9 @@ when:
 - macOS runs it from a temporary quarantine location (never moved to
   Applications): move it, then check again;
 - it can't write to the folder the app is in;
-- the release has no zip for this Mac, or the zip fails any check above.
+- the release has no zip for this Mac, or the zip fails any check above
+  (including a signed but **not notarized** app); **Open Release Page**
+  installs that release manually.
 
 Messages never name the tools involved; details go to the log.
 
@@ -74,5 +76,11 @@ that `scripts/package_release.sh` makes from a **Developer ID signed,
 notarized and stapled** app with the same bundle id. Changing the signing
 team or the bundle id breaks updates for existing installs: users then
 update by hand once.
+
+A Developer ID signed but **not notarized** release does not auto-install:
+the updater's requirement includes `notarized`. It reports the failure with
+**Open Release Page**, so users install each update by hand until a notarized
+build ships. The release notes should also carry the Gatekeeper
+**Open Anyway** steps for first launch.
 
 Linux has no releases, so the updater isn't offered there.

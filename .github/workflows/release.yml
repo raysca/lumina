@@ -10,13 +10,14 @@ permissions:
 
 jobs:
   release:
-    name: build, sign, notarize, package
+    name: build, sign and package
     runs-on: macos-14
     permissions:
       contents: write
     env:
       # `secrets` is not available in `if:`; expose whether it is set.
       HAS_SIGNING_CERT: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+      LUMINA_NOTARIZE: ${{ (secrets.LUMINA_NOTARY_PROFILE != '' || secrets.APPLE_ID != '') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +51,6 @@ jobs:
         env:
           LUMINA_UNIVERSAL: "1"
           LUMINA_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
-          LUMINA_NOTARIZE: ${{ (secrets.LUMINA_NOTARY_PROFILE != '' || secrets.APPLE_ID != '') && '1' || '0' }}
           LUMINA_NOTARY_PROFILE: ${{ secrets.LUMINA_NOTARY_PROFILE }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -61,6 +61,16 @@ jobs:
             export LUMINA_SIGN_IDENTITY="-"
           fi
           ./scripts/package_release.sh
+
+      - name: Warn about an unsigned draft
+        if: success() && env.HAS_SIGNING_CERT != 'true'
+        run: |
+          echo "::warning::This draft is ad-hoc signed and is not distributable. Configure the Developer ID secrets before publishing."
+
+      - name: Warn about a signed-only draft
+        if: success() && env.HAS_SIGNING_CERT == 'true' && env.LUMINA_NOTARIZE != '1'
+        run: |
+          echo "::warning::This draft is Developer ID signed but not notarized. Gatekeeper blocks the first launch and the in-app updater refuses it: add the System Settings > Privacy & Security > Open Anyway steps to the release notes, and expect manual updates until a notarized release ships."
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
