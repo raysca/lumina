@@ -5,6 +5,32 @@ use rusqlite::{params, Connection};
 use super::{Catalog, SCHEMA_VERSION};
 use crate::{MediaId, TimelineBucket};
 
+/// One aggregate level of the timeline: its type name, the key expression and
+/// the columns its buckets group by. The levels differ only in these.
+struct BucketLevel {
+    kind: &'static str,
+    key: &'static str,
+    group_by: &'static str,
+}
+
+const BUCKET_LEVELS: [BucketLevel; 3] = [
+    BucketLevel {
+        kind: "year",
+        key: "printf('%04d', year)",
+        group_by: "year",
+    },
+    BucketLevel {
+        kind: "month",
+        key: "printf('%04d-%02d', year, month)",
+        group_by: "year, month",
+    },
+    BucketLevel {
+        kind: "day",
+        key: "printf('%04d-%02d-%02d', year, month, day)",
+        group_by: "year, month, day",
+    },
+];
+
 /// Empties the contentless search index and rebuilds it from the catalog,
 /// with the same columns as the `media_fts_*` triggers.
 const REBUILD_SEARCH_INDEX_SQL: &str = r#"
@@ -739,62 +765,37 @@ impl Catalog {
 
     /// Rewrites every timeline bucket on `conn`; callers own the transaction,
     /// so an edit and its buckets can commit together.
+    ///
+    /// The three bucket levels differ only by key format and grouping;
+    /// [`BUCKET_LEVELS`] keeps that difference in one place.
     pub(crate) fn rebuild_timeline_buckets(tx: &rusqlite::Connection) -> Result<()> {
         tx.execute("DELETE FROM timeline_buckets;", [])?;
 
-        // Year buckets
-        tx.execute(
-            r#"
+        // One statement per level, built from the same template: a change to
+        // the visibility rule must reach years, months and days together.
+        for level in BUCKET_LEVELS {
+            tx.execute(
+                &format!(
+                    r#"
             INSERT INTO timeline_buckets (bucket_type, bucket_key, start_timestamp, end_timestamp, item_count, cover_media_id)
-            SELECT 
-                'year',
-                printf('%04d', year),
+            SELECT
+                '{kind}',
+                {key},
                 MIN(timestamp_epoch_ms),
                 MAX(timestamp_epoch_ms),
                 COUNT(*),
                 MAX(id)
             FROM media_items
             WHERE is_trashed = 0 AND is_hidden = 0
-            GROUP BY year;
+            GROUP BY {group_by};
             "#,
-            [],
-        )?;
-
-        // Month buckets
-        tx.execute(
-            r#"
-            INSERT INTO timeline_buckets (bucket_type, bucket_key, start_timestamp, end_timestamp, item_count, cover_media_id)
-            SELECT 
-                'month',
-                printf('%04d-%02d', year, month),
-                MIN(timestamp_epoch_ms),
-                MAX(timestamp_epoch_ms),
-                COUNT(*),
-                MAX(id)
-            FROM media_items
-            WHERE is_trashed = 0 AND is_hidden = 0
-            GROUP BY year, month;
-            "#,
-            [],
-        )?;
-
-        // Day buckets
-        tx.execute(
-            r#"
-            INSERT INTO timeline_buckets (bucket_type, bucket_key, start_timestamp, end_timestamp, item_count, cover_media_id)
-            SELECT 
-                'day',
-                printf('%04d-%02d-%02d', year, month, day),
-                MIN(timestamp_epoch_ms),
-                MAX(timestamp_epoch_ms),
-                COUNT(*),
-                MAX(id)
-            FROM media_items
-            WHERE is_trashed = 0 AND is_hidden = 0
-            GROUP BY year, month, day;
-            "#,
-            [],
-        )?;
+                    kind = level.kind,
+                    key = level.key,
+                    group_by = level.group_by
+                ),
+                [],
+            )?;
+        }
 
         Ok(())
     }
