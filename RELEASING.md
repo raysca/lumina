@@ -70,6 +70,19 @@ Two consequences are user-visible and must be in the release notes:
 "rejected" by design and that is not a packaging failure. Verify the signature
 instead.
 
+Put this at the top of the release notes (adapt the version):
+
+> **First launch:** Lumina is signed but not notarized by Apple yet. If macOS
+> says it cannot verify the app, open **System Settings › Privacy & Security**,
+> click **Open Anyway**, and confirm. On macOS 12–14, right-click Lumina and
+> choose **Open**.
+>
+> **Updates:** Check for Updates downloads the release but cannot install it
+> automatically until a notarized build ships; use **Open Release Page** and
+> install the new version by hand.
+>
+> The zip's `SHA256SUMS.txt` is beside it if you want to verify the download.
+
 ## Notarization
 
 Notarization is what makes a download open without the Gatekeeper prompt and
