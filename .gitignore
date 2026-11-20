@@ -45,6 +45,8 @@ Desktop.ini
 /dist/
 *.dSYM/
 *.log
+.flatpak-builder/
+/build-dir/
 
 # Generated screenshots (stale; regenerate with the app)
 /screenshots/

@@ -70,3 +70,29 @@ remain after package removal. This behavior has been checked in an isolated
 package install; broader distribution and upgrade testing remains open.
 
 This package is unsigned and must not be distributed as a supported release.
+
+## Flatpak (draft)
+
+`packaging/flatpak/io.github.raysca.Lumina.yml` is the Flathub build: the
+`org.gnome.Platform//50` runtime and SDK (GStreamer, GTK/GLib, Rust SDK
+extension), a minimal LGPL-only ffmpeg CLI built from the same source and flags
+as the macOS bundle, and the app itself from a pinned git commit with offline
+cargo sources.
+
+It requests `--filesystem=home` and `--filesystem=removable-media` on purpose:
+a library is a folder anywhere on the user's disks and the catalog stores paths
+relative to it, so portal document paths are not a stable identity across
+rescans or volume remaps. `--device=dri`, `--socket=pulseaudio` and Wayland
+with an X11 fallback cover rendering, audio and windowing. Expect to justify
+the filesystem access in the Flathub review.
+
+URL import currently needs `yt-dlp`, which is not bundled inside the sandbox
+and is not present on the host, so the app reports its normal missing-helper
+message there. HEIC/HEIF and RAW previews remain unavailable on Linux.
+
+The manifest is a draft: it parses (`flatpak-builder --show-manifest`) and its
+cargo sources are generated, but it has not been built end to end yet. The
+build checklist (x86_64 and aarch64, sandbox launch, library on a removable
+drive, video audio, deletion, `ffmpeg -version`) is in
+[`packaging/flatpak/README.md`](../packaging/flatpak/README.md). Do not submit
+it to Flathub until that passes and the release is tagged.
