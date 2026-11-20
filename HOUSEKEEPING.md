@@ -168,6 +168,14 @@ Four commits landed on top of `1c27102`:
 - `7e85bdd` UI-04 — one source for metadata label colours.
 - `70b38b9` core shrink — CORE-29 (test modules moved out of five large files), CORE-27
   (honest duplicate-scan name), CORE-26 part 1 (catalog naming convention).
+- `c61efd1` CORE-09 — one template builds the year/month/day timeline buckets.
+- `7be790d` CORE-15 — Get Info EXIF rows move to scanner/details.rs.
+
+Measured production sizes after the extractions (tests excluded) for the modules still
+listed as oversized: state 1282 · lib 998 · config 923 · decoder 895 (still high because it is
+genuinely long) · schema 835 · text_input 786 · video_actions 757 · media 734 · downloads 722 ·
+preferences 715 · map 694 · grid 673 · video_frame 554 total but ~339 production (not oversized;
+the audit counted its inline tests) · net_import 521 · duplicates 519 · search 513 · keyword_ops 518.
 
 Gates at the end: `cargo fmt --all -- --check` clean; `cargo clippy --workspace
 --all-targets --all-features -- -D warnings` clean; `cargo test --workspace` 1396 UI tests
