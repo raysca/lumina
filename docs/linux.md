@@ -61,6 +61,13 @@ ship in `/usr/share/doc/lumina/licenses/`. The package script validates the
 desktop entry and metainfo (`desktop-file-validate`, `appstreamcli validate`)
 before building, and the install check validates them again.
 
+Video playback needs nothing extra: the package depends on the GStreamer
+plugins and ffmpeg it uses, and apt installs them. URL import needs `curl` for
+direct video links (a dependency) and `yt-dlp` for site pages and HLS
+playlists, which is a **Recommends** so a normal `apt install` pulls it in;
+systems installed with `--no-install-recommends` need `yt-dlp` installed
+separately. The dialog's missing-helper message covers that case.
+
 Remove the application files with `sudo apt remove lumina`. The package does
 not own or remove user libraries, catalogs, configuration or caches. Lumina
 stores configuration under `${XDG_CONFIG_HOME:-~/.config}/lumina`, thumbnails
@@ -88,7 +95,9 @@ the filesystem access in the Flathub review.
 
 URL import currently needs `yt-dlp`, which is not bundled inside the sandbox
 and is not present on the host, so the app reports its normal missing-helper
-message there. HEIC/HEIF and RAW previews remain unavailable on Linux.
+message there. Bundling a pinned copy is required before calling URL import
+supported in the Flatpak. HEIC/HEIF and RAW previews remain unavailable on
+Linux.
 
 The manifest is a draft: it parses (`flatpak-builder --show-manifest`) and its
 cargo sources are generated, but it has not been built end to end yet. The

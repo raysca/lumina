@@ -39,6 +39,10 @@ const MISSING_PART: &str =
 /// three-line clamp, where a failed row shows it.
 const MISSING_PART_DEV: &str =
     "A part of Lumina needed for downloads is missing from this build. Run \"make bundle-deps\", then try again.";
+/// On Linux the helper is a distribution package, so reinstalling Lumina
+/// would not add it; point at the package manager instead.
+const MISSING_PART_LINUX: &str =
+    "A part of Lumina needed for downloads is missing. Install the download helper your package manager provides, then try again.";
 
 /// The message for a missing helper, for the build that is running. Call it
 /// only on the failure path: it asks where the executable lives.
@@ -51,6 +55,8 @@ pub fn missing_part() -> &'static str {
 fn missing_part_for(source_build: bool) -> &'static str {
     if source_build {
         MISSING_PART_DEV
+    } else if cfg!(target_os = "linux") {
+        MISSING_PART_LINUX
     } else {
         MISSING_PART
     }
@@ -524,7 +530,14 @@ mod tests {
     fn missing_helper_message_matches_the_build() {
         assert_eq!(missing_part(), MISSING_PART_DEV, "tests run from target/");
         assert_eq!(missing_part_for(true), MISSING_PART_DEV);
-        assert_eq!(missing_part_for(false), MISSING_PART);
+        assert_eq!(
+            missing_part_for(false),
+            if cfg!(target_os = "linux") {
+                MISSING_PART_LINUX
+            } else {
+                MISSING_PART
+            }
+        );
         assert!(
             MISSING_PART.contains("Reinstall"),
             "an installed app cannot fetch a helper at run time"
@@ -533,7 +546,11 @@ mod tests {
             !MISSING_PART_DEV.contains("Reinstall"),
             "a source build is not reinstalled: {MISSING_PART_DEV}"
         );
-        for message in [MISSING_PART, MISSING_PART_DEV] {
+        assert!(
+            MISSING_PART_LINUX.contains("package manager"),
+            "a Linux install gets its helper from the distribution"
+        );
+        for message in [MISSING_PART, MISSING_PART_DEV, MISSING_PART_LINUX] {
             let lower = message.to_lowercase();
             for word in [
                 "yt-dlp", "ytdlp", "ffmpeg", "curl", "homebrew", "hls", "m3u8",

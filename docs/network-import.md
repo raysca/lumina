@@ -8,8 +8,12 @@ downloads one video into the library.
 | Link | How it is downloaded |
 |---|---|
 | Direct file (`.mp4`, `.mov`, `.m4v`, `.mkv`, `.avi`) | system `curl` |
-| YouTube and other video sites | bundled yt-dlp |
-| HLS playlist (`.m3u8`, recorded streams only) | bundled yt-dlp, remuxed to MP4 by bundled ffmpeg |
+| YouTube and other video sites | yt-dlp (bundled on macOS, system on Linux) |
+| HLS playlist (`.m3u8`, recorded streams only) | yt-dlp, remuxed to MP4 by ffmpeg |
+
+On macOS the app bundle ships both helpers; the Linux `.deb` uses the system
+`curl`, `yt-dlp` (a Recommends) and `ffmpeg`. The Flatpak draft does not ship
+them yet, so URL import is unavailable inside the sandbox.
 
 Live streams, web pages behind a video link, and formats Lumina can't
 catalogue (e.g. WebM) are refused with a message.
@@ -99,12 +103,13 @@ it has something in it.
 The dialog and its errors never name the tools behind a download (yt-dlp,
 ffmpeg, curl, Homebrew) or stream formats (HLS, m3u8). Messages say what
 happened and what the user can do ("This video is private."). With a helper
-missing, an installed app says "A part of Lumina needed for downloads is
-missing. Reinstall Lumina to fix this."; a source build (a debug build or an
-executable under `target/`, which is rebuilt, not reinstalled) says "A part
-of Lumina needed for downloads is missing from this build. Run
-`make bundle-deps`, then try again." Tool output and full error chains go to
-the log.
+missing, an installed macOS app says "A part of Lumina needed for downloads is
+missing. Reinstall Lumina to fix this."; on Linux, where the helper is a
+distribution package, the message points at the package manager instead. A
+source build (a debug build or an executable under `target/`, which is
+rebuilt, not reinstalled) says "A part of Lumina needed for downloads is
+missing from this build. Run `make bundle-deps`, then try again." Tool output
+and full error chains go to the log.
 
 ## Privacy and network
 
@@ -118,6 +123,10 @@ the log.
   `yt-dlp` and `ffmpeg` if installed; a `.app` only ever runs the pinned copy
   beside its executable. yt-dlp and curl run in their own process group with the
   user's yt-dlp config ignored; cancel and quit stop the whole group.
+- On Linux, the `.deb` uses the system `curl` (a dependency) and `yt-dlp` (a
+  Recommends, so a normal apt install adds it), plus the system `ffmpeg` and
+  GStreamer plugins. The Flatpak draft does not bundle `curl` or `yt-dlp` yet,
+  so URL import is not supported inside the sandbox until they are added.
 - ffmpeg is built from the pinned source as LGPL-2.1 only, copy-only
   (demuxers, muxers and parsers; no encoders, no network protocols). yt-dlp
   uses it to merge separate video and audio into MP4 and to turn streams into

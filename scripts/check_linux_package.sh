@@ -22,6 +22,10 @@ fi
 
 sudo apt-get install -y "$ROOT_DIR/$DEB"
 command -v lumina >/dev/null || { echo "lumina is not on PATH after install" >&2; exit 1; }
+command -v curl >/dev/null || { echo "the package did not install curl" >&2; exit 1; }
+if ! command -v yt-dlp >/dev/null; then
+    echo "note: yt-dlp is not installed here (it is a Recommends)" >&2
+fi
 
 APP_ID="io.github.raysca.Lumina"
 DESKTOP="/usr/share/applications/${APP_ID}.desktop"

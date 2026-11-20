@@ -25,10 +25,11 @@ job.
 
 ## Not bundled yet
 
-- **URL import**: it needs `yt-dlp`, which is a Python program. Inside the
-  sandbox there is no host `yt-dlp`, so the app reports its normal "helper is
-  missing" message. Bundle a pinned `yt-dlp_linux` / `yt-dlp_linux_aarch64`
-  before calling URL import supported in the Flatpak.
+- **URL import**: it needs `curl` for direct video links and `yt-dlp` for site
+  pages and HLS playlists. The sandbox has neither (the host copies are not
+  visible), so the app reports its normal "helper is missing" message. Bundle
+  pinned `curl` and `yt-dlp_linux` / `yt-dlp_linux_aarch64` before calling URL
+  import supported in the Flatpak.
 - **HEIC/HEIF and RAW previews**: still unsupported on Linux in this tree.
 - **Screenshots** for the AppStream listing: the metainfo has none yet.
 

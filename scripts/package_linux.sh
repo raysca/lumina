@@ -84,7 +84,8 @@ Version: $VERSION
 Section: graphics
 Priority: optional
 Architecture: $ARCH
-Depends: $SHLIB_DEPENDS, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-libav, ffmpeg
+Depends: $SHLIB_DEPENDS, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-libav, ffmpeg, curl
+Recommends: yt-dlp
 Maintainer: Lumina maintainers
 Description: Local-first photo and video manager
  Lumina catalogs and manages local photos and videos.
