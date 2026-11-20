@@ -81,14 +81,21 @@ jobs:
             target/release/bundle/osx/*.dmg
             target/release/bundle/osx/SHA256SUMS.txt
 
-  # Internal verification only: the .deb stays a short-lived workflow
-  # artifact and is never attached to the GitHub release (RELEASING.md).
+  # The Linux package joins the same draft release only when a release key is
+  # configured: a draft must never carry an unsigned Linux artifact
+  # (RELEASING.md). Without the key the build still runs and its files stay a
+  # short-lived workflow artifact.
   linux:
-    name: build and check Linux package (internal, amd64)
+    name: build, check and sign Linux package (amd64)
+    needs: release
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
-      contents: read
+      contents: write
+    env:
+      LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+      # `secrets` is not available in `if:`; expose whether both are set.
+      HAS_LINUX_SIGNING_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY != '' && secrets.LINUX_SIGNING_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -102,15 +109,56 @@ jobs:
         with:
           key: linux-release
 
+      - name: Import the Linux release key
+        if: env.HAS_LINUX_SIGNING_KEY == 'true'
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" | base64 --decode | gpg --batch --import
+          gpg --batch --list-secret-keys "$LINUX_SIGNING_KEY" >/dev/null
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
       - name: Build package
         run: ./scripts/package_linux.sh
 
       - name: Install, launch and remove package
         run: ./scripts/check_linux_package.sh
 
+      # The release name carries the version, and the checksums cover exactly
+      # what is published. They are separate from the macOS SHA256SUMS.txt the
+      # in-app updater reads.
+      - name: Assemble release files
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' crates/lumina-ui-gpui/Cargo.toml | head -1)"
+          ARCH="$(dpkg --print-architecture)"
+          OUT="target/release/bundle/linux"
+          DIST="target/release/bundle/linux-dist"
+          NAME="Lumina-v${VERSION}-linux-${ARCH}.deb"
+          rm -rf "$DIST"
+          mkdir -p "$DIST"
+          cp "$OUT/lumina_${VERSION}_${ARCH}.deb" "$DIST/$NAME"
+          (cd "$DIST" && sha256sum "$NAME" > SHA256SUMS-linux.txt)
+
+      - name: Sign the checksums
+        if: env.HAS_LINUX_SIGNING_KEY == 'true'
+        env:
+          LINUX_SIGNING_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: ./scripts/sign_linux_release.sh target/release/bundle/linux-dist
+
       - name: Upload Linux package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lumina-linux-amd64-unsigned
-          path: target/release/bundle/linux/*
+          name: lumina-linux-amd64
+          path: target/release/bundle/linux-dist/*
           retention-days: 30
+
+      - name: Attach to the draft release
+        if: env.HAS_LINUX_SIGNING_KEY == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: target/release/bundle/linux-dist/*

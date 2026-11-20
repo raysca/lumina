@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | macOS 12+ (arm64 + x86_64) | **Supported** (no release tagged yet) | Universal `Lumina.app`, `.zip`, `.dmg` |
 | Windows (x86_64; arm64 later) | **Planned, not supported yet** | None today |
-| Linux (x86_64; arm64 later) | **In development, not supported yet** | Internal Ubuntu 24.04 amd64 `.deb` (glibc 2.39+); not released |
+| Linux (x86_64; arm64 later) | **In development, not supported yet** | Internal Ubuntu 24.04 amd64 `.deb` (glibc 2.39+); with the Linux release key set, the signed `.deb` also joins the draft release. Not a supported release |
 
 Only macOS is supported from this tree. Linux now has a native GStreamer
 player, ffmpeg video previews, a Debian packaging path and a native Linux CI
@@ -89,6 +89,15 @@ Developer ID signed, notarized and stapled `Lumina.app` from the same team
 and bundle id, with the tag's version. Never publish an ad-hoc build, and
 keep the zip and `SHA256SUMS.txt` names that `package_release.sh` writes.
 
+The same tag builds the Linux package in the release workflow (after the
+macOS job, so the draft exists). When `LINUX_GPG_PRIVATE_KEY` and
+`LINUX_SIGNING_KEY` are set, it publishes `Lumina-vX.Y.Z-linux-amd64.deb`,
+`SHA256SUMS-linux.txt`, `SHA256SUMS-linux.txt.asc` and the public key
+`lumina-linux-signing-key.asc` on the **draft** release. Without them the
+package stays a 30-day workflow artifact and is never attached: an unsigned
+Linux artifact must not appear on a release. Linux is still not a supported
+platform; see the acceptance criteria below.
+
 ### Repository secrets
 
 | Secret | Purpose |
@@ -101,6 +110,23 @@ keep the zip and `SHA256SUMS.txt` names that `package_release.sh` writes.
 | `APPLE_ID` | Apple ID for notarization |
 | `APPLE_TEAM_ID` | Apple Developer Team ID |
 | `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for notarization |
+
+Linux release signing (optional; without it the `.deb` is not published):
+
+| Secret | Purpose |
+| --- | --- |
+| `LINUX_GPG_PRIVATE_KEY` | base64 of the ASCII-armored private signing key |
+| `LINUX_SIGNING_KEY` | fingerprint of that key (what `gpg --local-user` uses) |
+| `LINUX_GPG_PASSPHRASE` | optional passphrase for the key |
+
+Create a dedicated key, publish its fingerprint with the release, and keep the
+private half only in the secret store:
+
+```bash
+gpg --quick-gen-key "Lumina Releases <releases@example.com>" default default never
+gpg --armor --export-secret-keys <fingerprint> | base64 > key.b64
+gpg --armor --export <fingerprint> > lumina-linux-signing-key.asc
+```
 
 Without signing secrets the workflow still builds ad-hoc artifacts and a draft
 release, clearly unsigned — do not distribute those as a final release.
@@ -139,7 +165,11 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
   still need parity testing. Windows needs a Media Foundation backend.
 - **Packaging and signing** — the release scripts use `codesign`,
   `notarytool`, `hdiutil`, `lipo` and `ditto`. Each platform needs its own
-  build/package/sign pipeline and CI runner.
+  build/package/sign pipeline and CI runner. The Linux `.deb` is now versioned,
+  checksummed and covered by a detached GPG signature on the checksums when the
+  release key is configured; in-package signing is not used (`debsigs`
+  0.01.19 implements signing but not verification), so a signed apt repository
+  is still the next step for `apt`-based delivery.
 - **Live UI tests** — Linux now has Xvfb smokes for X11 and nested Weston
   Wayland. The X11 check launches the app, scans an isolated H.264 video,
   displays its viewer frame and loads the GStreamer player; the Wayland check
@@ -183,7 +213,7 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
 | Platform | Target formats | Signing |
 | --- | --- | --- |
 | Windows x86_64 | `Lumina-vX.Y.Z-windows-x64.msix` (or NSIS/MSI fallback), zip | Authenticode |
-| Linux x86_64 | `.deb` (internal verification only) | Not signed; not for public distribution |
+| Linux x86_64 | `Lumina-vX.Y.Z-linux-amd64.deb`, `SHA256SUMS-linux.txt` | Detached GPG signature on the checksums (`.asc`); not for public distribution yet |
 | macOS universal | `Lumina-vX.Y.Z-macos-universal.zip`, `.dmg` | Developer ID + notarization |
 
 ### Acceptance criteria before calling Windows/Linux supported

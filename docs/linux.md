@@ -76,7 +76,29 @@ under `${XDG_DATA_HOME:-~/.local/share}/lumina/Sample Library`. These paths
 remain after package removal. This behavior has been checked in an isolated
 package install; broader distribution and upgrade testing remains open.
 
-This package is unsigned and must not be distributed as a supported release.
+This package is still not a supported release. With the Linux release key
+configured, CI also publishes it on the draft GitHub release as
+`Lumina-vX.Y.Z-linux-amd64.deb` with `SHA256SUMS-linux.txt`, a detached
+signature over those checksums and the public key. Without the key it stays an
+internal workflow artifact. See [Release signing](#release-signing).
+
+## Release signing
+
+The `.deb` is not signed in-band: `debsigs` 0.01.19 (Ubuntu 24.04) implements
+signing but not verification, so a signature inside the package is not
+something a user can check with distribution tooling. The release signs the
+checksums instead, which is what direct downloads can verify:
+
+```sh
+gpg --import lumina-linux-signing-key.asc
+gpg --verify SHA256SUMS-linux.txt.asc SHA256SUMS-linux.txt
+sha256sum --check SHA256SUMS-linux.txt
+```
+
+The key fingerprint is published with the release and is the release key, not
+a personal one. A signed apt repository (signed `Release`/`InRelease`) is the
+next step if Lumina is delivered through `apt`; Flathub signs the Flatpak build
+on its side.
 
 ## Flatpak (draft)
 
