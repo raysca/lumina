@@ -177,7 +177,9 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
   and they pass in the hosted native x86_64 CI job, as does `package-linux`.
   Dialogs,
   drag/drop, audio output and other real-session interactions still need desktop
-  validation. The separate CoreGraphics/Swift window probe remains macOS-only.
+  validation (the pass is recorded with
+  [`docs/linux-release-qa.md`](linux-release-qa.md)). The separate
+  CoreGraphics/Swift window probe remains macOS-only.
 - **Metadata and paths** — Linux uses XDG paths. Startup migration and broader
   package upgrade/uninstall testing still need coverage.
 
@@ -228,6 +230,9 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
 - [ ] Installer/package installs and uninstalls without leftovers, including user data handling.
 - [ ] Artifacts are signed and verified with the platform tooling; checksums are
       published; the release is not marked stable until all platforms pass.
+- [ ] The manual desktop pass in [`docs/linux-release-qa.md`](docs/linux-release-qa.md)
+      is recorded for the release (install, media, URL import, desktop
+      integration, removable drive, Flatpak).
 - [ ] README, support policy and `RELEASING.md` no longer say macOS-only.
 
 Until then, keep public releases macOS-only. CI keeps the unsigned Linux

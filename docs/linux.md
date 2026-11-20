@@ -100,6 +100,10 @@ a personal one. A signed apt repository (signed `Release`/`InRelease`) is the
 next step if Lumina is delivered through `apt`; Flathub signs the Flatpak build
 on its side.
 
+The manual desktop pass required before Linux is called supported lives in
+[`linux-release-qa.md`](linux-release-qa.md). It is not a substitute for the
+automated checks above, and it has not been run yet.
+
 ## Flatpak (draft)
 
 `packaging/flatpak/io.github.raysca.Lumina.yml` is the Flathub build: the
