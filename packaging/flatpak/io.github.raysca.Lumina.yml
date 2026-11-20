@@ -158,5 +158,5 @@ modules:
       # exists this pins the last commit that has the whole app tree.
       - type: git
         url: https://github.com/raysca/lumina.git
-        commit: 88c9bab91cfee546264513b6e4757d4b7143c658
+        commit: 82dac8162362fa4e6f34ba03f2b3f45dd85e54da
       - cargo-sources.json
