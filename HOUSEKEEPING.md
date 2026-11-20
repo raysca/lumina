@@ -166,6 +166,8 @@ Four commits landed on top of `1c27102`:
   library reset).
 - `8d86b26` Wave C-lite — CORE-04/24/28/30, UI-12, HK-04 (docs/known-deviations.md).
 - `7e85bdd` UI-04 — one source for metadata label colours.
+- `70b38b9` core shrink — CORE-29 (test modules moved out of five large files), CORE-27
+  (honest duplicate-scan name), CORE-26 part 1 (catalog naming convention).
 
 Gates at the end: `cargo fmt --all -- --check` clean; `cargo clippy --workspace
 --all-targets --all-features -- -D warnings` clean; `cargo test --workspace` 1396 UI tests
@@ -175,8 +177,9 @@ denies `ps -M` (Operation not permitted); it is untouched by these commits.
 
 ### Not done (still open in this file)
 
-31 oversized-module splits (H01-H12, CORE-11..20, UI-07/08) are multi-file moves with
-wide import churn; each needs its own reviewed change. Also open: CORE-05/06/07/08/09
+Two core modules are now below the size rule by extraction (decoder, files). The
+remaining 31 oversized-module splits (H01-H12, CORE-11..20, UI-07/08) are multi-file moves with
+wide import churn; each needs its own reviewed change. Also open: CORE-05/06/07/08/09 (CORE-26 part 2)
 (SQL and helper duplication), CORE-26/27 (naming/public renames), CORE-29, H15/18/19/22,
 UI-01 (overlay helper), UI-03, UI-11 (36 hard-coded strings), UI-14/15/16, HK-02 (test
 helper consolidation), HK-03 (`lumina.pen` is a product decision).
