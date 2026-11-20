@@ -178,7 +178,7 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
   Dialogs,
   drag/drop, audio output and other real-session interactions still need desktop
   validation (the pass is recorded with
-  [`docs/linux-release-qa.md`](linux-release-qa.md)). The separate
+  [`docs/linux-release-qa.md`](docs/linux-release-qa.md)). The separate
   CoreGraphics/Swift window probe remains macOS-only.
 - **Metadata and paths** — Linux uses XDG paths. Startup migration and broader
   package upgrade/uninstall testing still need coverage.
