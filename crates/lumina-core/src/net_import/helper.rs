@@ -359,7 +359,7 @@ mod tests {
             "the extension is case-insensitive, like Finder"
         );
         assert!(!is_app_bundle_exe(Path::new(
-            "/Users/me/src/lumina/target/debug/lumina-ui-gpui"
+            "/Users/me/src/lumina/target/debug/Lumina"
         )));
         assert!(!is_app_bundle_exe(Path::new("/usr/bin/lumina")));
     }
@@ -370,10 +370,10 @@ mod tests {
     #[test]
     fn source_build_detection_covers_local_bundles() {
         assert!(exe_is_under_target(Path::new(
-            "/Users/me/src/lumina/target/debug/lumina-ui-gpui"
+            "/Users/me/src/lumina/target/debug/Lumina"
         )));
         assert!(exe_is_under_target(Path::new(
-            "/Users/me/src/lumina/target/aarch64-apple-darwin/debug/lumina-ui-gpui"
+            "/Users/me/src/lumina/target/aarch64-apple-darwin/debug/Lumina"
         )));
         assert!(exe_is_under_target(Path::new(
             "/Users/me/src/lumina/target/release/bundle/osx/Lumina.app/Contents/MacOS/Lumina"
