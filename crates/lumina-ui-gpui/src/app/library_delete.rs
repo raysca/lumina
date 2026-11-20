@@ -111,18 +111,27 @@ impl LuminaApp {
             return;
         }
 
-        if open {
-            self.close_library_to_welcome(cx);
+        let join = if open {
+            let join = self.close_library_to_welcome(cx);
             // Settings was covering the library; show the welcome page it
             // returns to instead of an empty Library tab.
             if self.preferences_open {
                 self.close_preferences(cx);
             }
-        }
+            join
+        } else {
+            None
+        };
 
-        let task = cx
-            .background_executor()
-            .spawn(async move { library::remove_library_at(&catalog_db, &cache_root) });
+        let task = cx.background_executor().spawn(async move {
+            // The engine may still be held by a task that is shutting down
+            // (a download, a decode). Joining here, off the UI thread, both
+            // waits for it and keeps the catalog open until it is gone.
+            if let Some(handle) = join {
+                let _ = handle.join();
+            }
+            library::remove_library_at(&catalog_db, &cache_root)
+        });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |app, cx| match result {
@@ -151,7 +160,13 @@ impl LuminaApp {
 
     /// Closes the open library and shows the welcome screen again, with the
     /// same reset a library switch does so no id or texture from it survives.
-    fn close_library_to_welcome(&mut self, cx: &mut Context<Self>) {
+    /// Returns the event reader thread to join once the engine has no holders
+    /// left: joining it here would wait on the UI thread for the very tasks
+    /// this reset is cancelling.
+    fn close_library_to_welcome(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<std::thread::JoinHandle<()>> {
         if self.is_fullscreen_viewer {
             self.close_viewer(cx);
         }
@@ -162,6 +177,10 @@ impl LuminaApp {
         self.close_network_import_dialog(cx);
         self.discard_edit_draft();
 
+        // The download job holds an engine clone; drop it before the engine
+        // is expected to go away, or the event reader never sees its channel
+        // close.
+        self.downloads.reset(None);
         if let Some(old) = self.grid_state.take() {
             old.engine.cancel_scan();
             let mut cache = old.texture_cache.lock();
@@ -169,16 +188,11 @@ impl LuminaApp {
                 self.retire_image(thumb.image);
             }
         }
-        // Drop the engine (and the watcher it owns) before joining the event
-        // reader, whose channel closes with it.
         self.library_generation += 1;
-        if let Some(handle) = self.event_receiver_thread.take() {
-            let _ = handle.join();
-        }
+        let join = self.event_receiver_thread.take();
 
         self.first_scan = None;
         self.pending_restore = None;
-        self.downloads.reset(None);
         self.clear_selection_fields();
         self.selection = crate::views::sidebar::AlbumSelection::AllLibrary;
         self.stacks.reset();
@@ -197,5 +211,6 @@ impl LuminaApp {
         self.welcome.set_missing(None);
         self.welcome.focused_recent = None;
         cx.notify();
+        join
     }
 }

@@ -20,6 +20,13 @@ fn deleting_the_open_library_keeps_its_files_and_shows_the_welcome() {
     let cache_owner = engine.clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
+    // A normally opened library keeps a download job holding the engine; the
+    // close must drop it before waiting for the event reader, or deletion
+    // deadlocks the UI thread.
+    view.update(vcx, |app, _| {
+        app.downloads
+            .reset(Some(crate::app::downloads::real_job(cache_owner.clone())));
+    });
     let cache_dir = cache_owner.cache_dir().to_path_buf();
     std::fs::write(cache_dir.join("thumb.bin"), b"thumb").unwrap();
     let sibling = cache_owner.cache_root().join("catalog_sibling");
