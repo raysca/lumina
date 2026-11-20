@@ -57,7 +57,8 @@ Daily.
 It refuses, with a message and **Open Release Page** for a manual download,
 when:
 
-- the running copy isn't Developer ID signed (ad-hoc and local builds);
+- the running copy isn't Developer ID signed (ad-hoc and local builds; an
+  ad-hoc preview updates by hand);
 - it runs outside an app bundle (a `cargo run` build);
 - macOS runs it from a temporary quarantine location (never moved to
   Applications): move it, then check again;
@@ -82,5 +83,11 @@ the updater's requirement includes `notarized`. It reports the failure with
 **Open Release Page**, so users install each update by hand until a notarized
 build ships. The release notes should also carry the Gatekeeper
 **Open Anyway** steps for first launch.
+
+An **ad-hoc** preview release (no Developer ID at all) is published as a
+pre-release, which `releases/latest` skips, so the updater never offers it. Its
+installs can never update: the updater refuses to run from an ad-hoc copy, so
+they download every later version by hand until they install a Developer ID
+build once.
 
 Linux has no releases, so the updater isn't offered there.

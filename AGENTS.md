@@ -285,9 +285,12 @@ hdiutil verify target/release/bundle/osx/Lumina-*.dmg
 cd target/release/bundle/osx && shasum -a 256 -c SHA256SUMS.txt
 ```
 
-Unsigned/ad-hoc artifacts are for local testing only and must not be presented
-as a distributable release. Signing requires certificates and secrets described
-in `RELEASING.md`.
+Unsigned/ad-hoc artifacts are for local testing only and must not be published
+as a normal release. The one exception is the documented ad-hoc **preview**
+release (before a Developer ID exists): it is published as a GitHub
+pre-release, its notes carry the Gatekeeper approval steps, and it is never
+presented as a supported or self-updating release. See `RELEASING.md`.
+Signing requires certificates and secrets described in `RELEASING.md`.
 
 ## 9. Independent agent reviews
 

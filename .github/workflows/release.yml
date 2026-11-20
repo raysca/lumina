@@ -62,10 +62,10 @@ jobs:
           fi
           ./scripts/package_release.sh
 
-      - name: Warn about an unsigned draft
+      - name: Warn about an ad-hoc preview draft
         if: success() && env.HAS_SIGNING_CERT != 'true'
         run: |
-          echo "::warning::This draft is ad-hoc signed and is not distributable. Configure the Developer ID secrets before publishing."
+          echo "::warning::This draft is ad-hoc signed and is marked as a pre-release. Publish it only as the documented preview: include the System Settings > Privacy & Security > Open Anyway steps in the notes, and say that these installs cannot self-update (a later Developer ID build needs one manual install)."
 
       - name: Warn about a signed-only draft
         if: success() && env.HAS_SIGNING_CERT == 'true' && env.LUMINA_NOTARIZE != '1'
@@ -85,6 +85,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
+          # An ad-hoc build is a preview: `releases/latest` skips pre-releases,
+          # so installed apps are never offered one (RELEASING.md).
+          prerelease: ${{ env.HAS_SIGNING_CERT != 'true' }}
           generate_release_notes: true
           files: |
             target/release/bundle/osx/*.zip

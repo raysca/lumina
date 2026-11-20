@@ -44,7 +44,45 @@ LUMINA_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" make release
 The scripts sign the executable and bundle with the hardened runtime and
 `resources/Lumina.entitlements`, then verify with `codesign --verify --deep --strict`.
 
-### Signed without notarization (initial release)
+### Ad-hoc preview release (no Developer ID)
+
+The first public build can ship without an Apple Developer account:
+
+```bash
+make release        # no LUMINA_SIGN_IDENTITY: the scripts sign ad-hoc
+```
+
+Publish it **as a GitHub pre-release**. The updater asks `releases/latest`,
+which skips pre-releases, so an ad-hoc build is never offered to an installed
+app, and the release is unmistakably a preview rather than a supported version.
+
+What users get:
+
+- **First launch:** macOS cannot verify the developer. The notes must carry
+  the **System Settings › Privacy & Security › Open Anyway** steps (macOS
+  12–14: right-click Lumina › Open).
+- **No identity to inspect:** `codesign -dv` shows `Signature=adhoc`; there is
+  no Developer ID to verify, and `spctl` rejects it by design.
+- **No updates, ever, for those installs.** The updater refuses to run from an
+  ad-hoc copy (its designated requirement pins a hash no new build matches), so
+  every later version is a manual download. Moving to Developer ID later takes
+  one manual install of the first signed build; after that, updates work as
+  documented.
+
+Start the release notes with:
+
+> **Preview build.** Lumina is not signed with a Developer ID yet, so macOS
+> will ask you to approve it. Open **System Settings › Privacy & Security**,
+> click **Open Anyway** (macOS 12–14: right-click Lumina › Open), and confirm.
+>
+> **Updates:** this preview cannot update itself. Download future versions
+> from the releases page; moving to the standard build needs one manual
+> install.
+
+The release workflow sets the pre-release flag for an ad-hoc draft. Do not
+describe the build as signed, notarized, or safe for automatic updates.
+
+### Signed without notarization
 
 A Developer ID signature without an Apple notarization ticket is supported:
 
@@ -143,8 +181,9 @@ checksums. Publish the draft after verifying the artifacts.
 Publishing ships the release to every Lumina that checks for updates
 (`docs/updates.md`). Installed apps take it only if the zip holds a
 Developer ID signed, notarized and stapled `Lumina.app` from the same team
-and bundle id, with the tag's version. Never publish an ad-hoc build, and
-keep the zip and `SHA256SUMS.txt` names that `package_release.sh` writes.
+and bundle id, with the tag's version. Never publish an ad-hoc build as a
+normal release; the documented ad-hoc preview below is the only exception.
+Keep the zip and `SHA256SUMS.txt` names that `package_release.sh` writes.
 
 The same tag builds the Linux package in the release workflow (after the
 macOS job, so the draft exists). When `LINUX_GPG_PRIVATE_KEY` and
@@ -185,8 +224,9 @@ gpg --armor --export-secret-keys <fingerprint> | base64 > key.b64
 gpg --armor --export <fingerprint> > lumina-linux-signing-key.asc
 ```
 
-Without signing secrets the workflow still builds ad-hoc artifacts and a draft
-release, clearly unsigned — do not distribute those as a final release.
+Without signing secrets the workflow builds an ad-hoc draft and marks it as a
+**pre-release**. Publish it only as the documented ad-hoc preview, with the
+Gatekeeper and no-updates notes above — never as a normal release.
 
 With a signing certificate but no notary credentials the draft is Developer ID
 signed and not notarized. The workflow warns; that is a valid initial release
