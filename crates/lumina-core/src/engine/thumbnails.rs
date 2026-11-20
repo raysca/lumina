@@ -347,9 +347,20 @@ mod tests {
     }
 
     fn cache_file_count(dir: &Path) -> usize {
-        fs::read_dir(dir.join("cache"))
-            .map(|entries| entries.filter_map(|e| e.ok()).count())
-            .unwrap_or(0)
+        fn walk(path: &Path) -> usize {
+            let Ok(entries) = fs::read_dir(path) else {
+                return 0;
+            };
+            entries
+                .flatten()
+                .map(|entry| match entry.file_type() {
+                    Ok(kind) if kind.is_dir() => walk(&entry.path()),
+                    Ok(kind) if kind.is_file() => 1,
+                    _ => 0,
+                })
+                .sum()
+        }
+        walk(&dir.join("cache"))
     }
 
     #[test]

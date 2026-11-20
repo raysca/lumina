@@ -52,13 +52,13 @@ impl LuminaApp {
             .grid_state
             .as_ref()
             .is_some_and(|grid| same_library(grid.engine.library_root(), &path));
-        let (catalog_db, cache_dir) = if open {
+        let (catalog_db, cache_root) = if open {
             let engine = &self.grid_state.as_ref().expect("open library").engine;
             let Some(db) = engine.catalog_path() else {
                 self.set_error("This library has no catalog file to remove.", cx);
                 return;
             };
-            (db.to_path_buf(), engine.cache_dir().to_path_buf())
+            (db.to_path_buf(), engine.cache_root().to_path_buf())
         } else {
             #[cfg(test)]
             if let Some(dir) = self.catalog_dir_override.as_ref() {
@@ -117,7 +117,7 @@ impl LuminaApp {
 
         let task = cx
             .background_executor()
-            .spawn(async move { library::remove_library_at(&catalog_db, &cache_dir) });
+            .spawn(async move { library::remove_library_at(&catalog_db, &cache_root) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |app, cx| match result {

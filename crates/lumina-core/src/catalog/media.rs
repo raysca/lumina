@@ -265,7 +265,7 @@ impl Catalog {
             let path_str: String = row.get(0)?;
             let file_size: u64 = row.get(1)?;
             let mtime_epoch_ms: i64 = row.get(2)?;
-            Ok((PathBuf::from(path_str), (file_size, mtime_epoch_ms)))
+            Ok((super::paths::decode(&path_str), (file_size, mtime_epoch_ms)))
         })?;
 
         Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -280,7 +280,7 @@ impl Catalog {
             conn.prepare_cached("SELECT file_path, file_size, mtime_epoch_ms FROM media_items;")?;
         let rows = stmt.query_map([], |row| {
             Ok((
-                PathBuf::from(row.get::<_, String>(0)?),
+                super::paths::decode(&row.get::<_, String>(0)?),
                 row.get(1)?,
                 row.get(2)?,
             ))
@@ -311,7 +311,7 @@ impl Catalog {
         };
         let sizes: Vec<(i64, (u32, u32))> = sizeless
             .into_iter()
-            .filter_map(|(id, path)| Some((id, measure(std::path::Path::new(&path))?)))
+            .filter_map(|(id, path)| Some((id, measure(&super::paths::decode(&path))?)))
             .collect();
         if sizes.is_empty() {
             return Ok(0);

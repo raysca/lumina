@@ -54,7 +54,7 @@ impl Catalog {
     /// with its inode and size was just added elsewhere is folded with it:
     /// the file was renamed.
     pub fn mark_missing_under(&self, path: &Path) -> Result<MissingChange> {
-        let exact = path.to_string_lossy().to_string();
+        let exact = super::paths::encode(path);
         // Rows under the folder sort between "p/" and "p0" ('0' follows '/'),
         // a range on the unique file_path index; LIKE would need escaping.
         let lower = format!("{exact}/");
@@ -153,15 +153,16 @@ impl Catalog {
         let mut gone = Vec::new();
         let mut inodes = Vec::new();
         for (id, path, inode) in rows {
-            match std::fs::metadata(&path) {
+            let file = super::paths::decode(&path);
+            match std::fs::metadata(&file) {
                 Ok(_) if inode.is_none() => {
-                    if let Some(inode) = file_inode(Path::new(&path)) {
+                    if let Some(inode) = file_inode(&file) {
                         inodes.push((id, inode as i64));
                     }
                 }
                 Ok(_) => {}
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => gone.push(id),
-                Err(err) => log::warn!("cannot check {path}: {err}"),
+                Err(err) => log::warn!("cannot check {}: {err}", file.display()),
             }
         }
         if gone.is_empty() && inodes.is_empty() {
@@ -256,7 +257,8 @@ impl Catalog {
             params![other.0 as i64],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
-        let (root_id, rel_path, rel_parent) = super::roots::placement(root, Path::new(&path));
+        let (root_id, rel_path, rel_parent) =
+            super::roots::placement(root, &super::paths::decode(&path));
         let volume = root.map(|root| root.volume_id.as_str());
         tx.execute(
             "DELETE FROM media_items WHERE id = ?1;",
@@ -323,9 +325,7 @@ impl Catalog {
             );
             let mut stmt = conn.prepare_cached(&sql)?;
             let rows = stmt.query_map(
-                rusqlite::params_from_iter(
-                    chunk.iter().map(|path| path.to_string_lossy().into_owned()),
-                ),
+                rusqlite::params_from_iter(chunk.iter().map(|path| super::paths::encode(path))),
                 |row| {
                     Ok((
                         row.get::<_, String>(0)?,
@@ -336,7 +336,7 @@ impl Catalog {
             )?;
             for row in rows {
                 let (path, file_size, mtime_epoch_ms) = row?;
-                found.insert(PathBuf::from(path), (file_size, mtime_epoch_ms));
+                found.insert(super::paths::decode(&path), (file_size, mtime_epoch_ms));
             }
         }
         Ok(found)
@@ -348,7 +348,7 @@ impl Catalog {
         let id = conn
             .query_row(
                 "SELECT id FROM media_items WHERE file_path = ?1;",
-                [path.to_string_lossy()],
+                [super::paths::encode(path)],
                 |row| row.get::<_, i64>(0),
             )
             .optional()?;
@@ -936,6 +936,39 @@ pub(crate) mod tests {
         assert!(
             plan.contains("idx_file_state_inode"),
             "marking a folder missing must not scan the table per file: {plan}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_filename_round_trips_through_the_catalog() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = TempDir::new("non_utf8");
+        let catalog = Catalog::open_in_memory().unwrap();
+        catalog.ensure_library_root(&dir.0).unwrap();
+        let path = dir.0.join(std::ffi::OsStr::from_bytes(b"photo-\xff.jpg"));
+        // No file on disk: macOS refuses to create such a name, and the
+        // catalog's encoding is what is under test.
+        let item = ingest(&catalog, &path);
+
+        let got = catalog.get_item_by_id(item.id).unwrap().unwrap();
+        assert_eq!(
+            got.path.as_os_str().as_bytes(),
+            path.as_os_str().as_bytes(),
+            "the exact bytes survive the round trip"
+        );
+        assert_eq!(
+            catalog.id_at_path(&path).unwrap(),
+            Some(item.id),
+            "lookup by the same bytes finds the row"
+        );
+        assert!(
+            catalog
+                .present_signatures(std::slice::from_ref(&path))
+                .unwrap()
+                .contains_key(&path),
+            "the batch signature lookup uses the same spelling"
         );
     }
 

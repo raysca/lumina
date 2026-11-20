@@ -134,7 +134,7 @@ impl LuminaEngine {
         let (event_tx, event_rx) = unbounded();
 
         let db_existed = db_path.exists();
-        let catalog = Catalog::open(db_path)?;
+        let catalog = Catalog::open(&db_path)?;
         if db_existed {
             match catalog.quick_check() {
                 Ok(()) => log::info!("catalog integrity check passed"),
@@ -147,13 +147,16 @@ impl LuminaEngine {
             }
         }
 
-        let cache = match cache_dir {
-            Some(dir) => DiskCache::with_directory(dir)?,
-            None => DiskCache::new()?,
-        };
         catalog
             .ensure_library_root(&library_root)
             .context("recording the library root")?;
+        // The cache folder is named by the catalog file, so deleting a library
+        // names its thumbnails exactly; the root keeps the budget global.
+        let library_id = DiskCache::library_id(&db_path);
+        let cache = match cache_dir {
+            Some(root) => DiskCache::for_library(root, &library_id)?,
+            None => DiskCache::for_library(DiskCache::default_dir(), &library_id)?,
+        };
         {
             let cache = cache.clone();
             let _ = std::thread::Builder::new()
@@ -266,6 +269,11 @@ impl LuminaEngine {
     /// Where this engine caches decoded thumbnails.
     pub fn cache_dir(&self) -> &Path {
         self.cache.cache_dir()
+    }
+
+    /// The thumbnail root shared by every library.
+    pub fn cache_root(&self) -> &Path {
+        self.cache.root_dir()
     }
 
     pub fn catalog(&self) -> &Catalog {

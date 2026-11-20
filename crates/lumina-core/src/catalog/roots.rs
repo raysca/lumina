@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, OptionalExtension};
 use std::path::{Path, PathBuf};
 
+use super::paths;
 use super::Catalog;
 use crate::volumes::{self, VolumeIdentity};
 
@@ -37,17 +38,17 @@ pub(crate) struct RootContext {
     pub(crate) volume_id: String,
 }
 
-/// The catalog's form of `path`: `/`-separated on Windows so prefix queries
-/// behave the same there; Unix stores the OS's own spelling, where `\` is a
-/// legal filename character and must not be rewritten.
+/// The catalog's form of a media path: `%` escaped, invalid UTF-8 bytes as
+/// `%XX`, and `/`-separated on Windows so prefix queries behave there.
+/// Unix keeps its own spelling, where `\` is a legal filename character.
 pub(crate) fn path_string(path: &Path) -> String {
     #[cfg(windows)]
     {
-        path.to_string_lossy().replace('\\', "/")
+        paths::encode(path).replace('\\', "/")
     }
     #[cfg(not(windows))]
     {
-        path.to_string_lossy().into_owned()
+        paths::encode(path)
     }
 }
 
@@ -76,9 +77,10 @@ pub(crate) fn placement(
     let rel_parent = path
         .parent()
         .and_then(|parent| {
-            (parent == root.path.as_path())
-                .then(String::new)
-                .or_else(|| relative_to(&root.path, parent))
+            parent
+                .strip_prefix(&root.path)
+                .ok()
+                .map(|parent| parent.to_string_lossy().into_owned())
         })
         .unwrap_or_default();
     (Some(root.id), Some(rel_path), Some(rel_parent))
@@ -190,9 +192,9 @@ impl Catalog {
                     Ok(LibraryRoot {
                         id: row.get(0)?,
                         volume_id: row.get(1)?,
-                        mount_point: PathBuf::from(row.get::<_, String>(2)?),
-                        rel_from_volume: PathBuf::from(row.get::<_, String>(3)?),
-                        stored_root: PathBuf::from(row.get::<_, String>(4)?),
+                        mount_point: paths::decode(&row.get::<_, String>(2)?),
+                        rel_from_volume: paths::decode(&row.get::<_, String>(3)?),
+                        stored_root: paths::decode(&row.get::<_, String>(4)?),
                     })
                 },
             )
@@ -228,6 +230,9 @@ impl Catalog {
             return Ok(false);
         }
         let prefix = path_string(&stored_new);
+        // `parent_dir` is display/search text, not a path column: it must keep
+        // the readable spelling, never the `%XX` escapes.
+        let display_prefix = stored_new.to_string_lossy().into_owned();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         tx.execute(
@@ -245,9 +250,9 @@ impl Catalog {
         tx.execute(
             "UPDATE media_items SET \
                  file_path = ?1 || '/' || rel_path, \
-                 parent_dir = CASE WHEN rel_parent = '' THEN ?1 ELSE ?1 || '/' || rel_parent END \
-             WHERE root_id = ?2 AND rel_path IS NOT NULL;",
-            params![prefix, stored.id],
+                 parent_dir = CASE WHEN rel_parent = '' THEN ?2 ELSE ?2 || '/' || rel_parent END \
+             WHERE root_id = ?3 AND rel_path IS NOT NULL;",
+            params![prefix, display_prefix, stored.id],
         )
         .context("rewriting media paths after a root remap")?;
         Self::set_root_volume_in(&tx, stored.id, &identity.id)?;
@@ -276,15 +281,18 @@ impl Catalog {
         let mut assign = tx.prepare(
             "UPDATE media_items SET root_id = ?1, rel_path = ?2, rel_parent = ?3 WHERE id = ?4;",
         )?;
-        for (id, file_path, parent_dir) in pending {
-            let file = Path::new(&file_path);
-            let parent = Path::new(&parent_dir);
-            let Some(rel_path) = relative_to(root, file) else {
+        for (id, file_path, _parent_dir) in pending {
+            let file = paths::decode(&file_path);
+            let parent = file.parent().unwrap_or(Path::new(""));
+            let Some(rel_path) = relative_to(root, &file) else {
                 // A row outside the root (moved away, or written by an old
                 // build) keeps no root: it cannot be remapped with this one.
                 continue;
             };
-            let rel_parent = relative_to(root, parent).unwrap_or_default();
+            let rel_parent = parent
+                .strip_prefix(root)
+                .map(|parent| parent.to_string_lossy().into_owned())
+                .unwrap_or_default();
             if let Err(err) = assign.execute(params![root_id, rel_path, rel_parent, id]) {
                 // One odd row (a duplicate relative path from an old
                 // separator spelling, say) must not make the whole library
@@ -324,7 +332,7 @@ impl Catalog {
              LIMIT ?1;",
         )?;
         let rows = stmt.query_map(params![limit as i64], |row| {
-            Ok(PathBuf::from(row.get::<_, String>(0)?))
+            Ok(paths::decode(&row.get::<_, String>(0)?))
         })?;
         let present: Vec<PathBuf> = rows.collect::<rusqlite::Result<_>>()?;
         if !present.is_empty() {
@@ -337,7 +345,7 @@ impl Catalog {
              WHERE root_id IS NOT NULL AND rel_path IS NOT NULL LIMIT ?1;",
         )?;
         let rows = stmt.query_map(params![limit as i64], |row| {
-            Ok(PathBuf::from(row.get::<_, String>(0)?))
+            Ok(paths::decode(&row.get::<_, String>(0)?))
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }

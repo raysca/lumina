@@ -21,8 +21,32 @@ pub fn default_catalog_dir() -> PathBuf {
 /// The catalog file for `library_root`, in `catalog_dir`.
 ///
 /// The name is a hash of the canonical root, so opening the same folder twice
-/// reuses its catalog and a different folder never mixes into it.
+/// reuses its catalog and a different folder never mixes into it. Unlike
+/// [`catalog_path_for`], this does not promote a catalog stored under the old
+/// hash: a caller that passes its own directory owns that migration.
 pub fn catalog_path_in(catalog_dir: &Path, library_root: &Path) -> PathBuf {
+    let canonical = library_root
+        .canonicalize()
+        .unwrap_or_else(|_| library_root.to_path_buf());
+    // Encode, not lossy: two roots that differ only in bytes the display
+    // string loses must not share a catalog.
+    let hash = xxhash_rust::xxh3::xxh3_64(crate::catalog::paths::encode(&canonical).as_bytes());
+    catalog_dir.join(format!("catalog_{hash:016x}.db"))
+}
+
+/// [`catalog_path_in`] with the app's own catalog directory. A catalog named
+/// by the old lossy hash (a root containing `%`) is renamed to its encoded
+/// name the first time it is looked up, so the tags and edits survive.
+pub fn catalog_path_for(library_root: &Path) -> PathBuf {
+    let dir = default_catalog_dir();
+    let target = catalog_path_in(&dir, library_root);
+    promote_legacy_catalog(&dir, library_root, &target);
+    target
+}
+
+/// The pre-encoding hash of a root, used only to find a catalog worth
+/// renaming.
+fn legacy_catalog_path_in(catalog_dir: &Path, library_root: &Path) -> PathBuf {
     let canonical = library_root
         .canonicalize()
         .unwrap_or_else(|_| library_root.to_path_buf());
@@ -30,9 +54,37 @@ pub fn catalog_path_in(catalog_dir: &Path, library_root: &Path) -> PathBuf {
     catalog_dir.join(format!("catalog_{hash:016x}.db"))
 }
 
-/// [`catalog_path_in`] with the app's own catalog directory.
-pub fn catalog_path_for(library_root: &Path) -> PathBuf {
-    catalog_path_in(&default_catalog_dir(), library_root)
+fn promote_legacy_catalog(catalog_dir: &Path, library_root: &Path, target: &Path) {
+    if target.exists() {
+        return;
+    }
+    let legacy = legacy_catalog_path_in(catalog_dir, library_root);
+    if legacy == target || !legacy.exists() {
+        return;
+    }
+    if let Some(parent) = target.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match std::fs::rename(&legacy, target) {
+        Ok(()) => {
+            log::info!(
+                "moved the catalog for {} to its current name",
+                library_root.display()
+            );
+            for suffix in ["-wal", "-shm", ".bak"] {
+                let from = PathBuf::from(format!("{}{suffix}", legacy.display()));
+                if from.exists() {
+                    let to = PathBuf::from(format!("{}{suffix}", target.display()));
+                    let _ = std::fs::rename(from, to);
+                }
+            }
+        }
+        Err(err) => log::warn!(
+            "could not move {} to {}: {err:#}",
+            legacy.display(),
+            target.display()
+        ),
+    }
 }
 
 /// What removing a library deleted. The library folder and its files are
@@ -40,63 +92,39 @@ pub fn catalog_path_for(library_root: &Path) -> PathBuf {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibraryRemoval {
     pub removed_catalog: bool,
+    /// Files found in the library's thumbnail folder before it was removed;
+    /// removal itself is best effort.
     pub thumbnails_removed: usize,
 }
 
-/// Removes a library's catalog and its cached thumbnails, leaving every photo
+/// Removes a library's catalog and its thumbnail folder, leaving every photo
 /// and video where it is. `library_root` is only used to find the catalog.
-///
-/// A corrupt or unreadable catalog must not block removing the library, which
-/// is exactly when a user needs it: signatures are skipped with a log line.
 pub fn remove_library(library_root: &Path) -> Result<LibraryRemoval> {
     remove_library_at(&catalog_path_for(library_root), &DiskCache::default_dir())
 }
 
-/// [`remove_library`] with explicit paths, for tests and for the app after it
-/// has closed a library (where the open engine's own catalog path is used).
-pub fn remove_library_at(catalog_db: &Path, cache_dir: &Path) -> Result<LibraryRemoval> {
-    // Read the item signatures first: the cache keys them by path, size and
-    // mtime, and the catalog is about to go away.
-    let signatures = if catalog_db.exists() {
-        match Catalog::open(catalog_db) {
-            Ok(catalog) => match catalog.all_file_signatures() {
-                Ok(signatures) => signatures,
-                Err(err) => {
-                    log::warn!(
-                        "could not read {} for thumbnail eviction: {err:#}",
-                        catalog_db.display()
-                    );
-                    Vec::new()
-                }
-            },
-            Err(err) => {
+/// [`remove_library`] with explicit paths: `cache_root` is the thumbnail root
+/// shared by every library. The library's own folder is named by its catalog
+/// file, so a corrupt catalog can still be removed with its thumbnails.
+///
+/// The caller closes the library first. A decode already running may still
+/// write a thumbnail after this returns (the decode pool does not join); it
+/// recreates the folder, which is cache-only and swept by age/budget.
+pub fn remove_library_at(catalog_db: &Path, cache_root: &Path) -> Result<LibraryRemoval> {
+    let thumbnails_removed = {
+        let cache_dir = library_cache_dir(catalog_db, cache_root);
+        if cache_dir.is_dir() {
+            let removed = count_files(&cache_dir);
+            if let Err(err) = std::fs::remove_dir_all(&cache_dir) {
                 log::warn!(
-                    "could not open {} for thumbnail eviction: {err:#}",
-                    catalog_db.display()
-                );
-                Vec::new()
-            }
-        }
-    } else {
-        Vec::new()
-    };
-    let thumbnails_removed = if cache_dir.is_dir() {
-        match DiskCache::with_directory(cache_dir) {
-            Ok(cache) => cache.remove_cached_items_counted(
-                signatures
-                    .iter()
-                    .map(|(path, size, mtime)| (path.as_path(), *size, *mtime)),
-            ),
-            Err(err) => {
-                log::warn!(
-                    "could not read the thumbnail cache at {}: {err:#}",
+                    "could not remove the thumbnail cache at {}: {err:#}",
                     cache_dir.display()
                 );
-                0
             }
+            removed
+        } else {
+            0
         }
-    } else {
-        0
     };
 
     let mut removed_catalog = false;
@@ -125,6 +153,29 @@ pub fn remove_library_at(catalog_db: &Path, cache_dir: &Path) -> Result<LibraryR
     })
 }
 
+/// The thumbnail folder for the library whose catalog is `catalog_db`.
+fn library_cache_dir(catalog_db: &Path, cache_root: &Path) -> PathBuf {
+    cache_root.join(DiskCache::library_id(catalog_db))
+}
+
+fn count_files(dir: &Path) -> usize {
+    let mut files = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            match entry.file_type() {
+                Ok(kind) if kind.is_dir() => stack.push(entry.path()),
+                Ok(kind) if kind.is_file() => files += 1,
+                _ => {}
+            }
+        }
+    }
+    files
+}
+
 /// A library found on its volume: the catalog has been remapped in memory to
 /// the new root, and [`Self::commit`] moves it to the new root's catalog path
 /// so opening that root reuses it.
@@ -133,15 +184,29 @@ pub struct LibraryRelocation {
     pub library_root: PathBuf,
     pub source_db: PathBuf,
     pub target_db: PathBuf,
+    /// Where the shared thumbnail root is, when it is known. The old library
+    /// folder is dropped on commit: its keys name the old absolute paths.
+    pub cache_root: Option<PathBuf>,
 }
 
 impl LibraryRelocation {
-    /// Moves the catalog and its SQLite companions to the new root's path.
-    /// Only the rename happens here, so a caller can drop a superseded result
-    /// before it changes the filesystem layout.
+    /// Moves the catalog to the new root's path and drops the library's old
+    /// thumbnail folder. Only filesystem renames happen here, so a caller can
+    /// drop a superseded result before it changes the layout.
     pub fn commit(&self) -> Result<()> {
         if self.target_db != self.source_db && !self.target_db.exists() {
             move_catalog_files(&self.source_db, &self.target_db)?;
+        }
+        if let Some(root) = self.cache_root.as_ref() {
+            let stale = root.join(DiskCache::library_id(&self.source_db));
+            if stale.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&stale) {
+                    log::warn!(
+                        "could not remove the stale thumbnail folder {}: {err:#}",
+                        stale.display()
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -151,15 +216,22 @@ impl LibraryRelocation {
 /// mounted somewhere else (an external drive that came back under a different
 /// mount point, or a macOS volume mounted as `Photos 1`).
 pub fn find_library_relocation(library_root: &Path) -> Result<Option<LibraryRelocation>> {
-    find_library_relocation_at(&catalog_path_for(library_root), library_root, None)
+    find_library_relocation_at(
+        &catalog_path_for(library_root),
+        library_root,
+        None,
+        Some(&DiskCache::default_dir()),
+    )
 }
 
 /// [`find_library_relocation`] with explicit paths, for tests: `target_db` is
-/// where the catalog will move when the result is committed.
+/// where the catalog will move when the result is committed, and
+/// `cache_root` is where its old thumbnail folder may be dropped.
 pub fn find_library_relocation_at(
     catalog_db: &Path,
     library_root: &Path,
     target_db: Option<&Path>,
+    cache_root: Option<&Path>,
 ) -> Result<Option<LibraryRelocation>> {
     if library_root.is_dir() || !catalog_db.exists() {
         return Ok(None);
@@ -209,6 +281,7 @@ pub fn find_library_relocation_at(
             library_root: candidate,
             source_db: catalog_db.to_path_buf(),
             target_db: target,
+            cache_root: cache_root.map(Path::to_path_buf),
         }));
     }
     Ok(None)
@@ -326,15 +399,25 @@ mod tests {
             let catalog = Catalog::open(&catalog_db).unwrap();
             catalogued_photo(&catalog, &photo);
         }
-        let thumbs = DiskCache::with_directory(&cache).unwrap();
+        let cache_id = catalog_db.file_stem().unwrap().to_str().unwrap();
+        let thumbs = DiskCache::for_library(&cache, cache_id).unwrap();
         for size in [320, 512] {
             let key = DiskCache::compute_key(&photo, 11, 1_700_000_000_000, size);
             std::fs::write(thumbs.cache_file_path(&key), b"thumb").unwrap();
         }
+        let cache_dir = thumbs.cache_dir().to_path_buf();
         let removal = remove_library_at(&catalog_db, &cache).unwrap();
         assert_eq!(
             removal.thumbnails_removed, 2,
-            "every decoded size of the library's items is evicted"
+            "the library's whole thumbnail folder is removed"
+        );
+        assert!(
+            !cache_dir.exists(),
+            "the folder is gone, so nothing is left to sweep"
+        );
+        assert!(
+            photo.exists(),
+            "removing thumbnails never touches the photo"
         );
         let _ = std::fs::remove_dir_all(&base);
     }
@@ -360,6 +443,10 @@ mod tests {
         std::fs::create_dir_all(&new).unwrap();
         let db = base.join("catalog.db");
         let moved_db = base.join("moved_catalog.db");
+        let cache_root = base.join("thumbnails");
+        let stale_cache = cache_root.join(DiskCache::library_id(&db));
+        std::fs::create_dir_all(&stale_cache).unwrap();
+        std::fs::write(stale_cache.join("thumb.bin"), b"thumb").unwrap();
 
         let catalog = Catalog::open(&db).unwrap();
         let root = catalog.ensure_library_root(&old).unwrap();
@@ -380,17 +467,21 @@ mod tests {
 
         // While the old folder exists, nothing is relocated.
         assert_eq!(
-            find_library_relocation_at(&db, &old, Some(&moved_db)).unwrap(),
+            find_library_relocation_at(&db, &old, Some(&moved_db), Some(&cache_root)).unwrap(),
             None
         );
         assert!(!moved_db.exists());
         std::fs::remove_dir_all(&old).unwrap();
 
-        let relocation = find_library_relocation_at(&db, &old, Some(&moved_db))
+        let relocation = find_library_relocation_at(&db, &old, Some(&moved_db), Some(&cache_root))
             .unwrap()
             .expect("the catalog follows its volume, not the old path");
         assert_eq!(relocation.library_root, new);
         relocation.commit().unwrap();
+        assert!(
+            !stale_cache.exists(),
+            "the old absolute-path thumbnails are dropped with the old catalog"
+        );
         assert!(
             moved_db.exists(),
             "the catalog moves to the new root's path, so opening it reuses this one"
@@ -431,7 +522,7 @@ mod tests {
             .unwrap();
         std::fs::remove_dir_all(&old).unwrap();
         assert_eq!(
-            find_library_relocation_at(&db, &old, None).unwrap(),
+            find_library_relocation_at(&db, &old, None, None).unwrap(),
             None,
             "an unrelated folder with the same name must not adopt the catalog"
         );
@@ -446,6 +537,91 @@ mod tests {
         let removal = remove_library_at(&catalog_db, &base.join("cache")).unwrap();
         assert!(removal.removed_catalog, "the corrupt catalog is removed");
         assert!(!catalog_db.exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_pre_encoding_catalog_is_reencoded_on_open() {
+        let base = temp_dir("reencode");
+        let db = base.join("catalog.db");
+        {
+            let catalog = Catalog::open(&db).unwrap();
+            let item = crate::catalog::tests_support::video_item("/lib/100%41.jpg");
+            catalog.insert_or_update_batch(&[item]).unwrap();
+            // Simulate a row written before paths were encoded.
+            let conn = catalog.conn.lock();
+            conn.execute("UPDATE media_items SET file_path = '/lib/100%41.jpg';", [])
+                .unwrap();
+            conn.pragma_update(None, "user_version", 26).unwrap();
+        }
+
+        let reopened = Catalog::open(&db).unwrap();
+        let raw: String = reopened
+            .conn
+            .lock()
+            .query_row("SELECT file_path FROM media_items;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            raw, "/lib/100%2541.jpg",
+            "the literal percent is escaped once, so it decodes back to itself"
+        );
+        let item = reopened.get_item_slice(0, 1).unwrap().remove(0);
+        assert_eq!(item.path, Path::new("/lib/100%41.jpg"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_catalog_under_the_old_hash_is_promoted() {
+        let base = temp_dir("legacy_hash");
+        let root = base.join("Photos 20% off");
+        std::fs::create_dir_all(&root).unwrap();
+        let legacy = legacy_catalog_path_in(&base, &root);
+        let target = catalog_path_in(&base, &root);
+        assert_ne!(legacy, target, "the encoded root hashes differently");
+        std::fs::write(&legacy, b"catalog").unwrap();
+
+        promote_legacy_catalog(&base, &root, &target);
+        assert!(
+            target.exists(),
+            "the old catalog is found under the new name"
+        );
+        assert!(!legacy.exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_remap_keeps_the_display_parent_readable() {
+        let base = temp_dir("remap_display");
+        let library = base.join("Photos 20% off");
+        let moved = base.join("Moved 20% off");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::create_dir_all(&moved).unwrap();
+        let db = base.join("catalog.db");
+        let catalog = Catalog::open(&db).unwrap();
+        let root = catalog.ensure_library_root(&library).unwrap();
+        catalogued_photo(&catalog, &library.join("a.jpg"));
+        catalog
+            .conn
+            .lock()
+            .execute(
+                "UPDATE library_roots SET volume_id = 'mount:/nowhere' WHERE id = ?1;",
+                [root.id],
+            )
+            .unwrap();
+
+        assert!(catalog.remap_library_root(&moved).unwrap());
+        let item = catalog.get_item_slice(0, 1).unwrap().remove(0);
+        assert_eq!(item.path, moved.join("a.jpg"), "the path column is exact");
+        let parent: String = catalog
+            .conn
+            .lock()
+            .query_row("SELECT parent_dir FROM media_items;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            parent,
+            moved.to_string_lossy(),
+            "the display column keeps the readable spelling, not %25"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 

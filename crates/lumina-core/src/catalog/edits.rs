@@ -194,7 +194,7 @@ impl Catalog {
         let conn = self.conn.lock();
         let found = conn.query_row(
             "SELECT EXISTS (SELECT 1 FROM media_items WHERE file_path = ?1);",
-            [path.to_string_lossy()],
+            [super::paths::encode(path)],
             |row| row.get(0),
         )?;
         Ok(found)
@@ -221,7 +221,7 @@ impl Catalog {
                  LEFT JOIN media_file_state s ON s.media_id = m.id
                  WHERE m.file_path = ?1
                    AND (m.is_trashed = 1 OR s.missing_since_epoch_ms IS NOT NULL));",
-            [copy.path.to_string_lossy()],
+            [super::paths::encode(&copy.path)],
             |row| row.get(0),
         )?;
         if stale {

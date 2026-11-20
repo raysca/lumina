@@ -31,7 +31,7 @@ impl Catalog {
             .query_row(params![source_url], |row| {
                 Ok(PriorDownload {
                     media_id: MediaId(row.get::<_, i64>(0)? as u64),
-                    path: PathBuf::from(row.get::<_, String>(1)?),
+                    path: super::paths::decode(&row.get::<_, String>(1)?),
                     imported_epoch_ms: row.get(2)?,
                 })
             })
@@ -44,11 +44,7 @@ impl Catalog {
     /// and any other came from a sidecar. Idempotent; returns rows decided.
     pub fn backfill_downloaded_sources(&self, library_root: &Path) -> Result<usize> {
         let mut prefix = String::new();
-        for ch in library_root
-            .join(crate::import::IMPORTS_DIR)
-            .to_string_lossy()
-            .chars()
-        {
+        for ch in super::paths::encode(&library_root.join(crate::import::IMPORTS_DIR)).chars() {
             if matches!(ch, '%' | '_' | '\\') {
                 prefix.push('\\');
             }

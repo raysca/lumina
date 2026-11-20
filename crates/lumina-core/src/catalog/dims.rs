@@ -62,7 +62,8 @@ impl Catalog {
                     if cancel.load(Ordering::Relaxed) {
                         return None;
                     }
-                    let measured = measure(Path::new(path)).filter(|s| s.0 > 0 && s.1 > 0);
+                    let measured =
+                        measure(&super::paths::decode(path)).filter(|s| s.0 > 0 && s.1 > 0);
                     if measured.is_none() {
                         unreadable += 1;
                     }

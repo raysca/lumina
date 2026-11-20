@@ -37,7 +37,7 @@ impl Catalog {
             let id: i64 = row.get(0)?;
             let path_str: String = row.get(1)?;
             let size: u64 = row.get(2)?;
-            Ok((MediaId(id as u64), PathBuf::from(path_str), size))
+            Ok((MediaId(id as u64), super::paths::decode(&path_str), size))
         })?;
 
         Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -99,7 +99,7 @@ impl Catalog {
         let rows = stmt.query_map(params![file_size as i64], |row| {
             let id: i64 = row.get(0)?;
             let path_str: String = row.get(1)?;
-            Ok((MediaId(id as u64), PathBuf::from(path_str)))
+            Ok((MediaId(id as u64), super::paths::decode(&path_str)))
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }

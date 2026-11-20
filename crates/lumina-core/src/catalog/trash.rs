@@ -132,7 +132,7 @@ impl Catalog {
             let Some((path_str, file_size, mtime_epoch_ms)) = row else {
                 continue;
             };
-            let path = PathBuf::from(&path_str);
+            let path = super::paths::decode(&path_str);
             match delete_from_disk(&path, target) {
                 Ok(()) => {
                     tx.execute(
@@ -183,7 +183,7 @@ impl Catalog {
         {
             let mut delete_stmt = tx.prepare_cached("DELETE FROM media_items WHERE id = ?1;")?;
             for (id, path_str, file_size, mtime_epoch_ms) in trashed_items {
-                let path = PathBuf::from(&path_str);
+                let path = super::paths::decode(&path_str);
                 match delete_from_disk(&path, target) {
                     Ok(()) => {
                         delete_stmt.execute(params![id])?;
@@ -338,6 +338,29 @@ mod tests {
             sidecar.exists(),
             "a sidecar must survive when its media could not be deleted"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_percent_in_a_filename_is_deleted_from_disk_not_treated_as_gone() {
+        let dir = temp_dir("percent");
+        let path = dir.join("100%41.jpg");
+        std::fs::write(&path, b"photo").unwrap();
+        let catalog = Catalog::open_in_memory().unwrap();
+        let stored = catalog
+            .insert_or_update_batch(&[item(&path)])
+            .unwrap()
+            .remove(0);
+
+        let outcome = catalog
+            .permanently_delete_items(&[stored.id], crate::DeletionTarget::PermanentDisk)
+            .unwrap();
+        assert_eq!(outcome.deleted.len(), 1);
+        assert!(
+            !path.exists(),
+            "the file whose name contains the percent is the one deleted"
+        );
+        assert_eq!(catalog.total_count().unwrap(), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

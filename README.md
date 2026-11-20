@@ -294,7 +294,7 @@ On first run the welcome screen offers **Open Existing Library…** (↵),
 generated gradient photos written to
 `~/Library/Application Support/lumina/Sample Library/`, then opened like any
 other library) and **Use Pictures Folder** (⇧↵). Lumina stores its catalog in
-`~/Library/Application Support/lumina/` and thumbnails in
+`~/Library/Application Support/lumina/` and one thumbnail folder per library in
 `~/Library/Caches/lumina/thumbnails/`; UI preferences live in
 `~/Library/Application Support/lumina/config.json`.
 

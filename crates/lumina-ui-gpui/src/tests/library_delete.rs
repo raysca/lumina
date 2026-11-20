@@ -17,8 +17,14 @@ fn deleting_the_open_library_keeps_its_files_and_shows_the_welcome() {
         "setup: the test catalog lives in the library"
     );
 
+    let cache_owner = engine.clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
+    let cache_dir = cache_owner.cache_dir().to_path_buf();
+    std::fs::write(cache_dir.join("thumb.bin"), b"thumb").unwrap();
+    let sibling = cache_owner.cache_root().join("catalog_sibling");
+    std::fs::create_dir_all(&sibling).unwrap();
+    std::fs::write(sibling.join("keep.bin"), b"keep").unwrap();
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
     render_ui(vcx);
 
@@ -68,6 +74,14 @@ fn deleting_the_open_library_keeps_its_files_and_shows_the_welcome() {
         );
     });
     assert!(!catalog.exists(), "the catalog is removed");
+    assert!(
+        !cache_dir.exists(),
+        "the open library's whole thumbnail folder is removed"
+    );
+    assert!(
+        sibling.exists(),
+        "another library's thumbnail folder is left alone"
+    );
     assert!(photo.exists(), "the user's photo stays where it is");
     assert!(
         library.is_dir(),
@@ -94,7 +108,13 @@ fn a_recent_library_can_be_deleted_from_the_welcome_screen() {
             .insert_or_update_batch(std::slice::from_ref(&photo))
             .unwrap();
     }
-    let cache = lumina_core::cache::DiskCache::with_directory(&thumbs).unwrap();
+    let cache_id = catalog_db
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let cache = lumina_core::cache::DiskCache::for_library(&thumbs, &cache_id).unwrap();
     let thumb = cache.cache_file_path(&lumina_core::cache::DiskCache::compute_key(
         &photo.path,
         photo.file_size,
@@ -151,7 +171,11 @@ fn a_recent_library_can_be_deleted_from_the_welcome_screen() {
         !catalog_db.exists(),
         "the closed library's catalog is removed"
     );
-    assert!(!thumb.exists(), "its cached thumbnails are evicted");
+    assert!(
+        !thumbs.join(&cache_id).exists(),
+        "its whole thumbnail folder is removed"
+    );
+    assert!(!thumb.exists(), "no cached thumbnails are left behind");
     assert!(photo.path.exists(), "the user's photo stays where it is");
     drop(view);
 }

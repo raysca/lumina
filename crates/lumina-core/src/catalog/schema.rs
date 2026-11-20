@@ -662,6 +662,16 @@ impl Catalog {
 
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        // v27: paths are stored encoded (`%` escaped, invalid UTF-8 bytes as
+        // `%XX`). Re-encode rows written before this so a name like
+        // `100%41.jpg` keeps its literal spelling instead of decoding as
+        // `100A.jpg`. Display columns (`parent_dir`, `rel_parent`) stay text.
+        if current < 27 {
+            let tx = conn.unchecked_transaction()?;
+            super::paths::reencode_catalog_paths(&tx)
+                .context("re-encoding paths written by an earlier build")?;
+            tx.commit()?;
+        }
         // v16: the tag and duplicate-merge paths used to send the contentless
         // index 'delete's without the caption (or with values that were not
         // indexed), dropping caption words and keeping stale ones. Rebuild it

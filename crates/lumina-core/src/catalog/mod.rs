@@ -23,6 +23,7 @@ pub use files::MissingChange;
 pub use sources::PriorDownload;
 mod media;
 pub use media::GeoPoint;
+pub(crate) mod paths;
 mod places;
 pub use places::PlaceCount;
 mod rights;
@@ -55,7 +56,7 @@ use crate::{MediaId, MediaItem, MediaType};
 /// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
 /// idempotent, and this version is stamped into `PRAGMA user_version` so future
 /// migrations can dispatch on it.
-pub const SCHEMA_VERSION: i64 = 26;
+pub const SCHEMA_VERSION: i64 = 27;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {
@@ -325,7 +326,7 @@ impl Catalog {
 
         Ok(MediaItem {
             id: MediaId(id as u64),
-            path: PathBuf::from(file_path),
+            path: paths::decode(&file_path),
             parent_dir,
             file_name,
             title,
