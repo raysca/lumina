@@ -166,14 +166,18 @@ docs/             accessibility, search, network import, updates, Linux
   user-owned S3-compatible storage: credentials only in the OS credential store,
   client-side encryption, no secrets in config/database/logs, and no automatic
   deletion of local or remote data.
-- Approved exception: self-update (`lumina-core/src/update/`, macOS only).
-  It contacts GitHub's release API and download hosts only when the user
-  picks Check for Updates or turned on Check Daily (off by default), and
-  sends no user data. It installs only an app that meets the running app's
-  designated requirement plus `notarized` (same Developer ID team and bundle
-  id), checked when staged and again just before the swap; the release
-  checksum alone is never trusted. The swap happens at quit and rolls back
-  on failure. See `docs/updates.md`.
+- Approved exception: self-update (`lumina-core/src/update/`). It contacts
+  GitHub's release API and download hosts only when the user picks Check for
+  Updates or turned on Check Daily (off by default), and sends no user data.
+  Every update must carry an `update.json` manifest signed by the project
+  update key (public half compiled in; private half only in the release
+  secret store), and the artifact's SHA-256 must match it; the release
+  checksum alone is never trusted. When the running app is a Developer ID
+  build, the new app must also meet its designated requirement plus
+  `notarized`, checked when staged and again just before the swap; an ad-hoc
+  or source build trusts the manifest. macOS swaps the app at quit and rolls
+  back on failure. Linux never replaces package-manager files: it reports the
+  new version and points at Flatpak or apt. See `docs/updates.md`.
 - Approved exception: user-initiated URL video import (`net_import`, File >
   Import Video from URL). It contacts the site in the URL the user pasted and
   the servers that site sends the video from (CDN and API hosts), sends no

@@ -28,8 +28,7 @@ fn release(version: &str) -> Release {
     Release {
         version: version.into(),
         page_url: "https://example.test/release".into(),
-        zip: None,
-        sums_url: None,
+        assets: Vec::new(),
     }
 }
 
@@ -54,6 +53,7 @@ fn relaunched() -> Result<()> {
 fn backend() -> UpdateBackend {
     UpdateBackend {
         check: newer,
+        manifest: |_, _| unreachable!("the manifest is only fetched on Linux"),
         stage: staged,
         install: installed,
         relaunch: relaunched,

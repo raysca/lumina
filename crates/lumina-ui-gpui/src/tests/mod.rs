@@ -112,7 +112,9 @@ mod text_input;
 mod thumbnails;
 mod toasts;
 mod ui_thread;
-// Updates are offered on macOS only (`app::updates::supported`).
+// The update tests cover the macOS install flow (download, swap, relaunch).
+// Linux reports a managed update instead; its message is tested in
+// `lumina_core::update`.
 #[cfg(target_os = "macos")]
 mod updates;
 mod video_controls;

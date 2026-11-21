@@ -10,7 +10,7 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
     vec![
         Menu::new("Lumina").items([
             MenuItem::action("About Lumina", ShowAbout),
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             MenuItem::action(crate::i18n::t("command.check_for_updates"), CheckForUpdates),
             MenuItem::separator(),
             MenuItem::action("Settings…", OpenPreferences),

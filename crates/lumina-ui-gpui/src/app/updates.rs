@@ -21,7 +21,7 @@ const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Whether this build offers updates: only macOS has published releases.
 pub const fn supported() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(target_os = "macos", target_os = "linux"))
 }
 
 /// Where the update flow is.
@@ -36,6 +36,14 @@ pub enum UpdatePhase {
     },
     /// Verified and waiting; installs at the next quit.
     Ready(StagedUpdate),
+    /// A newer release exists, but this build must not replace itself: the
+    /// package manager (Flatpak/apt) owns the files. `message` says how to
+    /// install it; `page_url` opens the release page.
+    Managed {
+        version: String,
+        page_url: String,
+        message: String,
+    },
     /// `page_url` offers the release page for a manual download.
     Failed {
         message: String,
@@ -48,6 +56,7 @@ pub enum UpdatePhase {
 #[derive(Clone, Copy)]
 pub struct UpdateBackend {
     pub check: fn(&AtomicBool) -> Result<Release>,
+    pub manifest: fn(&Release, &AtomicBool) -> Result<core_update::manifest::UpdateManifest>,
     pub stage: fn(&Release, &AtomicBool) -> Result<StagedUpdate>,
     pub install: fn(&StagedUpdate) -> Result<()>,
     pub relaunch: fn() -> Result<()>,
@@ -57,6 +66,7 @@ impl Default for UpdateBackend {
     fn default() -> Self {
         Self {
             check: core_update::fetch_latest,
+            manifest: core_update::fetch_manifest,
             stage: |release, cancel| install::stage(release, &install::running_bundle()?, cancel),
             install: |staged| install::install(staged, &install::running_bundle()?),
             relaunch: || install::relaunch_after_exit(&install::running_bundle()?),
@@ -151,13 +161,69 @@ impl LuminaApp {
             }
             Ok(release) => {
                 if core_update::is_newer(&release.version, env!("CARGO_PKG_VERSION")) {
-                    self.download_update(release, manual, cx);
+                    if cfg!(target_os = "macos") {
+                        self.download_update(release, manual, cx);
+                    } else {
+                        self.managed_update(release, manual, cx);
+                    }
                 } else {
                     self.set_update_phase(UpdatePhase::UpToDate);
                 }
             }
         }
         cx.notify();
+    }
+
+    /// Linux: verify the release's manifest, then point at the package
+    /// manager instead of replacing root-owned files.
+    fn managed_update(&mut self, release: Release, manual: bool, cx: &mut Context<Self>) {
+        let manifest = self.updates.backend.manifest;
+        let version = release.version.clone();
+        let page_url = release.page_url.clone();
+        let task = cx
+            .background_executor()
+            .spawn(async move { manifest(&release, &AtomicBool::new(false)) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |app, cx| match result {
+                Ok(_) => {
+                    let message =
+                        core_update::managed_message(core_update::package_kind(), &version);
+                    app.set_update_phase(UpdatePhase::Managed {
+                        version: version.clone(),
+                        page_url,
+                        message: message.clone(),
+                    });
+                    app.show_toast_kind(
+                        ToastKind::Positive,
+                        format!("Lumina {version} is available"),
+                        Some(&message),
+                        None,
+                        cx,
+                    );
+                    cx.notify();
+                }
+                Err(err) => {
+                    log::warn!("update {version}: {err:#}");
+                    let message = err.to_string();
+                    if !manual {
+                        app.show_toast_kind(
+                            ToastKind::Warning,
+                            format!("Lumina {version} is available"),
+                            Some(&message),
+                            None,
+                            cx,
+                        );
+                    }
+                    app.set_update_phase(UpdatePhase::Failed {
+                        message,
+                        page_url: Some(page_url),
+                    });
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     fn download_update(&mut self, release: Release, manual: bool, cx: &mut Context<Self>) {
@@ -261,12 +327,13 @@ impl LuminaApp {
 
     /// The release page in the browser, for a manual download.
     pub fn open_release_page(&mut self, cx: &mut Context<Self>) {
-        if let UpdatePhase::Failed {
-            page_url: Some(url),
-            ..
-        } = &self.updates.phase
-        {
-            cx.open_url(url);
+        match &self.updates.phase {
+            UpdatePhase::Failed {
+                page_url: Some(url),
+                ..
+            }
+            | UpdatePhase::Managed { page_url: url, .. } => cx.open_url(url),
+            _ => {}
         }
     }
 
@@ -290,7 +357,8 @@ impl LuminaApp {
             UpdatePhase::Ready(_) => SettingsButton::RestartToUpdate,
             UpdatePhase::Failed {
                 page_url: Some(_), ..
-            } => SettingsButton::ReleasePage,
+            }
+            | UpdatePhase::Managed { .. } => SettingsButton::ReleasePage,
             _ => SettingsButton::CheckUpdates,
         }
     }
@@ -306,6 +374,7 @@ impl LuminaApp {
                 "Lumina {} is ready. It installs when you restart or quit.",
                 staged.version
             ),
+            UpdatePhase::Managed { message, .. } => message.clone(),
             UpdatePhase::Failed { message, .. } => message.clone(),
         }
     }

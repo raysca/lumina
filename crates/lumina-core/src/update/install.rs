@@ -1,11 +1,12 @@
 //! Downloading, verifying and installing an update on macOS.
 //!
-//! Trust comes from Apple code signing, as in Electron's macOS updater: the
-//! new app must meet the running app's designated requirement (same
-//! Developer ID team and bundle id) plus `notarized`, at staging and again
-//! just before the swap. The
-//! SHA-256 from the release only catches a damaged download; it comes from
-//! the same place as the zip, so it proves nothing about who made it.
+//! Trust comes from the release's signed manifest (`update.json`): its
+//! Ed25519 signature must verify against the key compiled into the app, and
+//! the downloaded zip's SHA-256 must match the manifest. Apple code signing
+//! is added on top when this Mac runs a Developer ID build: the new app must
+//! then meet the same team and bundle id and be notarized. An ad-hoc or
+//! source build has no Developer ID to pin, so the manifest is its anchor —
+//! which is what lets a preview build update at all.
 //!
 //! Everything is staged in a hidden `.Lumina-update-<nanos>` folder beside
 //! the app, so the final swap is two renames on one volume.
@@ -17,7 +18,8 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::{expected_sha256, Release, NO_DOWNLOAD};
+use super::manifest;
+use super::{Asset, Release, NO_DOWNLOAD};
 use crate::net_import::run_captured;
 
 /// Name prefix of staging folders; `remove_stale` deletes leftovers.
@@ -51,9 +53,10 @@ pub struct StagedUpdate {
     dir: PathBuf,
     /// The verified `Lumina.app` inside it.
     app: PathBuf,
-    /// The running app's designated requirement, to check `app` again at
-    /// install: the staging folder is writable by any process of this user.
-    requirement: String,
+    /// The running app's Developer ID requirement, when it has one: the
+    /// staged copy is checked against it again at install. `None` for an
+    /// ad-hoc build, whose trust is the signed manifest.
+    requirement: Option<String>,
 }
 
 impl StagedUpdate {
@@ -64,7 +67,7 @@ impl StagedUpdate {
             version: version.to_string(),
             dir: PathBuf::new(),
             app: PathBuf::new(),
-            requirement: String::new(),
+            requirement: None,
         }
     }
 }
@@ -91,38 +94,34 @@ fn bundle_of(exe: &Path) -> Result<PathBuf> {
     Ok(bundle.to_path_buf())
 }
 
-/// The bundle's designated requirement, refused unless it is a Developer ID
-/// signature (an ad-hoc one pins a hash no new build can ever match).
-fn designated_requirement(bundle: &Path) -> Result<String> {
-    let output = run_tool(Command::new("codesign").arg("-d").arg("-r-").arg(bundle))?;
+/// The bundle's Developer ID designated requirement, if it has one. An
+/// ad-hoc signature pins a hash no new build can match, so it returns `None`
+/// and the signed manifest is the trust anchor instead.
+fn designated_requirement(bundle: &Path) -> Option<String> {
+    let output = run_tool(Command::new("codesign").arg("-d").arg("-r-").arg(bundle)).ok()?;
     // The requirement is on stdout; older systems print it on stderr.
     let text = format!(
         "{}\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let requirement = text
-        .lines()
+    text.lines()
         .find_map(|l| l.trim().strip_prefix("designated => "))
         .filter(|r| r.contains("anchor apple generic") && r.contains("subject.OU"))
-        .map(str::to_string);
-    requirement.ok_or_else(|| {
-        log::warn!(
-            "update: running app is not Developer ID signed: {}",
-            text.trim()
-        );
-        anyhow!(UNSIGNED)
-    })
+        .map(str::to_string)
 }
 
 /// Downloads `release` beside `bundle`, checks it, and unpacks it. Leaves
 /// nothing behind on failure.
 pub fn stage(release: &Release, bundle: &Path, cancel: &AtomicBool) -> Result<StagedUpdate> {
-    let (Some(zip), Some(sums_url)) = (&release.zip, &release.sums_url) else {
-        bail!(NO_DOWNLOAD);
-    };
-    // Checked first: an unsigned copy can't take any update, so don't download one.
-    let requirement = designated_requirement(bundle)?;
+    // The manifest is the trust anchor: verify it before downloading anything.
+    let manifest = super::fetch_manifest(release, cancel)?;
+    let artifact = super::macos_artifact(&manifest, std::env::consts::ARCH)
+        .ok_or_else(|| anyhow!(NO_DOWNLOAD))?;
+    let asset = release
+        .asset(&artifact.name)
+        .ok_or_else(|| anyhow!(NO_DOWNLOAD))?;
+    let requirement = designated_requirement(bundle);
     let parent = bundle.parent().ok_or_else(|| anyhow!(NOT_WRITABLE))?;
     remove_stale(parent);
     let nanos = SystemTime::now()
@@ -134,7 +133,14 @@ pub fn stage(release: &Release, bundle: &Path, cancel: &AtomicBool) -> Result<St
         log::warn!("update: can't create {dir:?}: {err}");
         anyhow!(NOT_WRITABLE)
     })?;
-    let staged = stage_in(&dir, release, zip, sums_url, &requirement, cancel);
+    let staged = stage_in(
+        &dir,
+        &manifest,
+        artifact,
+        asset,
+        requirement.as_deref(),
+        cancel,
+    );
     if staged.is_err() {
         remove(&dir);
     }
@@ -143,26 +149,23 @@ pub fn stage(release: &Release, bundle: &Path, cancel: &AtomicBool) -> Result<St
 
 fn stage_in(
     dir: &Path,
-    release: &Release,
-    zip: &super::Asset,
-    sums_url: &str,
-    requirement: &str,
+    manifest: &manifest::UpdateManifest,
+    artifact: &manifest::UpdateArtifact,
+    asset: &Asset,
+    requirement: Option<&str>,
     cancel: &AtomicBool,
 ) -> Result<StagedUpdate> {
     let zip_path = dir.join("update.zip");
-    download(&zip.url, &zip_path, cancel, DOWNLOAD_TIMEOUT)?;
-    let sums_path = dir.join("SHA256SUMS.txt");
-    download(sums_url, &sums_path, cancel, STEP_TIMEOUT)?;
+    super::download(&asset.url, &zip_path, cancel, DOWNLOAD_TIMEOUT)?;
 
-    let sums = fs::read_to_string(&sums_path).context(BAD_DOWNLOAD)?;
-    let expected = expected_sha256(&sums, &zip.name).ok_or_else(|| {
-        log::warn!("update: {} is not in SHA256SUMS.txt", zip.name);
-        anyhow!(BAD_DOWNLOAD)
-    })?;
-    let output = run_tool(Command::new("shasum").args(["-a", "256"]).arg(&zip_path))?;
-    let actual = String::from_utf8_lossy(&output.stdout);
-    if actual.split_whitespace().next() != Some(expected.as_str()) {
-        log::warn!("update: checksum mismatch for {}", zip.name);
+    let actual = manifest::sha256_file(&zip_path).context(BAD_DOWNLOAD)?;
+    if actual != artifact.sha256 {
+        log::warn!(
+            "update: checksum mismatch for {} ({} != {})",
+            artifact.name,
+            actual,
+            artifact.sha256
+        );
         bail!(BAD_DOWNLOAD);
     }
 
@@ -181,30 +184,46 @@ fn stage_in(
         bail!(BAD_DOWNLOAD);
     }
     let app = unpacked.join("Lumina.app");
-    verify(&app, requirement, &release.version)?;
+    verify(&app, requirement, &manifest.version)?;
     // The zip isn't needed once unpacked; keep the staging folder small.
     if let Err(err) = fs::remove_file(&zip_path) {
         log::warn!("update: can't remove {zip_path:?}: {err}");
     }
     Ok(StagedUpdate {
-        version: release.version.clone(),
+        version: manifest.version.clone(),
         dir: dir.to_path_buf(),
         app,
-        requirement: requirement.to_string(),
+        requirement: requirement.map(str::to_string),
     })
 }
 
-/// Refuses `app` unless it is a real folder (not a link), intact, meets
-/// `requirement`, is notarized, and is the version the release says.
-fn verify(app: &Path, requirement: &str, version: &str) -> Result<()> {
+/// Refuses `app` unless it is a real folder, its code seal is intact, it is
+/// the version the manifest names, and — when this Mac runs a Developer ID
+/// build — it meets that requirement and is notarized.
+fn verify(app: &Path, requirement: Option<&str>, version: &str) -> Result<()> {
     if !fs::symlink_metadata(app).is_ok_and(|m| m.is_dir()) {
         log::warn!("update: {app:?} is not a folder");
         bail!(UNTRUSTED);
     }
-    // `notarized` in the requirement itself: a Gatekeeper assessment
-    // passes everything when the user has turned Gatekeeper off.
-    if !meets_requirement(app, &format!("({requirement}) and notarized"))? {
+    // Always check the bundle's own seal. An ad-hoc build passes this.
+    let output = run_tool(
+        Command::new("codesign")
+            .args(["--verify", "--deep", "--strict"])
+            .arg(app),
+    )?;
+    if !output.status.success() {
+        log::warn!(
+            "update: code signature check failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
         bail!(UNTRUSTED);
+    }
+    if let Some(requirement) = requirement {
+        // `notarized` in the requirement itself: a Gatekeeper assessment
+        // passes everything when the user has turned Gatekeeper off.
+        if !meets_requirement(app, &format!("({requirement}) and notarized"))? {
+            bail!(UNTRUSTED);
+        }
     }
     let output = run_tool(
         Command::new("plutil")
@@ -241,7 +260,7 @@ fn meets_requirement(app: &Path, requirement: &str) -> Result<bool> {
 /// put back and stays as it was.
 pub fn install(staged: &StagedUpdate, bundle: &Path) -> Result<()> {
     // Checked again: the staged copy may have been changed since staging.
-    verify(&staged.app, &staged.requirement, &staged.version).context(INSTALL_FAILED)?;
+    verify(&staged.app, staged.requirement.as_deref(), &staged.version).context(INSTALL_FAILED)?;
     // A sibling of the bundle: same folder, so the rename needs no write
     // access inside the bundle. Not a staging name: `remove_stale` must
     // never delete it, since after a failed rollback it is the only copy.
@@ -316,39 +335,6 @@ fn remove(path: &Path) {
     }
 }
 
-fn download(url: &str, target: &Path, cancel: &AtomicBool, timeout: Duration) -> Result<()> {
-    let output = run_captured(
-        Command::new("curl")
-            .args([
-                "-sS",
-                "-f",
-                "-L",
-                "--proto",
-                "=https",
-                "--connect-timeout",
-                "30",
-            ])
-            // Give up on a connection that stalls for a minute.
-            .args(["--speed-limit", "1", "--speed-time", "60", "-A", "Lumina"])
-            .arg("-o")
-            .arg(target)
-            .arg("--")
-            .arg(url),
-        cancel,
-        timeout,
-    )
-    .context(BAD_DOWNLOAD)?;
-    if !output.status.success() {
-        log::warn!(
-            "update download failed ({}): {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        bail!(BAD_DOWNLOAD);
-    }
-    Ok(())
-}
-
 /// Runs a system tool with the step timeout; a failure to start is an
 /// untrusted update, never a pass.
 fn run_tool(command: &mut Command) -> Result<crate::net_import::ToolOutput> {
@@ -413,7 +399,7 @@ mod tests {
             version: "9.9.9".into(),
             dir: staged.clone(),
             app: staged.join("unpacked/Lumina.app"),
-            requirement: "anchor apple generic".into(),
+            requirement: None,
         };
         // The staged copy is checked again at install; an unsigned one
         // (changed after staging) never goes in.
@@ -500,8 +486,10 @@ mod tests {
             signed.status.success(),
             "ad-hoc signing the fixture: {signed:?}"
         );
-        let err = designated_requirement(&app).expect_err("ad-hoc signatures are refused");
-        assert_eq!(err.to_string(), UNSIGNED);
+        assert!(
+            designated_requirement(&app).is_none(),
+            "an ad-hoc signature has no Developer ID requirement"
+        );
 
         // The check really evaluates requirements: the fixture meets its own...
         let own = Command::new("codesign")
@@ -527,15 +515,17 @@ mod tests {
             !meets_requirement(&app, requirement).expect("codesign runs"),
             "an ad-hoc app must not satisfy another team's requirement"
         );
-        let err = verify(&app, requirement, "0.0.0").expect_err("verification fails");
+        let err = verify(&app, Some(requirement), "0.0.0").expect_err("verification fails");
         assert_eq!(err.to_string(), UNTRUSTED);
-        // It meets its own requirement and the version matches (the fixture
-        // has none: ""), so only `notarized` refuses it here.
-        let err = verify(&app, own, "").expect_err("an app that isn't notarized is refused");
+        // The manifest is the anchor for an ad-hoc build: integrity and the
+        // version are enough when there is no Developer ID to pin.
+        verify(&app, None, "").expect("an ad-hoc app passes the manifest-anchored check");
+        // A Developer ID build still demands notarization.
+        let err = verify(&app, Some(own), "").expect_err("notarization is still required");
         assert_eq!(
             err.to_string(),
             UNTRUSTED,
-            "notarization is required, not just a matching signature"
+            "a Developer ID requirement still demands notarization"
         );
         let _ = fs::remove_dir_all(&dir);
     }

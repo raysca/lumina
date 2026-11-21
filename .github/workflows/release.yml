@@ -178,3 +178,103 @@ jobs:
         with:
           draft: true
           files: target/release/bundle/linux-dist/*
+
+  # Every platform verifies this manifest before installing an update. It is
+  # created after the artifacts exist, so it names exactly what the draft
+  # release carries. Without the key the release has no manifest and
+  # installed apps can only update by hand.
+  manifest:
+    name: sign the update manifest
+    needs: [release, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      HAS_UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: manifest
+
+      - name: Download the macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lumina-release
+          path: dist/macos
+
+      - name: Download the Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lumina-linux-amd64
+          path: dist/linux
+
+      - name: Assemble and sign the manifest
+        if: env.HAS_UPDATE_SIGNING_KEY == 'true'
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' crates/lumina-ui-gpui/Cargo.toml | head -1)"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG" != "$VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match the Cargo version $VERSION" >&2
+            exit 1
+          fi
+          PAGE="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+          args=()
+          for zip in dist/macos/Lumina-v*-macos-*.zip; do
+            [[ -f "$zip" ]] || continue
+            case "$zip" in
+              *-universal.zip) key=macos-universal ;;
+              *-arm64.zip) key=macos-arm64 ;;
+              *-x86_64.zip) key=macos-x86_64 ;;
+              *) continue ;;
+            esac
+            args+=("$key=$zip")
+          done
+          # Only a signed Linux package may be offered as an update.
+          if [[ -f dist/linux/SHA256SUMS-linux.txt.asc ]]; then
+            for deb in dist/linux/*.deb; do
+              [[ -f "$deb" ]] || continue
+              arch="$(basename "$deb" | sed -n 's/.*-linux-\([a-z0-9_]*\)\.deb/\1/p')"
+              [[ -n "$arch" ]] || continue
+              args+=("linux-${arch}-deb=$deb")
+            done
+          fi
+          if [[ ${#args[@]} -eq 0 ]]; then
+            echo "No artifacts to list; refusing to sign an empty manifest" >&2
+            exit 1
+          fi
+          cargo run -q -p lumina-core --example make_update_manifest -- \
+            dist/update.json "$VERSION" "$PAGE" "${args[@]}"
+          ./scripts/sign_update_manifest.sh dist/update.json
+
+      - name: Warn when updates cannot be signed
+        if: env.HAS_UPDATE_SIGNING_KEY != 'true'
+        run: |
+          echo "::warning::UPDATE_SIGNING_KEY is not set; this release has no update manifest, so installed apps can only update by hand."
+
+      - name: Upload the manifest
+        if: env.HAS_UPDATE_SIGNING_KEY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-update-manifest
+          path: |
+            dist/update.json
+            dist/update.json.sig
+          retention-days: 30
+
+      - name: Attach the manifest to the draft release
+        if: env.HAS_UPDATE_SIGNING_KEY == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/update.json
+            dist/update.json.sig

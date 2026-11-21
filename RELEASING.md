@@ -63,11 +63,12 @@ What users get:
   12–14: right-click Lumina › Open).
 - **No identity to inspect:** `codesign -dv` shows `Signature=adhoc`; there is
   no Developer ID to verify, and `spctl` rejects it by design.
-- **No updates, ever, for those installs.** The updater refuses to run from an
-  ad-hoc copy (its designated requirement pins a hash no new build matches), so
-  every later version is a manual download. Moving to Developer ID later takes
-  one manual install of the first signed build; after that, updates work as
-  documented.
+- **Updates come from the signed manifest.** An ad-hoc build verifies the
+  update key like any other, so once a later normal release carries
+  `update.json` About offers it. The preview is published as a pre-release, so
+  it is never offered to an install that already exists; its own users still
+  see later normal releases. The update key is the only authorship proof for
+  these installs, so it belongs in the secret store, not the repository.
 
 Start the release notes with:
 
@@ -80,7 +81,8 @@ Start the release notes with:
 > install.
 
 The release workflow sets the pre-release flag for an ad-hoc draft. Do not
-describe the build as signed, notarized, or safe for automatic updates.
+describe the build as signed or notarized; its updates are verified by the
+project key, not by Apple.
 
 ### Signed without notarization
 
@@ -98,11 +100,10 @@ Two consequences are user-visible and must be in the release notes:
   malware. The user opens **System Settings › Privacy & Security**, clicks
   **Open Anyway** (on macOS 12–14: right-click the app › **Open**), and
   confirms. A signed-only build is not a double-click install.
-- **The in-app updater refuses it.** The updater requires the new app to meet
-  the running app's designated requirement **and `notarized`**
-  (`docs/updates.md`). Check for Updates downloads the zip, fails
-  verification, and offers the release page for a manual download, so users
-  update by hand until a notarized release exists.
+- **The updater installs it through the signed manifest.** Apple notarization
+  is not required for a signed-only install to update. A Developer ID install
+  (one whose running app has a team) still requires a notarized new app, so a
+  signed-only release cannot update those.
 
 `spctl --assess` is a notarization check: on a signed-only build it reports
 "rejected" by design and that is not a packaging failure. Verify the signature
@@ -123,9 +124,10 @@ Put this at the top of the release notes (adapt the version):
 
 ## Notarization
 
-Notarization is what makes a download open without the Gatekeeper prompt and
-what the in-app updater requires. It is optional for an initial signed-only
-release (see above), but plan to notarize before relying on auto-update.
+Notarization is what makes a download open without the Gatekeeper prompt, and a
+notarized new app is still required when updating a Developer ID install. The
+updater itself trusts the signed manifest, so a signed-only or ad-hoc build can
+update without it.
 
 Store credentials once (recommended):
 
@@ -185,6 +187,11 @@ and bundle id, with the tag's version. Never publish an ad-hoc build as a
 normal release; the documented ad-hoc preview below is the only exception.
 Keep the zip and `SHA256SUMS.txt` names that `package_release.sh` writes.
 
+A final job then builds `update.json` from the published artifacts, signs it
+with `UPDATE_SIGNING_KEY`, and attaches it to the same draft. Every platform
+verifies that manifest before installing an update; a release without it can
+only be installed by hand.
+
 The same tag builds the Linux package in the release workflow (after the
 macOS job, so the draft exists). When `LINUX_GPG_PRIVATE_KEY` and
 `LINUX_SIGNING_KEY` are set, it publishes `Lumina-vX.Y.Z-linux-amd64.deb`,
@@ -206,6 +213,18 @@ platform; see the acceptance criteria below.
 | `APPLE_ID` | Apple ID for notarization |
 | `APPLE_TEAM_ID` | Apple Developer Team ID |
 | `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for notarization |
+| `UPDATE_SIGNING_KEY` | base64 of the update key's PEM; signs `update.json` for every platform |
+
+Generate the update key once with `scripts/update_keygen.sh`; it prints the
+public key to embed in `crates/lumina-core/src/update/manifest.rs` and leaves
+the private half in a file only you can read. The secret is that file,
+base64-encoded:
+
+```bash
+base64 < ~/.config/lumina-release/update-key.pem
+```
+
+Without it the release has no `update.json` and installed copies cannot update.
 
 Linux release signing (optional; without it the `.deb` is not published):
 
