@@ -1,4 +1,6 @@
-use anyhow::{anyhow, Context, Result};
+#[cfg(target_os = "macos")]
+use anyhow::Context;
+use anyhow::{anyhow, Result};
 use image::{imageops::FilterType, DynamicImage, GenericImageView, ImageDecoder};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::fs;

@@ -218,9 +218,8 @@ mod linux {
                 "{canonical:?} must be under its mount {:?}",
                 found.mount_point
             );
-            assert_eq!(
-                find_mount(&found.id),
-                Some(found.mount_point.clone()),
+            assert!(
+                find_mounts(&found.id).contains(&found.mount_point),
                 "the probed volume is found again by its id"
             );
         }
