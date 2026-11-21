@@ -82,7 +82,7 @@ jobs:
 
   bundle-macos:
     name: build Lumina.app (macOS arm64, ad-hoc signed)
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

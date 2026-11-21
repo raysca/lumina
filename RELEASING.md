@@ -176,7 +176,7 @@ they fail on a signed-only build and that is expected.
 ## CI release
 
 Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml` on
-`macos-14`, builds universal binaries, optionally signs/notarizes, uploads
+`macos-latest`, builds universal binaries, optionally signs/notarizes, uploads
 artifacts, and creates a **draft** GitHub release with the zip, DMG, and
 checksums. Publish the draft after verifying the artifacts.
 

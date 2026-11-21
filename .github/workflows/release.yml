@@ -11,7 +11,7 @@ permissions:
 jobs:
   release:
     name: build, sign and package
-    runs-on: macos-14
+    runs-on: macos-latest
     permissions:
       contents: write
     env:
