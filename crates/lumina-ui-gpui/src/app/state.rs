@@ -665,6 +665,18 @@ impl LuminaApp {
     pub fn new_in_window(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let app = Self::new(cx);
         window.focus(&app.focus_handle, cx);
+        // GPUI's macOS default leaves the process running when the last window
+        // closes. The main window is the app: its close button goes through
+        // the same quit path as ⌘Q (download confirmation, config save,
+        // update install). Returning false keeps the window open while that
+        // prompt is up; a confirmed quit calls `cx.quit()`.
+        let weak_app = cx.weak_entity();
+        window.on_window_should_close(cx, move |_window, cx| {
+            let Some(app) = weak_app.upgrade() else {
+                return true;
+            };
+            app.update(cx, |app, cx| app.should_close_main_window(cx))
+        });
         app
     }
 

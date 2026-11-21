@@ -638,6 +638,47 @@ fn quit_without_downloads_quits_at_once() {
 }
 
 #[core::prelude::v1::test]
+fn closing_the_main_window_quits_without_downloads() {
+    let (_dir, engine, _fake, mut cx) = queue_app("dl_close_now");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        assert!(
+            !app.should_close_main_window(cx),
+            "the platform close is cancelled; quitting closes the app"
+        );
+        assert!(app.downloads.quit_requested, "the app quits at once");
+    });
+}
+
+#[core::prelude::v1::test]
+fn closing_the_main_window_asks_about_running_downloads() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_close_ask");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    view.update(vcx, |app, cx| {
+        assert!(
+            !app.should_close_main_window(cx),
+            "the window stays open while the prompt is up"
+        );
+        assert!(
+            matches!(app.downloads.confirm, Some(DownloadsConfirm::Quit)),
+            "closing with a running download asks first"
+        );
+        assert!(!app.downloads.quit_requested, "the app has not quit yet");
+    });
+    render_ui(vcx);
+    super::helpers::click(vcx, "downloads-confirm-ok");
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.quit_requested, "confirming quits");
+        assert!(app.downloads.entries.is_empty());
+    });
+}
+
+#[core::prelude::v1::test]
 fn confirm_escape_and_backdrop_cancel() {
     let (_dir, engine, fake, mut cx) = queue_app("dl_quit_cancel");
     let (view, vcx) = app_with_library(&mut cx, engine);

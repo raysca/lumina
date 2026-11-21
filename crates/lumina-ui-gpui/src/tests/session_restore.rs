@@ -8,6 +8,7 @@ use super::helpers::{
 use crate::app::types::UiMessage;
 use crate::config::{LastView, RestoredSession};
 use crate::views::sidebar::AlbumSelection;
+use crate::LuminaApp;
 use lumina_core::{EngineEvent, MediaId, SystemAlbum};
 
 const FAVORITES: AlbumSelection = AlbumSelection::System(SystemAlbum::Favorites);
@@ -297,6 +298,22 @@ fn request_quit_still_quits_after_saving() {
         assert!(
             app.downloads.quit_requested,
             "saving first must not stop Quit"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn closing_the_main_window_runs_the_quit_path() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = cx.add_window_view(LuminaApp::new_in_window);
+    assert!(
+        !vcx.simulate_close(),
+        "the window stays open until the quit completes"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.downloads.quit_requested,
+            "closing the main window quits the app"
         );
     });
 }

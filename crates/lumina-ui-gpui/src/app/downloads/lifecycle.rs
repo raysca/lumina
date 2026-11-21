@@ -85,6 +85,15 @@ impl LuminaApp {
         cx.quit();
     }
 
+    /// The main window's close button. It goes through the same quit path as
+    /// ⌘Q, so a running download is confirmed and the config is saved.
+    /// Returns false: the window stays open until the quit actually happens
+    /// (or the confirmation is cancelled).
+    pub(crate) fn should_close_main_window(&mut self, cx: &mut Context<Self>) -> bool {
+        self.request_quit(cx);
+        false
+    }
+
     /// Quit / Open in the prompt, and ⏎.
     pub(crate) fn confirm_downloads_prompt(&mut self, cx: &mut Context<Self>) {
         let Some(then) = self.downloads.confirm.take() else {
