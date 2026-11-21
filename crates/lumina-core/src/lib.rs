@@ -129,7 +129,7 @@ pub struct LuminaEngine {
 
 impl LuminaEngine {
     pub fn open(library_root: PathBuf) -> Result<(Arc<Self>, Receiver<EngineEvent>)> {
-        let db_path = crate::library::catalog_path_for(&library_root);
+        let db_path = crate::library::catalog_path_for(&library_root)?;
         Self::open_with_paths(library_root, db_path, None)
     }
 

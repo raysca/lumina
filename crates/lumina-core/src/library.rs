@@ -4,7 +4,7 @@
 //! None of this touches the user's media: deleting a library removes the
 //! catalog and its cached decodes, and the folder stays where it is.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 use crate::cache::DiskCache;
@@ -36,12 +36,14 @@ pub fn catalog_path_in(catalog_dir: &Path, library_root: &Path) -> PathBuf {
 
 /// [`catalog_path_in`] with the app's own catalog directory. A catalog named
 /// by the old lossy hash (a root containing `%`) is renamed to its encoded
-/// name the first time it is looked up, so the tags and edits survive.
-pub fn catalog_path_for(library_root: &Path) -> PathBuf {
+/// name the first time it is looked up, so the tags and edits survive. Returns
+/// an error if that move cannot complete: opening a fresh catalog instead
+/// would silently lose the old library's metadata.
+pub fn catalog_path_for(library_root: &Path) -> Result<PathBuf> {
     let dir = default_catalog_dir();
     let target = catalog_path_in(&dir, library_root);
-    promote_legacy_catalog(&dir, library_root, &target);
-    target
+    promote_legacy_catalog(&dir, library_root, &target)?;
+    Ok(target)
 }
 
 /// The pre-encoding hash of a root, used only to find a catalog worth
@@ -54,47 +56,79 @@ fn legacy_catalog_path_in(catalog_dir: &Path, library_root: &Path) -> PathBuf {
     catalog_dir.join(format!("catalog_{hash:016x}.db"))
 }
 
-fn promote_legacy_catalog(catalog_dir: &Path, library_root: &Path, target: &Path) {
+fn promote_legacy_catalog(catalog_dir: &Path, library_root: &Path, target: &Path) -> Result<()> {
     if target.exists() {
-        return;
+        return Ok(());
     }
     let legacy = legacy_catalog_path_in(catalog_dir, library_root);
     if legacy == target || !legacy.exists() {
-        return;
+        return Ok(());
     }
-    if let Some(parent) = target.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    match std::fs::rename(&legacy, target) {
-        Ok(()) => {
-            log::info!(
-                "moved the catalog for {} to its current name",
-                library_root.display()
-            );
-            // The WAL and shared-memory files belong to the catalog file: if
-            // one stays behind under the old name, frames it holds are not
-            // seen by the promoted database. Never swallow a failed move.
-            for suffix in ["-wal", "-shm", ".bak"] {
-                let from = PathBuf::from(format!("{}{suffix}", legacy.display()));
-                if !from.exists() {
-                    continue;
-                }
-                let to = PathBuf::from(format!("{}{suffix}", target.display()));
-                if let Err(err) = std::fs::rename(&from, &to) {
-                    log::warn!(
-                        "could not move the catalog companion {} to {}: {err:#}",
-                        from.display(),
-                        to.display()
-                    );
-                }
-            }
+    let parent = target
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("{} has no parent folder", target.display()))?;
+    std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+
+    // SQLite's sidecars belong to the catalog: a WAL left behind holds frames
+    // the promoted database never sees. Copy them first, then move the catalog
+    // only when every companion is safely in place; a failure leaves the legacy
+    // library untouched instead of half-promoted.
+    let mut copied = Vec::new();
+    for suffix in ["-wal", "-shm", ".bak"] {
+        let from = PathBuf::from(format!("{}{suffix}", legacy.display()));
+        if !from.exists() {
+            continue;
         }
-        Err(err) => log::warn!(
-            "could not move {} to {}: {err:#}",
-            legacy.display(),
-            target.display()
-        ),
+        let to = PathBuf::from(format!("{}{suffix}", target.display()));
+        let bytes = match std::fs::copy(&from, &to) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                for (_, copy) in &copied {
+                    let _ = std::fs::remove_file(copy);
+                }
+                return Err(err)
+                    .with_context(|| format!("copying {} to {}", from.display(), to.display()));
+            }
+        };
+        let source_bytes = std::fs::metadata(&from)
+            .map(|meta| meta.len())
+            .unwrap_or(bytes);
+        if bytes != source_bytes {
+            let _ = std::fs::remove_file(&to);
+            for (_, copy) in &copied {
+                let _ = std::fs::remove_file(copy);
+            }
+            bail!(
+                "copying {} to {} wrote {bytes} of {source_bytes} bytes",
+                from.display(),
+                to.display()
+            );
+        }
+        copied.push((from, to));
     }
+
+    if let Err(err) = std::fs::rename(&legacy, target) {
+        for (_, copy) in &copied {
+            let _ = std::fs::remove_file(copy);
+        }
+        return Err(err)
+            .with_context(|| format!("moving {} to {}", legacy.display(), target.display()));
+    }
+    log::info!(
+        "moved the catalog for {} to its current name",
+        library_root.display()
+    );
+    // The promoted catalog is complete. A sidecar that cannot be removed only
+    // leaves a duplicate next to a file that no longer exists.
+    for (from, _) in copied {
+        if let Err(err) = std::fs::remove_file(&from) {
+            log::warn!(
+                "could not remove the old catalog companion {}: {err:#}",
+                from.display()
+            );
+        }
+    }
+    Ok(())
 }
 
 /// What removing a library deleted. The library folder and its files are
@@ -223,7 +257,7 @@ impl LibraryRelocation {
 /// mount point, or a macOS volume mounted as `Photos 1`).
 pub fn find_library_relocation(library_root: &Path) -> Result<Option<LibraryRelocation>> {
     find_library_relocation_at(
-        &catalog_path_for(library_root),
+        &catalog_path_for(library_root)?,
         library_root,
         None,
         Some(&DiskCache::default_dir()),
@@ -262,9 +296,10 @@ pub fn find_library_relocation_at(
             );
             continue;
         }
-        let target = target_db
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| catalog_path_for(&candidate));
+        let target = match target_db {
+            Some(path) => path.to_path_buf(),
+            None => catalog_path_for(&candidate)?,
+        };
         if target != catalog_db && target.exists() {
             // The new folder was opened once already and has its own catalog;
             // keep that one rather than rewriting the old tree over it.
@@ -590,7 +625,7 @@ mod tests {
         let legacy_wal = PathBuf::from(format!("{}-wal", legacy.display()));
         std::fs::write(&legacy_wal, b"frames").unwrap();
 
-        promote_legacy_catalog(&base, &root, &target);
+        promote_legacy_catalog(&base, &root, &target).unwrap();
         assert!(
             target.exists(),
             "the old catalog is found under the new name"
@@ -603,6 +638,40 @@ mod tests {
         assert!(
             PathBuf::from(format!("{}-wal", target.display())).exists(),
             "the WAL is next to the promoted catalog"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_failed_companion_copy_keeps_the_legacy_catalog() {
+        let base = temp_dir("legacy_hash_fail");
+        let root = base.join("Photos 20% off");
+        std::fs::create_dir_all(&root).unwrap();
+        let legacy = legacy_catalog_path_in(&base, &root);
+        let target = catalog_path_in(&base, &root);
+        assert_ne!(legacy, target, "the encoded root hashes differently");
+        std::fs::write(&legacy, b"catalog").unwrap();
+        let legacy_wal = PathBuf::from(format!("{}-wal", legacy.display()));
+        std::fs::write(&legacy_wal, b"frames").unwrap();
+        // A directory where the copied WAL belongs makes the copy fail without
+        // relying on file permissions, which tests cannot assume.
+        let target_wal = PathBuf::from(format!("{}-wal", target.display()));
+        std::fs::create_dir_all(&target_wal).unwrap();
+
+        let err = promote_legacy_catalog(&base, &root, &target)
+            .expect_err("a companion that cannot be copied must fail the move");
+        assert!(
+            format!("{err:#}").contains("copying"),
+            "the error names the failed copy: {err:#}"
+        );
+        assert!(legacy.exists(), "the legacy catalog stays where it was");
+        assert!(
+            legacy_wal.exists(),
+            "the WAL stays next to the legacy catalog"
+        );
+        assert!(
+            !target.exists(),
+            "nothing is promoted until every companion is safe"
         );
         let _ = std::fs::remove_dir_all(&base);
     }

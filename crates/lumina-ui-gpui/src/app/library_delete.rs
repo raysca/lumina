@@ -37,6 +37,16 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// The catalog for a closed library. Tests point this at their own
+    /// directory so deletion never resolves the real user data dir.
+    fn catalog_path_for_delete(&self, path: &Path) -> anyhow::Result<PathBuf> {
+        #[cfg(test)]
+        if let Some(dir) = self.catalog_dir_override.as_ref() {
+            return Ok(library::catalog_path_in(dir, path));
+        }
+        library::catalog_path_for(path)
+    }
+
     /// Removes the library the modal named: config first (so a failed save
     /// cannot leave a catalog deleted but the library still listed), then the
     /// catalog and thumbnails off the UI thread. The media files are never
@@ -66,24 +76,23 @@ impl LuminaApp {
             (db.to_path_buf(), engine.cache_root().to_path_buf())
         } else {
             #[cfg(test)]
-            if let Some(dir) = self.catalog_dir_override.as_ref() {
-                (
-                    lumina_core::library::catalog_path_in(dir, &path),
-                    self.cache_dir_override
-                        .clone()
-                        .unwrap_or_else(lumina_core::cache::DiskCache::default_dir),
-                )
-            } else {
-                (
-                    library::catalog_path_for(&path),
-                    lumina_core::cache::DiskCache::default_dir(),
-                )
-            }
+            let cache_root = self
+                .cache_dir_override
+                .clone()
+                .unwrap_or_else(lumina_core::cache::DiskCache::default_dir);
             #[cfg(not(test))]
-            (
-                library::catalog_path_for(&path),
-                lumina_core::cache::DiskCache::default_dir(),
-            )
+            let cache_root = lumina_core::cache::DiskCache::default_dir();
+            let catalog_db = match self.catalog_path_for_delete(&path) {
+                Ok(db) => db,
+                Err(err) => {
+                    self.set_error(
+                        format!("Could not access this library's catalog: {err:#}"),
+                        cx,
+                    );
+                    return;
+                }
+            };
+            (catalog_db, cache_root)
         };
 
         // Every place the removed library is named in the saved session.
