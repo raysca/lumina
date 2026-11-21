@@ -162,7 +162,8 @@ mod linux {
             .filter_map(|line| {
                 let (before, after) = line.split_once(" - ")?;
                 let mount = before.split(' ').nth(4)?;
-                let source = after.split(' ').nth(2)?;
+                // `- <fstype> <source> <super options>`: the source is second.
+                let source = after.split(' ').nth(1)?;
                 let mount = PathBuf::from(unescape(mount.as_bytes()));
                 let source = source
                     .starts_with('/')
