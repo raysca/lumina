@@ -2211,3 +2211,133 @@ fn storage_summary_sums_by_kind() {
         "an empty library sums to zero"
     );
 }
+
+/// 2019-07-14T09:30:00Z, the date the files say now.
+const SHOT_MS: i64 = 1_563_096_600_000;
+
+/// Rows as the old scanner stored them: dated by the file's mtime when no
+/// EXIF date was found. Returns the catalog and the ids of a download dated
+/// its import day, a photo with an EXIF date, a file whose mtime is old, a
+/// date the user edited, an unreadable file and a video.
+fn capture_dates_catalog() -> (Catalog, [MediaId; 6]) {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let exif_dated = MediaItem {
+        timestamp_epoch_ms: 1_420_070_400_000,
+        ..sample_media_item("/p/exif.jpg", MediaType::Image, now, None, None)
+    };
+    let stored = catalog
+        .insert_or_update_batch(&[
+            sample_media_item("/p/download.jpg", MediaType::Image, now, None, None),
+            exif_dated,
+            sample_media_item(
+                "/p/old.jpg",
+                MediaType::Image,
+                1_500_000_000_000,
+                None,
+                None,
+            ),
+            sample_media_item("/p/edited.jpg", MediaType::Image, now, None, None),
+            sample_media_item("/p/gone.jpg", MediaType::Image, now, None, None),
+            sample_media_item("/v/clip.mov", MediaType::Video, now, None, None),
+        ])
+        .expect("insert rows");
+    let ids = [0, 1, 2, 3, 4, 5].map(|i| stored[i].id);
+    catalog
+        .set_timestamp(ids[3], now)
+        .expect("the user edits a date");
+    (catalog, ids)
+}
+
+/// What the scanner would store now. Only import-day candidates are read.
+fn measured_capture_time(path: &std::path::Path) -> Option<i64> {
+    match path.file_name()?.to_str()? {
+        "download.jpg" | "clip.mov" => Some(SHOT_MS),
+        "gone.jpg" => None,
+        other => panic!("only rows dated their import day are read, not {other}"),
+    }
+}
+
+fn timestamp_of(catalog: &Catalog, id: MediaId) -> i64 {
+    catalog
+        .get_item_by_id(id)
+        .unwrap()
+        .expect("row exists")
+        .timestamp_epoch_ms
+}
+
+#[test]
+fn capture_date_backfill_redates_only_import_day_rows_once() {
+    let (catalog, [download, exif, old, edited, gone, clip]) = capture_dates_catalog();
+    let before = |id| timestamp_of(&catalog, id);
+    let (exif_ts, old_ts, edited_ts, gone_ts) =
+        (before(exif), before(old), before(edited), before(gone));
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+
+    let fixed = catalog
+        .backfill_capture_dates(measured_capture_time, &cancel)
+        .expect("backfill runs");
+    assert_eq!(fixed, 2, "the download and the video are re-dated");
+    for id in [download, clip] {
+        let item = catalog.get_item_by_id(id).unwrap().unwrap();
+        assert_eq!(
+            item.timestamp_epoch_ms, SHOT_MS,
+            "an import-day date is replaced"
+        );
+        assert_eq!(
+            (item.year, item.month, item.day),
+            (2019, 7, 14),
+            "the date columns move with the capture time"
+        );
+    }
+    assert_eq!(
+        timestamp_of(&catalog, exif),
+        exif_ts,
+        "an EXIF date is kept"
+    );
+    assert_eq!(
+        timestamp_of(&catalog, old),
+        old_ts,
+        "an old file date is kept"
+    );
+    assert_eq!(
+        timestamp_of(&catalog, edited),
+        edited_ts,
+        "an edited date is kept"
+    );
+    assert_eq!(
+        timestamp_of(&catalog, gone),
+        gone_ts,
+        "an unreadable file keeps its date"
+    );
+    assert_eq!(
+        catalog.get_config("capture_dates_v1").unwrap().as_deref(),
+        Some("1"),
+        "a finished backfill sets its marker"
+    );
+
+    let again = catalog
+        .backfill_capture_dates(|_| panic!("the marker stops a second run"), &cancel)
+        .expect("second run is a no-op");
+    assert_eq!(again, 0);
+}
+
+#[test]
+fn cancelled_capture_date_backfill_changes_nothing_and_runs_again() {
+    let (catalog, [download, ..]) = capture_dates_catalog();
+    let before = timestamp_of(&catalog, download);
+    let cancel = std::sync::atomic::AtomicBool::new(true);
+    let fixed = catalog
+        .backfill_capture_dates(measured_capture_time, &cancel)
+        .expect("a cancelled backfill is not an error");
+    assert_eq!(fixed, 0);
+    assert_eq!(timestamp_of(&catalog, download), before);
+    assert_eq!(
+        catalog.get_config("capture_dates_v1").unwrap(),
+        None,
+        "a cancelled backfill runs again on the next scan"
+    );
+}

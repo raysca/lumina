@@ -54,6 +54,23 @@ fn parse_mvhd_duration(data: &[u8]) -> Option<(u64, f64)> {
     None
 }
 
+/// Seconds from the QuickTime epoch (1904-01-01) to the Unix epoch.
+const QUICKTIME_EPOCH_OFFSET_SECS: u64 = 2_082_844_800;
+
+/// The `mvhd` creation time in Unix ms. Zero (never set) and anything before
+/// 1970 (a camera with no clock) count as unknown.
+fn parse_mvhd_created(data: &[u8]) -> Option<i64> {
+    let pos = data.windows(4).position(|w| w == b"mvhd")?;
+    let secs = match *data.get(pos + 4)? {
+        0 => u32::from_be_bytes(data.get(pos + 8..pos + 12)?.try_into().ok()?) as u64,
+        1 => u64::from_be_bytes(data.get(pos + 8..pos + 16)?.try_into().ok()?),
+        _ => return None,
+    };
+    let unix = secs.checked_sub(QUICKTIME_EPOCH_OFFSET_SECS)?;
+    let ms = i64::try_from(unix).ok()?.checked_mul(1000)?;
+    (ms > 0 && chrono::DateTime::from_timestamp_millis(ms).is_some()).then_some(ms)
+}
+
 /// Displayed size of the first visual track, from its `tkhd` box. Audio
 /// tracks have a zero size and are skipped. A 90°/270° matrix (portrait phone
 /// video stored landscape) swaps width and height.
@@ -117,6 +134,12 @@ pub fn extract_video_size(path: &Path) -> Option<(u32, u32)> {
     scan_movie_header(path, parse_tkhd_size)
 }
 
+/// When an MP4/MOV video was recorded (Unix ms, UTC), from its `mvhd`
+/// creation time; `None` when the header has none.
+pub fn extract_video_created(path: &Path) -> Option<i64> {
+    scan_movie_header(path, parse_mvhd_created)
+}
+
 /// Duration of a video as `(ms, seconds)`: from MP4/MOV headers, else from
 /// Spotlight (bounded by the native tool timeout). `None` when neither knows.
 pub fn extract_video_duration(path: &Path) -> Option<(u64, f64)> {
@@ -153,6 +176,49 @@ pub fn extract_video_duration(path: &Path) -> Option<(u64, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mvhd_creation_time_is_read_in_both_versions_and_unset_is_none() {
+        // 2021-06-01T12:00:00Z
+        let unix: u64 = 1_622_548_800;
+        let mut v0 = vec![0u8; 32];
+        v0[0..4].copy_from_slice(b"mvhd");
+        v0[8..12].copy_from_slice(&((unix + QUICKTIME_EPOCH_OFFSET_SECS) as u32).to_be_bytes());
+        assert_eq!(
+            parse_mvhd_created(&v0),
+            Some(unix as i64 * 1000),
+            "v0 is a u32"
+        );
+
+        let mut v1 = vec![0u8; 40];
+        v1[0..4].copy_from_slice(b"mvhd");
+        v1[4] = 1;
+        v1[8..16].copy_from_slice(&(unix + QUICKTIME_EPOCH_OFFSET_SECS).to_be_bytes());
+        assert_eq!(
+            parse_mvhd_created(&v1),
+            Some(unix as i64 * 1000),
+            "v1 is a u64"
+        );
+
+        let mut unset = vec![0u8; 32];
+        unset[0..4].copy_from_slice(b"mvhd");
+        assert_eq!(
+            parse_mvhd_created(&unset),
+            None,
+            "0 means the camera set none"
+        );
+        unset[8..12].copy_from_slice(&1000u32.to_be_bytes());
+        assert_eq!(
+            parse_mvhd_created(&unset),
+            None,
+            "1904 is a clockless camera"
+        );
+        assert_eq!(
+            parse_mvhd_created(&v0[..10]),
+            None,
+            "a truncated box is unknown"
+        );
+    }
 
     #[test]
     fn parse_mvhd_duration_v1_large_duration_does_not_overflow() {

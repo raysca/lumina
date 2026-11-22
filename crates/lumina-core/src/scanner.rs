@@ -17,7 +17,7 @@ mod details;
 mod mp4;
 use details::{clean_string, parse_dms, parse_integer, parse_rational};
 pub use details::{read_media_details, MediaDetails};
-pub use mp4::{extract_video_duration, extract_video_size};
+pub use mp4::{extract_video_created, extract_video_duration, extract_video_size};
 
 /// Every non-hidden entry under `dir`: hidden files and folders (and all
 /// inside them) are skipped, and symlinks are not followed.
@@ -250,7 +250,7 @@ impl Scanner {
         let mut exif_size = crate::dims::ExifSize::default();
 
         // Deep EXIF metadata extraction
-        let mut timestamp_epoch_ms = mtime_epoch_ms;
+        let mut timestamp_epoch_ms = None;
         let mut latitude = None;
         let mut longitude = None;
         let mut altitude = None;
@@ -267,16 +267,7 @@ impl Scanner {
                 let mut bufreader = BufReader::new(file);
                 let exifreader = exif::Reader::new();
                 if let Ok(exif_data) = exifreader.read_from_container(&mut bufreader) {
-                    // Timestamp
-                    if let Some(field) = exif_data
-                        .get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
-                        .or_else(|| exif_data.get_field(exif::Tag::DateTime, exif::In::PRIMARY))
-                    {
-                        let val_str = field.display_value().to_string();
-                        if let Some(ts) = chrono_parse_timestamp(&val_str) {
-                            timestamp_epoch_ms = ts;
-                        }
-                    }
+                    timestamp_epoch_ms = exif_capture_time(&exif_data);
 
                     // Camera & Hardware
                     if let Some(f) = exif_data.get_field(exif::Tag::Make, exif::In::PRIMARY) {
@@ -352,6 +343,12 @@ impl Scanner {
             (width, height) = crate::dims::displayed_size(path, header, exif_size);
         }
 
+        if media_type == MediaType::Video {
+            timestamp_epoch_ms = extract_video_created(path);
+        }
+        let timestamp_epoch_ms =
+            timestamp_epoch_ms.unwrap_or_else(|| file_capture_time(&metadata, mtime_epoch_ms));
+
         // Deconstruct date components
         let (year, month, day) = epoch_to_date_components(timestamp_epoch_ms);
 
@@ -425,6 +422,66 @@ pub(crate) fn epoch_to_date_components(epoch_ms: i64) -> (i32, u32, u32) {
     }
 }
 
+/// Capture time from EXIF: DateTimeOriginal, else DateTimeDigitized
+/// (CreateDate), else DateTime (ModifyDate, which editors rewrite but which is
+/// still nearer the shot than the file's dates).
+fn exif_capture_time(exif: &exif::Exif) -> Option<i64> {
+    [
+        exif::Tag::DateTimeOriginal,
+        exif::Tag::DateTimeDigitized,
+        exif::Tag::DateTime,
+    ]
+    .into_iter()
+    .find_map(|tag| {
+        let field = exif.get_field(tag, exif::In::PRIMARY)?;
+        chrono_parse_timestamp(&field.display_value().to_string())
+    })
+}
+
+/// Capture time for a file with no embedded date: its birth time, or its
+/// modification time when the birth time is unknown or later (a copy made
+/// with the original mtime kept). Never the time it was catalogued.
+fn file_capture_time(metadata: &std::fs::Metadata, mtime_epoch_ms: i64) -> i64 {
+    let birth = metadata
+        .created()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64);
+    older_file_time(birth, mtime_epoch_ms)
+}
+
+/// The birth time when known and not after the modification time, else the
+/// modification time. An mtime of 0 stays 0 (undated), whatever the birth.
+fn older_file_time(birth_epoch_ms: Option<i64>, mtime_epoch_ms: i64) -> i64 {
+    match birth_epoch_ms {
+        Some(b) if b > 0 && b <= mtime_epoch_ms => b,
+        _ => mtime_epoch_ms,
+    }
+}
+
+/// Capture time the scanner would store for `path` now, from its embedded
+/// date or its file dates (see [`Scanner::inspect_media_file`]). `None` when
+/// the file cannot be read.
+pub(crate) fn capture_time(path: &Path) -> Option<i64> {
+    let media_type = Scanner::classify_media_extension(path)?;
+    let metadata = std::fs::metadata(path).ok()?;
+    let mtime_epoch_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as i64);
+    let embedded = match media_type {
+        MediaType::Image | MediaType::Raw => File::open(path).ok().and_then(|file| {
+            let exif = exif::Reader::new()
+                .read_from_container(&mut BufReader::new(file))
+                .ok()?;
+            exif_capture_time(&exif)
+        }),
+        MediaType::Video => extract_video_created(path),
+    };
+    Some(embedded.unwrap_or_else(|| file_capture_time(&metadata, mtime_epoch_ms)))
+}
+
 fn chrono_parse_timestamp(s: &str) -> Option<i64> {
     let parts: Vec<&str> = s.split_whitespace().collect();
     if parts.len() < 2 {
@@ -455,3 +512,6 @@ fn chrono_parse_timestamp(s: &str) -> Option<i64> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests;
