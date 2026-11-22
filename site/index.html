@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lumina: a private photo library for macOS and Linux</title>
+  <meta name="description" content="Lumina is a fast, native photo and video manager with no account, no cloud and no telemetry. Free and open source for macOS and Linux.">
+  <meta name="theme-color" content="#0A0A0C">
+  <meta property="og:title" content="Lumina: your photo library, on your computer, and nowhere else">
+  <meta property="og:description" content="A fast, native photo and video manager with no account, no cloud and no telemetry. Free and open source.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://raysca.github.io/lumina/">
+  <link rel="icon" href="assets/brand/lumina-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/brand/lumina-icon.svg" alt="" width="28" height="28">Lumina</a>
+    <ul>
+      <li><a href="#privacy">Privacy</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li class="keep"><a href="https://github.com/raysca/lumina">GitHub</a></li>
+      <li class="keep"><a class="btn btn-primary btn-sm" href="#download">Download</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main id="main">
+  <header class="hero" id="top">
+    <div class="wrap">
+      <img class="hero-icon" src="assets/brand/lumina-icon.svg" alt="Lumina app icon: an amber aperture on graphite" width="112" height="112">
+      <span class="eyebrow">Free and open source · macOS and Linux</span>
+      <h1>Your photos. Your computer. <em>Nowhere else.</em></h1>
+      <p class="lede">Lumina is a fast, native photo and video manager with no account, no cloud and no telemetry. Browse, cull, search and organise your whole library, offline, in ordinary folders you own.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#download" id="hero-download">Download Lumina</a>
+        <a class="btn btn-ghost" href="https://github.com/raysca/lumina">View on GitHub</a>
+      </div>
+      <p class="fineprint">MIT licensed. No sign-up. Windows is planned.</p>
+
+      <!-- Illustration of the library view. Replace with docs/assets/screenshots/hero.png once the Safelight screenshots are captured. -->
+      <figure class="window" aria-label="Illustration of the Lumina library window">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><div class="search">city:Kyoto rating:&gt;=4</div></div>
+        <div class="window-body" aria-hidden="true">
+          <div class="side">
+            <b>LIBRARY</b>
+            <span class="on">All Photos <em>2,418</em></span>
+            <span>Favourites <em>96</em></span>
+            <span>Videos <em>212</em></span>
+            <span>Places</span>
+            <b>CULLING</b>
+            <span>Picks <em>341</em></span>
+            <span>Similar Shots</span>
+            <b>ALBUMS</b>
+            <span>Japan 2026</span>
+            <span>Portfolio</span>
+          </div>
+          <div class="grid">
+            <div style="background:linear-gradient(160deg,#D9CFC1,#8C7B6B)"></div>
+            <div style="background:linear-gradient(135deg,#4B3F72,#E8584F)"></div>
+            <div style="background:linear-gradient(45deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(180deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(135deg,#2A2A2C,#858583)"></div>
+            <div style="background:linear-gradient(160deg,#C48AA0,#F2E3D5)"></div>
+            <div style="background:linear-gradient(135deg,#F6C46E,#C2701F)"></div>
+            <div style="background:linear-gradient(200deg,#4B3F72,#E8584F)"></div>
+            <div class="sel" style="background:linear-gradient(160deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(45deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(135deg,#4B3F72,#E8584F)"></div>
+            <div style="background:linear-gradient(135deg,#2A2A2C,#858583)"></div>
+            <div style="background:linear-gradient(45deg,#7A3E48,#E8A87C)"></div>
+            <div style="background:linear-gradient(45deg,#F6C46E,#C2701F)"></div>
+            <div style="background:linear-gradient(200deg,#2A2A2C,#858583)"></div>
+            <div style="background:linear-gradient(160deg,#F6C46E,#C2701F)"></div>
+            <div style="background:linear-gradient(45deg,#F6C46E,#C2701F)"></div>
+            <div style="background:linear-gradient(180deg,#3B5D3A,#A9C27F)"></div>
+            <div style="background:linear-gradient(160deg,#4B3F72,#E8584F)"></div>
+            <div style="background:linear-gradient(135deg,#C48AA0,#F2E3D5)"></div>
+            <div style="background:linear-gradient(180deg,#2A2A2C,#858583)"></div>
+            <div style="background:linear-gradient(160deg,#C48AA0,#F2E3D5)"></div>
+            <div style="background:linear-gradient(45deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(160deg,#2A2A2C,#858583)"></div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="promises">
+      <div><strong>No account</strong><span>Open the app and go. Nothing to sign up for, ever.</span></div>
+      <div><strong>No cloud</strong><span>Your library is plain folders on your own disk.</span></div>
+      <div><strong>No telemetry</strong><span>No analytics, no crash uploads, no background calls.</span></div>
+      <div><strong>No lock-in</strong><span>Metadata in open XMP sidecars. Leave any time.</span></div>
+    </div>
+
+    <section id="privacy">
+      <div class="feature">
+        <div>
+          <div class="kicker">Private by design</div>
+          <h2>Turn off your Wi-Fi. Lumina won't notice.</h2>
+          <p class="section-lede">Every feature works offline, including Places. The world map is drawn from an outline bundled with the app and the reverse geocoder is built in, so no tile server ever learns where your photos were taken.</p>
+          <ul>
+            <li>No Lumina account, cloud library or sync service.</li>
+            <li>No analytics, telemetry or crash reporting.</li>
+            <li>Update checks are off by default, and every update is signature-checked.</li>
+            <li>Export as JPEG strips every bit of metadata, GPS included.</li>
+          </ul>
+        </div>
+        <div class="panel" role="table" aria-label="Everything Lumina can send over the network">
+          <h3>Everything Lumina sends over the network</h3>
+          <div class="net-row" role="row"><span class="dot off"></span><span role="cell">Browsing, search, map, editing</span><small role="cell">never</small></div>
+          <div class="net-row" role="row"><span class="dot off"></span><span role="cell">Analytics and crash reports</span><small role="cell">never</small></div>
+          <div class="net-row" role="row"><span class="dot ask"></span><span role="cell">Check for Updates</span><small role="cell">when you ask</small></div>
+          <div class="net-row" role="row"><span class="dot ask"></span><span role="cell">Import Video from URL</span><small role="cell">when you ask</small></div>
+          <p class="count">Don't take our word for it: watch with Little Snitch, LuLu or OpenSnitch. <a href="https://github.com/raysca/lumina/blob/main/docs/updates.md">How updates work</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="feature flip">
+        <div>
+          <div class="kicker">Fast and native</div>
+          <h2>Smooth at any size.</h2>
+          <p class="section-lede">Lumina is written in Rust on GPUI, the GPU-accelerated engine behind the Zed editor. Decoding, cataloguing and search run in a separate core, so the interface never waits on your disk.</p>
+          <ul>
+            <li>A virtualised grid that scrolls at up to 120 FPS on ProMotion displays.</li>
+            <li>Mosaic and Years / Months / Days browsing.</li>
+            <li>Instant zoom, pan and 1:1 pixel inspection in the viewer.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="results" aria-hidden="true">
+            <div style="background:linear-gradient(135deg,#D9CFC1,#8C7B6B)"></div>
+            <div style="background:linear-gradient(135deg,#C48AA0,#F2E3D5)"></div>
+            <div style="background:linear-gradient(135deg,#2A2A2C,#858583)"></div>
+            <div style="background:linear-gradient(160deg,#2A2A2C,#858583)"></div>
+            <div style="background:linear-gradient(45deg,#12343B,#5FA8A0)"></div>
+            <div style="background:linear-gradient(180deg,#4B3F72,#E8584F)"></div>
+            <div style="background:linear-gradient(45deg,#12343B,#5FA8A0)"></div>
+            <div style="background:linear-gradient(180deg,#12343B,#5FA8A0)"></div>
+            <div style="background:linear-gradient(160deg,#1F2A44,#E9A23B)"></div>
+            <div style="background:linear-gradient(160deg,#3B5D3A,#A9C27F)"></div>
+            <div style="background:linear-gradient(45deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(45deg,#1F2A44,#E9A23B)"></div>
+          </div>
+          <p class="count">Illustration. Real screenshots arrive with the 0.2 release.</p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div>
+          <div class="kicker">Culling</div>
+          <h2>Cull a shoot without touching the mouse.</h2>
+          <p class="section-lede">Pick, reject and rate as fast as you can press a key. Compare up to nine shots with one shared zoom, review RAW + JPEG pairs and bursts as stacks, then clear the rejects in one step. Almost everything can be undone.</p>
+        </div>
+        <div class="panel">
+          <div class="keys">
+            <div class="key"><kbd>P</kbd><span>Pick</span></div>
+            <div class="key"><kbd>X</kbd><span>Reject</span></div>
+            <div class="key"><kbd>0–5</kbd><span>Rate</span></div>
+            <div class="key"><kbd>C</kbd><span>Compare 2 to 9</span></div>
+            <div class="key"><kbd>⌘K</kbd><span>Command palette</span></div>
+            <div class="key"><kbd>⌘Z</kbd><span>Undo</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature flip">
+        <div>
+          <div class="kicker">Search</div>
+          <h2>Find that photo in seconds.</h2>
+          <p class="section-lede">Type what you remember. Lumina searches file names, folders, places, cameras, lenses, tags and captions, and understands filters you can stack.</p>
+          <ul>
+            <li>Smart albums from rules, with a live count and preview.</li>
+            <li>Hierarchical keywords like <code>places/japan/kyoto</code>, with aliases.</li>
+            <li>An offline map of everywhere you've been.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="query" aria-label="Example search: camera Sony, ISO over 800, city Kyoto, rating 4 or more">
+            <span class="chip"><b>camera:</b>Sony</span>
+            <span class="chip"><b>iso:</b>&gt;800</span>
+            <span class="chip"><b>city:</b>Kyoto</span>
+            <span class="chip"><b>rating:</b>&gt;=4</span>
+          </div>
+          <div class="results" aria-hidden="true">
+            <div style="background:linear-gradient(180deg,#12343B,#5FA8A0)"></div>
+            <div style="background:linear-gradient(200deg,#3E8BF5,#BFD9F7)"></div>
+            <div style="background:linear-gradient(45deg,#1F2A44,#E9A23B)"></div>
+            <div style="background:linear-gradient(135deg,#2E4A62,#9CC3D5)"></div>
+            <div style="background:linear-gradient(200deg,#C48AA0,#F2E3D5)"></div>
+            <div style="background:linear-gradient(180deg,#3B5D3A,#A9C27F)"></div>
+            <div style="background:linear-gradient(200deg,#3B5D3A,#A9C27F)"></div>
+            <div style="background:linear-gradient(135deg,#4B3F72,#E8584F)"></div>
+          </div>
+          <p class="count">Search syntax: <a href="https://github.com/raysca/lumina/blob/main/docs/search.md">the full list of filters</a></p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div>
+          <div class="kicker">Portable metadata</div>
+          <h2>Your work survives Lumina.</h2>
+          <p class="section-lede">Lumina never modifies your originals. Ratings, colour labels, keywords, captions and copyright are written to Adobe-compatible XMP sidecars next to your files, so Lightroom and other photo tools can read them. If you ever leave, everything comes with you.</p>
+          <ul>
+            <li>Metadata templates for your name, copyright and contact details.</li>
+            <li>Imports sidecars written by other apps, and never overwrites them.</li>
+          </ul>
+        </div>
+        <div class="panel">
+<pre aria-label="Example XMP sidecar"><span class="t">&lt;rdf:Description</span>
+  <span class="a">xmp:Rating</span>=<span class="v">"5"</span>
+  <span class="a">xmp:Label</span>=<span class="v">"Green"</span><span class="t">&gt;</span>
+  <span class="t">&lt;lr:hierarchicalSubject&gt;</span>
+    <span class="t">&lt;rdf:li&gt;</span>places|japan|kyoto<span class="t">&lt;/rdf:li&gt;</span>
+  <span class="t">&lt;/lr:hierarchicalSubject&gt;</span>
+  <span class="t">&lt;dc:rights&gt;</span>© 2026 You<span class="t">&lt;/dc:rights&gt;</span>
+<span class="t">&lt;/rdf:Description&gt;</span></pre>
+          <p class="count">photo.jpg.xmp, sitting right next to photo.jpg</p>
+        </div>
+      </div>
+
+      <div class="more">
+        <div><h3>Video that feels native</h3><p>Real-frame scrub previews, chapters, loop ranges, audio tracks and Picture-in-Picture.</p></div>
+        <div><h3>Quick, safe edits</h3><p>Rotate, exposure, auto enhance and crop, stored non-destructively. Or open any photo in your favourite editor.</p></div>
+        <div><h3>Albums, smart and simple</h3><p>Hand-picked albums with covers, twelve built-in smart albums and your own rules.</p></div>
+        <div><h3>Tidy imports</h3><p>Drop a card's worth of files and they land in dated folders, with a preview of what will be copied first.</p></div>
+        <div><h3>Nothing gets lost</h3><p>Files moved outside Lumina keep their metadata and reconnect. Trash, undo and catalog backups throughout.</p></div>
+        <div><h3>Keyboard-first and accessible</h3><p>Every feature has a keyboard path, a ⌘K palette for everything and a built-in shortcut sheet.</p></div>
+      </div>
+      <p class="count" style="text-align:center;margin-top:24px"><a href="https://github.com/raysca/lumina/blob/main/docs/features.md">See every feature and shortcut</a></p>
+    </section>
+
+    <section id="compare">
+      <div class="kicker">The difference</div>
+      <h2>Ownership, not a subscription.</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col"></th><th scope="col" class="lum">Lumina</th><th scope="col">Typical cloud photo service</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Works without an account</th><td class="yes">Yes</td><td class="no">No</td></tr>
+            <tr><th scope="row">Photos stay only on your disk</th><td class="yes">Yes</td><td class="no">No</td></tr>
+            <tr><th scope="row">No analytics or telemetry</th><td class="yes">Yes</td><td class="no">Rarely</td></tr>
+            <tr><th scope="row">Fully offline, maps included</th><td class="yes">Yes</td><td class="no">No</td></tr>
+            <tr><th scope="row">Open metadata you can take anywhere</th><td class="yes">XMP sidecars</td><td class="no">Export only</td></tr>
+            <tr><th scope="row">Source code you can read</th><td class="yes">MIT licence</td><td class="no">No</td></tr>
+            <tr><th scope="row">Price</th><td class="yes">Free</td><td class="no">Monthly storage fees</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="built">
+      <div class="kicker">Under the hood</div>
+      <h2>Built properly, in the open.</h2>
+      <p class="section-lede">A Rust core with a SQLite catalog and full-text search, a GPUI interface, and native media playback on each platform. Contributions are welcome.</p>
+      <div class="built">
+        <div class="stat"><strong>120 FPS</strong><span>GPU-rendered interface on GPUI, the engine behind Zed</span></div>
+        <div class="stat"><strong>~1,900</strong><span>automated tests, including real OS-level UI automation</span></div>
+        <div class="stat"><strong>MIT</strong><span>licensed, with every line on GitHub</span></div>
+      </div>
+    </section>
+
+    <section id="download" class="download">
+      <div class="kicker">Download</div>
+      <h2>Take your library back.</h2>
+      <p class="section-lede" style="margin-left:auto;margin-right:auto">Free, forever. No account to create.</p>
+      <div class="platforms">
+        <div class="platform" data-os="mac">
+          <h3>macOS</h3>
+          <p>macOS 12 or newer. Apple silicon and Intel. Signed and notarized.</p>
+          <a class="btn btn-primary btn-sm" href="https://github.com/raysca/lumina/releases/latest">Download .dmg</a>
+        </div>
+        <div class="platform" data-os="linux">
+          <h3>Linux</h3>
+          <p>x86_64, Ubuntu 24.04 or newer. Flatpak or .deb.</p>
+          <a class="btn btn-primary btn-sm" href="https://github.com/raysca/lumina/releases/latest">Download</a>
+        </div>
+        <div class="platform" data-os="windows">
+          <h3>Windows</h3>
+          <p>On the roadmap.</p>
+          <a class="soon" href="https://github.com/raysca/lumina/blob/main/ROADMAP.md">Follow progress</a>
+        </div>
+      </div>
+      <div class="source">
+        <p class="count">Or build it from source with Rust 1.95+:</p>
+<pre>git clone https://github.com/raysca/lumina
+cd lumina
+cargo run -p lumina-ui-gpui</pre>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="kicker">Questions</div>
+      <h2>Frequently asked</h2>
+      <div class="faq">
+        <details><summary>Is Lumina really free?</summary><p>Yes. Lumina is open source under the MIT licence. There is no paid tier, no account and no storage plan to upsell.</p></details>
+        <details><summary>Does Lumina upload anything?</summary><p>No. It only goes online when you choose Check for Updates (or turn on daily checks, which are off by default) or paste a link into Import Video from URL. There is no analytics, telemetry or crash reporting.</p></details>
+        <details><summary>Will it change or move my files?</summary><p>No. Lumina never modifies your originals. Edits are stored in its catalog and applied on screen, and metadata is written to XMP sidecars next to your files. Importing copies files into dated folders; opening a folder indexes it in place.</p></details>
+        <details><summary>Can I use it alongside Lightroom or my favourite editor?</summary><p>Yes. Lumina reads and writes Adobe-compatible XMP sidecars, and Edit in… (⌘E) opens any photo in the editor you choose. Lumina is a library and culling tool, not a RAW developer.</p></details>
+        <details><summary>Which formats does it support?</summary><p>JPEG, PNG, WebP, HEIC, TIFF and common camera RAW files, plus MP4, MOV, M4V, AVI and MKV video. Linux does not preview HEIC or RAW yet. <a href="https://github.com/raysca/lumina/blob/main/docs/features.md#supported-formats">Format details</a></p></details>
+        <details><summary>What about Windows?</summary><p>Windows is planned. Watch the repository's releases on GitHub to hear when it lands.</p></details>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/brand/lumina-icon.svg" alt="" width="24" height="24">Lumina</a>
+    <span class="no-track">This site has no analytics, cookies or third-party requests.</span>
+    <span><a href="https://github.com/raysca/lumina">GitHub</a> · <a href="https://github.com/raysca/lumina/blob/main/LICENSE">MIT licence</a> · <a href="https://github.com/raysca/lumina/blob/main/THIRD_PARTY_NOTICES.md">Credits</a></span>
+  </div>
+</footer>
+
+<script>
+  // Highlight the visitor's platform. Runs locally; nothing is sent anywhere.
+  (function () {
+    var ua = navigator.userAgent;
+    var os = /Mac/.test(ua) ? "mac" : /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : /Windows/.test(ua) ? "windows" : null;
+    if (!os) return;
+    var card = document.querySelector('.platform[data-os="' + os + '"]');
+    if (card) card.classList.add("mine");
+    var hero = document.getElementById("hero-download");
+    if (hero && os === "mac") hero.textContent = "Download for macOS";
+    if (hero && os === "linux") hero.textContent = "Download for Linux";
+  })();
+</script>
+</body>
+</html>
