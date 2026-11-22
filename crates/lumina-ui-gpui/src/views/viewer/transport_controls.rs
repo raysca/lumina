@@ -125,8 +125,9 @@ pub(super) fn render(
                 .flex()
                 .flex_row()
                 .gap(px(4.0))
-                .font_family(theme::FONT_MONO)
-                .text_size(px(12.0))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_SMALL)
                 .children(crate::views::page_header::text_marker(
                     "video-time",
                     &readout,
@@ -144,8 +145,9 @@ pub(super) fn render(
                 .border_1()
                 .border_color(theme::line())
                 .when(video.speed_menu_open, |b| b.bg(theme::bg_3()))
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t2())
                 .child(format_playback_speed(video.playback_speed))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -339,8 +341,9 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 .flex_row()
                 .items_center()
                 .gap_1p5()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
+                .text_size(theme::TEXT_SMALL)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(if is_cur { theme::accent() } else { theme::t1() })
                 .child(if is_cur {
                     div().flex().items_center().child(render_icon(
@@ -390,7 +393,7 @@ fn render_audio_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl In
     )
     .aria_expanded(this.video.tracks.audio_menu_open)
     .when(this.video.tracks.audio_menu_open, |b| b.bg(theme::bg_3()))
-    .text_xs()
+    .text_size(theme::TEXT_SMALL)
     .text_color(theme::t1())
     .child(t("video.audio_menu"))
     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -443,7 +446,7 @@ fn render_audio_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 .flex_row()
                 .items_center()
                 .gap_1p5()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(if is_cur { theme::accent() } else { theme::t1() })
                 .child(if is_cur {
                     div()

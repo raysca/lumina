@@ -132,20 +132,20 @@ impl LuminaApp {
                     .child(
                         div()
                             .debug_selector(|| "error-banner-title".to_string())
-                            .text_size(px(12.5))
+                            .text_size(theme::TEXT_SMALL)
                             .font_weight(FontWeight::MEDIUM)
                             .child(title),
                     )
                     .children(detail.map(|detail| {
                         div()
                             .debug_selector(|| "error-banner-detail".to_string())
-                            .text_xs()
+                            .text_size(theme::TEXT_SMALL)
                             .child(detail)
                     }))
                     .children(import_failure.map(|failure| {
                         div()
                             .debug_selector(|| "error-banner-import".to_string())
-                            .text_xs()
+                            .text_size(theme::TEXT_SMALL)
                             .child(failure)
                     })),
             )
@@ -169,7 +169,7 @@ impl LuminaApp {
                     .px(px(6.0))
                     .py(px(4.0))
                     .rounded(theme::RADIUS_SM)
-                    .text_size(px(11.5))
+                    .text_size(theme::TEXT_SMALL)
                     .line_height(px(14.0))
                     .text_color(theme::t2())
                     .hover(|s| s.text_color(theme::t1()))

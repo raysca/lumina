@@ -12,12 +12,14 @@ use crate::theme;
 /// hang from its bottom edge.
 pub(crate) const PAGE_HEADER_HEIGHT: f32 = theme::TITLEBAR_HEIGHT + 1.0;
 
+/// [`theme::TEXT_TITLE`] and [`theme::TEXT_CAPTION`] as plain numbers, for
+/// the lift below.
 const TITLE_SIZE: f32 = 20.0;
-const META_SIZE: f32 = 10.5;
+const META_SIZE: f32 = 11.0;
 /// GPUI lays text out with no baseline, so `items_baseline` lines up the
 /// boxes' bottom edges, and the smaller meta lands below the title's
 /// baseline. Its baseline sits 0.365 of the font size above its box's
-/// bottom (Inter and the mono alike, at the default line height), so the
+/// bottom (Inter, at the default line height), so the
 /// meta is lifted by the difference to share the title's baseline.
 pub(crate) const META_BASELINE_LIFT: f32 = 0.365 * (TITLE_SIZE - META_SIZE);
 
@@ -29,19 +31,6 @@ pub(crate) fn page_header(
     leading: Option<AnyElement>,
     title: impl Into<SharedString>,
     meta: Option<SharedString>,
-    actions: impl IntoElement,
-    draggable: bool,
-) -> Div {
-    page_header_with_meta_font(leading, title, meta, theme::FONT_MONO, actions, draggable)
-}
-
-/// [`page_header`] with the meta line in `meta_font`: Settings' subtitle is
-/// sans, the other pages' mono.
-pub(crate) fn page_header_with_meta_font(
-    leading: Option<AnyElement>,
-    title: impl Into<SharedString>,
-    meta: Option<SharedString>,
-    meta_font: &'static str,
     actions: impl IntoElement,
     draggable: bool,
 ) -> Div {
@@ -76,7 +65,7 @@ pub(crate) fn page_header_with_meta_font(
                         .min_w_0()
                         .truncate()
                         .font_family(theme::FONT_DISPLAY)
-                        .text_size(px(TITLE_SIZE))
+                        .text_size(theme::TEXT_TITLE)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
                         .children(text_marker("page-title", &title))
@@ -88,12 +77,12 @@ pub(crate) fn page_header_with_meta_font(
                         .debug_selector(|| "page-meta".to_string())
                         .min_w_0()
                         .truncate()
-                        .font_family(meta_font)
-                        .text_size(px(META_SIZE))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .mb(px(META_BASELINE_LIFT))
                         .text_color(theme::t3())
                         .children(marker)
-                        .children(text_marker("page-meta-font", &meta_font.into()))
                         .child(meta)
                 })),
         )
@@ -195,7 +184,7 @@ pub(crate) fn page_tabs(
                 .cursor_pointer()
                 .child(
                     div()
-                        .text_size(px(12.5))
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(if tab.active {
                             FontWeight::MEDIUM
                         } else {
@@ -210,8 +199,9 @@ pub(crate) fn page_tabs(
                 ))
                 .child(
                     div()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(9.5))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(if tab.active {
                             theme::accent()
                         } else {
@@ -301,7 +291,7 @@ pub(crate) fn header_primary_button(
         .bg(theme::accent())
         .hover(|s| s.bg(theme::accent_hover()))
         .cursor_pointer()
-        .text_size(px(12.5))
+        .text_size(theme::TEXT_SMALL)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::on_accent())
         .child(render_icon(icon, px(14.0), theme::on_accent()))

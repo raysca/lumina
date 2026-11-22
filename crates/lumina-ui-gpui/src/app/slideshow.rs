@@ -420,7 +420,7 @@ impl LuminaApp {
                                 .debug_selector(|| "slideshow-paused".to_string())
                                 .px_3()
                                 .py_1()
-                                .text_sm()
+                                .text_size(theme::TEXT_BODY)
                                 .text_color(theme::t1())
                                 .child(t("slideshow.paused")),
                         ),

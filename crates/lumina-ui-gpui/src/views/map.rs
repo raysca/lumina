@@ -36,12 +36,17 @@ fn notice(id: &'static str, title: String, body: String) -> impl IntoElement {
         .gap_2()
         .child(
             div()
-                .text_sm()
+                .text_size(theme::TEXT_BODY)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(title),
         )
-        .child(div().text_xs().text_color(theme::t2()).child(body))
+        .child(
+            div()
+                .text_size(theme::TEXT_SMALL)
+                .text_color(theme::t2())
+                .child(body),
+        )
 }
 
 fn cluster_label(c: &Cluster) -> String {
@@ -82,8 +87,9 @@ fn pin(index: usize, c: &Cluster, focused: bool, app: Entity<LuminaApp>) -> AnyE
         .child(
             div()
                 .debug_selector(move || format!("map-cluster-label-{index}-{count}"))
-                .text_xs()
-                .font_family(theme::FONT_MONO)
+                .text_size(theme::TEXT_SMALL)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::on_accent())
                 .child(count.to_string()),
@@ -291,7 +297,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .absolute()
                 .bottom_2()
                 .left_3()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(t("map.hint")),
         )

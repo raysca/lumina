@@ -28,7 +28,7 @@ pub(super) fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> i
         .child(
             div()
                 .flex_1()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(format!("{n} selected")),

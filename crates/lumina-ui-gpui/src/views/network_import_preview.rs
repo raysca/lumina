@@ -38,8 +38,9 @@ fn badge(selector: &'static str, text: String) -> Div {
         .bg(theme::bg_3())
         .flex()
         .items_center()
-        .font_family(theme::FONT_MONO)
-        .text_size(px(10.5))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .text_color(theme::t2())
 }
 
@@ -65,8 +66,9 @@ pub(crate) fn read_only_field(url: &str) -> Div {
                 .flex_1()
                 .min_w_0()
                 .truncate()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(12.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(url.to_string()),
         )
@@ -100,8 +102,9 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
                 .bg(theme::key_photo_scrim())
                 .flex()
                 .items_center()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::on_media())
         }));
 
@@ -147,7 +150,7 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
                 .gap(px(6.0))
                 .child(
                     marked("net-import-preview-title", info.title.clone())
-                        .text_size(px(14.0))
+                        .text_size(theme::TEXT_BODY)
                         .font_weight(FontWeight::MEDIUM)
                         .line_height(px(19.0))
                         .text_color(theme::t1())
@@ -157,8 +160,9 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
                 .child(
                     marked("net-import-preview-meta", meta)
                         .truncate()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.0))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t2()),
                 )
                 .child(badges),

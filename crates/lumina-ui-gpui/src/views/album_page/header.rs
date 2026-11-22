@@ -35,7 +35,7 @@ fn ghost_button(selector: &'static str, label: SharedString) -> Stateful<Div> {
         .border_color(theme::line())
         .hover(|s| s.bg(theme::media_scrim()))
         .cursor_pointer()
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
 }
 
@@ -235,7 +235,7 @@ pub(crate) fn render(
                                 .min_w_0()
                                 .truncate()
                                 .font_family(theme::FONT_DISPLAY)
-                                .text_size(px(30.0))
+                                .text_size(theme::TEXT_DISPLAY)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::on_media())
                                 .children(text_marker("album-header-title", &title))
@@ -246,8 +246,9 @@ pub(crate) fn render(
                                 .debug_selector(|| "album-header-meta".to_string())
                                 .min_w_0()
                                 .truncate()
-                                .font_family(theme::FONT_MONO)
-                                .text_size(px(10.5))
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
+                                .text_size(theme::TEXT_CAPTION)
                                 .text_color(theme::on_media_meta())
                                 .children(text_marker("album-header-meta", &meta))
                                 .child(meta),
@@ -267,7 +268,7 @@ fn breadcrumb(title: SharedString, cx: &mut Context<LuminaApp>) -> Div {
         .flex_row()
         .items_center()
         .gap(px(6.0))
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .child(
             div()
                 .id("album-crumb-root")

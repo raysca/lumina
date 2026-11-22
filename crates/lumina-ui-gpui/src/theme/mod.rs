@@ -29,8 +29,28 @@ pub fn collapsed_header_inset() -> Pixels {
     px(TRAFFIC_LIGHTS_INSET - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)
 }
 
-/// Body text: sidebar rows, fields and menus (v3.1 type scale).
+// Type scale: seven sizes in whole pixels, plus MICRO for 14px badges.
+// Every text size in the app is one of these.
+/// Hero headings: onboarding and the album page cover.
+pub const TEXT_DISPLAY: Pixels = px(28.0);
+/// Page titles, the wordmark and section heads in dialogs.
+pub const TEXT_TITLE: Pixels = px(20.0);
+/// Dialog titles, empty state headings and the viewer's title.
+pub const TEXT_LARGE: Pixels = px(15.0);
+/// Body text: sidebar rows, fields and menus.
 pub const TEXT_BODY: Pixels = px(13.0);
+/// Secondary text: buttons, hints, tooltips and list details.
+pub const TEXT_SMALL: Pixels = px(12.0);
+/// Counts, dates, sizes and section labels.
+pub const TEXT_CAPTION: Pixels = px(11.0);
+/// Badge digits inside 14px pills and the narrow timeline rail.
+pub const TEXT_MICRO: Pixels = px(9.0);
+
+/// Counts, dates and sizes set in [`FONT_SANS`] with tabular figures, so
+/// columns of digits line up without a monospaced face.
+pub fn tabular_figures() -> gpui::FontFeatures {
+    gpui::FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)]))
+}
 
 // Corner radii (v3.1). Photo thumbnails stay square wherever they appear;
 // icon tiles keep their own shape.
@@ -220,7 +240,7 @@ pub fn header_fade() -> gpui::Background {
 /// spacing; sidebar and inspector sections sit 16px below the previous.
 pub fn section_label(text: impl Into<SharedString>) -> Div {
     div()
-        .text_size(px(10.0))
+        .text_size(TEXT_CAPTION)
         .font_weight(gpui::FontWeight::SEMIBOLD)
         .text_color(t3())
         .child(text.into())
@@ -230,12 +250,59 @@ pub fn section_label(text: impl Into<SharedString>) -> Div {
 pub const FONT_SANS: &str = "Inter";
 /// The wordmark and page titles (600 only).
 pub const FONT_DISPLAY: &str = "Inter Tight";
-/// Counts, sizes, durations and shortcut hints.
+/// Keyboard shortcut keycaps and file paths only.
 pub const FONT_MONO: &str = "JetBrains Mono";
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every `.rs` file under `src/`, tests excluded, with its path.
+    fn ui_sources() -> Vec<(std::path::PathBuf, String)> {
+        fn walk(dir: &std::path::Path, out: &mut Vec<(std::path::PathBuf, String)>) {
+            for entry in std::fs::read_dir(dir).expect("src dir") {
+                let path = entry.expect("dir entry").path();
+                if path.is_dir() {
+                    if path.file_name().is_some_and(|n| n != "tests") {
+                        walk(&path, out);
+                    }
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let text = std::fs::read_to_string(&path).expect("source");
+                    out.push((path, text));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut out,
+        );
+        out
+    }
+
+    #[test]
+    fn text_sizes_come_from_the_type_scale() {
+        let raw: Vec<String> = ui_sources()
+            .into_iter()
+            .flat_map(|(path, text)| {
+                text.lines()
+                    .enumerate()
+                    .filter(|(_, line)| {
+                        // Spelled in pieces so this test does not match itself.
+                        line.contains(concat!("text_size(", "px("))
+                            || ["xs", "sm", "base", "lg"]
+                                .iter()
+                                .any(|n| line.contains(&format!(".text_{n}()")))
+                    })
+                    .map(|(i, _)| format!("{}:{}", path.display(), i + 1))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(
+            raw.is_empty(),
+            "text sizes use the TEXT_* tokens, not raw sizes: {raw:#?}"
+        );
+    }
 
     #[test]
     fn label_ids_map_to_the_six_palette_colours() {

@@ -85,8 +85,9 @@ pub(crate) fn nav_row(
                 div()
                     .debug_selector(move || count_selector)
                     .flex_none()
-                    .text_size(px(10.0))
-                    .font_family(FONT_MONO)
+                    .text_size(TEXT_CAPTION)
+                    .font_family(FONT_SANS)
+                    .font_features(tabular_figures())
                     .text_color(if attention || active { accent() } else { t3() })
                     .child(crate::i18n::count(count)),
             )
@@ -115,7 +116,7 @@ pub fn chip(id: impl Into<ElementId>, kind: ChipKind) -> Stateful<Div> {
         .rounded_full()
         .border_1()
         .border_color(line())
-        .text_size(px(12.0));
+        .text_size(TEXT_SMALL);
     match kind {
         ChipKind::Normal => base.bg(bg_2()).text_color(t1()),
         ChipKind::Ghost => base.bg(rgba(0x00000000)).text_color(t2()),

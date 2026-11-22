@@ -2021,36 +2021,3 @@ fn settings_brand_shows_the_logo_where_the_library_does() {
 
     drop(view);
 }
-
-#[core::prelude::v1::test]
-fn settings_subtitle_is_sans_and_library_meta_mono() {
-    let (_temp_dir, engine) = seed_library("settings_meta_font", 1);
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
-    render_ui(vcx);
-    assert!(
-        vcx.debug_bounds("page-meta-font-text:JetBrains Mono")
-            .is_some(),
-        "the library page's meta line stays mono"
-    );
-
-    view.update(vcx, |app, cx| {
-        app.open_preferences_at(PreferencesTab::General, cx)
-    });
-    render_ui(vcx);
-    assert!(
-        vcx.debug_bounds("page-meta-font-text:Inter").is_some(),
-        "the settings subtitle uses the sans UI font"
-    );
-
-    view.update(vcx, |app, cx| app.close_preferences(cx));
-    render_ui(vcx);
-    assert!(
-        vcx.debug_bounds("page-meta-font-text:JetBrains Mono")
-            .is_some(),
-        "back in the library, its meta line is mono again"
-    );
-
-    drop(view);
-}

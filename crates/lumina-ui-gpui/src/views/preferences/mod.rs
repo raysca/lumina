@@ -8,7 +8,7 @@ use crate::app::preferences::{PreferencesTab, SettingsButton};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::page_header::{header_icon_button, page_header_with_meta_font};
+use crate::views::page_header::{header_icon_button, page_header};
 
 mod about;
 mod downloads;
@@ -129,14 +129,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .flex_col()
                 // The library's banner is hidden under this page.
                 .child(app.render_error_banner(cx))
-                .child(page_header_with_meta_font(
-                    None,
-                    label,
-                    Some(meta.into()),
-                    theme::FONT_SANS,
-                    actions,
-                    false,
-                ))
+                .child(page_header(None, label, Some(meta.into()), actions, false))
                 .child(
                     div()
                         .id("preferences-body")
@@ -177,7 +170,7 @@ fn reset_button(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .bg(theme::bg_2())
         .hover(|s| s.bg(theme::bg_3()))
         .whitespace_nowrap()
-        .text_size(px(12.5))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .cursor_pointer()
         .child(render_icon(Icon::RefreshCw, px(14.0), theme::t2()))

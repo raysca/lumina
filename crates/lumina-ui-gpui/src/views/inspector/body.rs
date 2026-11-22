@@ -92,7 +92,7 @@ fn inspector_empty_state() -> AnyElement {
         .flex()
         .justify_center()
         .items_center()
-        .text_sm()
+        .text_size(theme::TEXT_BODY)
         .text_color(theme::t2())
         .child("No media selected")
         .into_any_element()
@@ -262,7 +262,7 @@ fn render_single_body(body: InspectorBody<'_>) -> AnyElement {
                         .child(
                             div()
                                 .w_full()
-                                .text_base()
+                                .text_size(theme::TEXT_LARGE)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::t1())
                                 .child(display_title.clone()),
@@ -272,14 +272,15 @@ fn render_single_body(body: InspectorBody<'_>) -> AnyElement {
                                 .id("inspector-filename")
                                 .debug_selector(|| "inspector-filename".to_string())
                                 .w_full()
-                                .text_xs()
-                                .font_family(theme::FONT_MONO)
+                                .text_size(theme::TEXT_SMALL)
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
                                 .text_color(theme::t2())
                                 .child(file_name.clone()),
                         )
                         .child(
                             div()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::t2())
                                 .child(meta_summary_line),
                         )
@@ -456,7 +457,7 @@ fn header_button(
         .bg(if on { theme::accent() } else { theme::bg_2() })
         .hover(move |s| if on { s } else { s.bg(theme::bg_3()) })
         .cursor_pointer()
-        .text_xs()
+        .text_size(theme::TEXT_SMALL)
         .text_color(fg)
         .flex()
         .flex_row()
@@ -500,7 +501,7 @@ fn render_tab_bar(weak_app: WeakEntity<LuminaApp>, active_tab: InspectorTab) -> 
                 .items_center()
                 .rounded(theme::RADIUS_MD)
                 .cursor_pointer()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .font_weight(if is_active {
                     FontWeight::MEDIUM
                 } else {

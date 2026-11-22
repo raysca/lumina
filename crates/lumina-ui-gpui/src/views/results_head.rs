@@ -66,7 +66,7 @@ impl LuminaApp {
                         div()
                             .debug_selector(|| "search-results-title".to_string())
                             .font_family(theme::FONT_DISPLAY)
-                            .text_size(px(15.0))
+                            .text_size(theme::TEXT_LARGE)
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::t1())
                             .child(title),
@@ -74,8 +74,9 @@ impl LuminaApp {
                     .child(
                         div()
                             .debug_selector(|| "search-results-count".to_string())
-                            .font_family(theme::FONT_MONO)
-                            .text_size(px(10.0))
+                            .font_family(theme::FONT_SANS)
+                            .font_features(theme::tabular_figures())
+                            .text_size(theme::TEXT_CAPTION)
                             .text_color(theme::t3())
                             .child(count),
                     ),
@@ -92,7 +93,7 @@ impl LuminaApp {
                     )))
                     .relative()
                     .cursor_pointer()
-                    .text_size(px(11.5))
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .hover(|s| s.text_color(theme::t1()))
                     .child(sort)

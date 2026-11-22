@@ -468,8 +468,9 @@ impl MediaContextMenu {
     ) -> impl IntoElement {
         let trailing = if let Some(sc) = shortcut {
             div()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
+                .text_size(theme::TEXT_SMALL)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(if hover.hovered == Some(id_str) && !is_destructive {
                     theme::accent_hint()
                 } else {

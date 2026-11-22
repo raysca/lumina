@@ -127,7 +127,7 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
         })
         .bg(theme::bg_1())
         .cursor_text()
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
             this.tag_manager.search_focused = true;
             this.search_focused = false;
@@ -169,7 +169,7 @@ fn render_sort(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .rounded(theme::RADIUS_SM)
         .cursor_pointer()
         .hover(|s| s.bg(theme::bg_2()))
-        .text_size(px(11.5))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t2())
         .children(text_marker("tag-sort", &label))
         .child(label)

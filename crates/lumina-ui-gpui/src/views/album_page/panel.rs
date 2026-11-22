@@ -133,7 +133,7 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
                         .border_1()
                         .border_color(theme::danger_border())
                         .cursor_pointer()
-                        .text_size(px(12.0))
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(danger)
                         .child(render_icon(Icon::Trash, px(13.0), danger))
@@ -144,7 +144,7 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
                 )
                 .child(
                     div()
-                        .text_size(px(10.5))
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .children(text_marker("album-panel-hint", &hint))
                         .child(hint),

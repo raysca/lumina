@@ -268,7 +268,7 @@ impl LuminaApp {
                             .items_center()
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_size(theme::TEXT_BODY)
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme::t1())
                                     .child("Keyboard Shortcuts"),
@@ -300,13 +300,13 @@ impl LuminaApp {
                                     .py_1()
                                     .child(
                                         div()
-                                            .text_xs()
+                                            .text_size(theme::TEXT_SMALL)
                                             .text_color(theme::t1())
                                             .child(shortcut_display_text(description)),
                                     )
                                     .child(
                                         div()
-                                            .text_xs()
+                                            .text_size(theme::TEXT_SMALL)
                                             .font_family(theme::FONT_MONO)
                                             .text_color(theme::t2())
                                             .child(shortcut_display_text(keys)),

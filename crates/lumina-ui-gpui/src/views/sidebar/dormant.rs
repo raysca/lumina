@@ -41,7 +41,7 @@ pub(crate) fn render_dormant(app: &LuminaApp) -> Div {
                 .border_1()
                 .border_color(theme::line())
                 .bg(theme::bg_0())
-                .text_size(px(12.5))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t3())
                 .child(
                     crate::icons::render_icon(crate::icons::Icon::Search, px(14.0), theme::t3())
@@ -77,8 +77,9 @@ pub(crate) fn render_dormant(app: &LuminaApp) -> Div {
                         .child(
                             div()
                                 .flex_none()
-                                .text_size(px(10.0))
-                                .font_family(theme::FONT_MONO)
+                                .text_size(theme::TEXT_CAPTION)
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
                                 .text_color(theme::t3())
                                 .child(crate::i18n::count(0)),
                         )
@@ -106,7 +107,7 @@ fn hint(label: String, text: String) -> Div {
                 .rounded(px(7.0))
                 .border_1()
                 .border_color(theme::line())
-                .text_size(px(11.0))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(text),
         )

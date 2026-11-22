@@ -105,14 +105,15 @@ pub(super) fn render_storage_card(
                 .child(div().size(px(8.0)).rounded_full().bg(p.color))
                 .child(
                     div()
-                        .text_size(px(11.5))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(p.label),
                 )
                 .child(
                     div()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.0))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .child(format_bytes(p.bytes)),
                 )
@@ -144,7 +145,7 @@ pub(super) fn render_storage_card(
         .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
         .whitespace_nowrap()
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .child(render_icon(Icon::Eraser, px(12.0), theme::t2()))
         .child(
@@ -177,7 +178,7 @@ pub(super) fn render_storage_card(
                 .child(
                     div()
                         .flex_1()
-                        .text_size(px(13.5))
+                        .text_size(theme::TEXT_BODY)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
                         .child("Library storage"),
@@ -186,8 +187,9 @@ pub(super) fn render_storage_card(
                     let marker = used.clone();
                     div()
                         .debug_selector(move || format!("settings-storage-used-text:{marker}"))
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.5))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(used)
                 }),

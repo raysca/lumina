@@ -171,7 +171,7 @@ pub(crate) fn render_brand(
                     .min_w_0()
                     .truncate()
                     .font_family(theme::FONT_DISPLAY)
-                    .text_size(px(18.0))
+                    .text_size(theme::TEXT_TITLE)
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme::t1())
                     .child("Lumina"),

@@ -317,7 +317,7 @@ impl Render for MediaCardTooltip {
             .border_1()
             .border_color(theme::line())
             .rounded(theme::RADIUS_MD)
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t1())
             .child(self.name.clone())
     }

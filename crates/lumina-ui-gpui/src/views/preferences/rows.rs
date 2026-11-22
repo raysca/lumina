@@ -35,7 +35,7 @@ pub(super) fn section(
                     div()
                         // Tests read the note as `settings-section-note:<text>`.
                         .debug_selector(move || format!("settings-section-note:{marker}"))
-                        .text_size(px(11.5))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t3())
                         .child(note)
                 })),
@@ -82,7 +82,7 @@ pub(super) fn row(label: &'static str, description: Option<&'static str>, contro
                 .when(description.is_some(), |s| s.py(px(14.0)))
                 .child(
                     div()
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .line_height(px(18.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme::t1())
@@ -90,7 +90,7 @@ pub(super) fn row(label: &'static str, description: Option<&'static str>, contro
                 )
                 .children(description.map(|text| {
                     div()
-                        .text_size(px(11.5))
+                        .text_size(theme::TEXT_SMALL)
                         .line_height(px(16.0))
                         .text_color(theme::t2())
                         .child(text)
@@ -115,11 +115,12 @@ pub(super) fn controls() -> Div {
 pub(super) fn value(text: &str, mono: bool) -> Div {
     let v = div().min_w_0().truncate().child(text.to_string());
     if mono {
-        v.font_family(theme::FONT_MONO)
-            .text_size(px(11.5))
+        v.font_family(theme::FONT_SANS)
+            .font_features(theme::tabular_figures())
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t2())
     } else {
-        v.text_size(px(12.5)).text_color(theme::t1())
+        v.text_size(theme::TEXT_SMALL).text_color(theme::t1())
     }
 }
 
@@ -152,7 +153,7 @@ pub(super) fn path_pill(id: &'static str, path: String) -> Stateful<Div> {
                 .whitespace_nowrap()
                 .text_ellipsis_start()
                 .font_family(theme::FONT_MONO)
-                .text_size(px(11.5))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(path),
         )
@@ -187,7 +188,7 @@ pub(super) fn row_button(
         .bg(theme::bg_3())
         .hover(|s| s.bg(theme::line_2()))
         .whitespace_nowrap()
-        .text_size(px(12.5))
+        .text_size(theme::TEXT_SMALL)
         .font_weight(FontWeight::MEDIUM)
         .text_color(theme::t1())
         .cursor_pointer()

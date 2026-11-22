@@ -118,7 +118,7 @@ pub(super) fn render_popup(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
                 div()
                     .px_2()
                     .py_1()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .children(text_marker("album-builder-popup", &empty_line))
                     .child(empty_line),
@@ -134,7 +134,7 @@ fn row_control(control: Stateful<Div>) -> Stateful<Div> {
         .px(px(12.0))
         .rounded(px(9.0))
         .bg(theme::bg_0())
-        .text_size(px(13.0))
+        .text_size(theme::TEXT_BODY)
 }
 
 pub(super) fn square_button(
@@ -201,7 +201,7 @@ fn rating_stars(
         .child(
             div()
                 .debug_selector(move || format!("album-rule-stars-label-{i}"))
-                .text_size(px(12.0))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(rating_value_label(&row.operator, &row.text)),
         )
@@ -241,7 +241,7 @@ fn keyword_tokens(
             .flex_row()
             .items_center()
             .gap(px(4.0))
-            .text_size(px(11.5))
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::accent())
             .child(tag.clone())
             .child(
@@ -280,7 +280,7 @@ fn keyword_tokens(
         .children(chips)
         .child(
             div()
-                .text_size(px(12.0))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t3())
                 .child(t("smart_album.add_keyword")),
         )
@@ -356,7 +356,8 @@ pub(super) fn render_row(
         .w(px(66.0))
         .justify_center()
         .text_center()
-        .font_family(theme::FONT_MONO)
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
         .into_any_element(),
         _ => row_control(text_field(
             format!("album-rule-value-{i}"),

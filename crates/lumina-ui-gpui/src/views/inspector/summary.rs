@@ -178,8 +178,9 @@ fn render_file_header(item: &MediaItem) -> Div {
                         .flex_1()
                         // Lets a long name wrap instead of widening the panel.
                         .min_w(px(0.0))
-                        .text_size(px(13.0))
-                        .font_family(theme::FONT_MONO)
+                        .text_size(theme::TEXT_BODY)
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
                         .text_color(theme::t1())
                         .child(item.file_name.clone()),
                 )
@@ -202,8 +203,9 @@ fn render_file_header(item: &MediaItem) -> Div {
                             .bg(theme::accent_soft())
                             .flex()
                             .items_center()
-                            .text_size(px(9.5))
-                            .font_family(theme::FONT_MONO)
+                            .text_size(theme::TEXT_CAPTION)
+                            .font_family(theme::FONT_SANS)
+                            .font_features(theme::tabular_figures())
                             .text_color(theme::accent())
                             .child(badge)
                             // Dimensions moved here from the old footer.
@@ -216,8 +218,9 @@ fn render_file_header(item: &MediaItem) -> Div {
         .child(
             div()
                 .debug_selector(|| "inspector-when".to_string())
-                .text_size(px(10.5))
-                .font_family(theme::FONT_MONO)
+                .text_size(theme::TEXT_CAPTION)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(theme::t3())
                 .child(when_line(item)),
         )
@@ -261,7 +264,7 @@ pub(super) fn section(title_key: &str, content: impl IntoElement) -> Div {
 /// A section's title text, for sections with an action beside it.
 pub(crate) fn section_title(title_key: &str) -> Div {
     div()
-        .text_size(px(9.5))
+        .text_size(theme::TEXT_CAPTION)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::t3())
         .child(t(title_key))
@@ -393,7 +396,8 @@ fn render_tags(
                 .child(
                     div()
                         .flex_none()
-                        .font_family(theme::FONT_MONO)
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
                         .text_color(theme::accent())
                         .child("#"),
                 )

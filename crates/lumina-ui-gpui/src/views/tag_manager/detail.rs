@@ -39,7 +39,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
         return panel
             .items_center()
             .justify_center()
-            .text_sm()
+            .text_size(theme::TEXT_BODY)
             .text_color(theme::t2())
             .child(t("tags.detail_empty"))
             .into_any_element();
@@ -73,7 +73,7 @@ fn render_header(
             .h(px(32.0))
             .border_color(theme::focus_ring())
             .font_family(theme::FONT_DISPLAY)
-            .text_size(px(21.0))
+            .text_size(theme::TEXT_TITLE)
             .font_weight(FontWeight::SEMIBOLD)
             .children(app.field_input_for(TextTarget::TagManagerRename))
             .into_any_element()
@@ -81,7 +81,7 @@ fn render_header(
         div()
             .truncate()
             .font_family(theme::FONT_DISPLAY)
-            .text_size(px(21.0))
+            .text_size(theme::TEXT_TITLE)
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(theme::t1())
             .child(tag.to_string())
@@ -135,8 +135,9 @@ fn render_header(
         )
         .child(
             div()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(items_label.to_string()),
         )
@@ -149,7 +150,7 @@ pub(super) fn render_touches(items_label: &str) -> impl IntoElement {
     div()
         .id("tag-detail-touches")
         .debug_selector(|| "tag-detail-touches".to_string())
-        .text_size(px(10.5))
+        .text_size(theme::TEXT_CAPTION)
         .text_color(theme::t3())
         .child(t("tags.touches").replace("{items}", items_label))
 }
@@ -178,7 +179,7 @@ fn render_preview(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> im
             .aria_label(t("tags.view_all_label"))
             .tooltip(theme::tooltip_label(t("tags.view_all_label")))
             .cursor_pointer()
-            .text_size(px(11.0))
+            .text_size(theme::TEXT_CAPTION)
             .text_color(theme::accent())
             .child(view_all)
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -200,7 +201,7 @@ fn render_items(app: &LuminaApp) -> AnyElement {
         return div()
             .id("tag-manager-items-empty")
             .debug_selector(|| "tag-manager-items-empty".to_string())
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t2())
             .child(t("tags.no_items"))
             .into_any_element();
@@ -274,7 +275,7 @@ fn render_delete(
                 .bg(theme::danger_soft())
                 .hover(|s| s.bg(theme::danger_bg_hover()))
                 .cursor_pointer()
-                .text_size(px(12.0))
+                .text_size(theme::TEXT_SMALL)
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme::danger())
                 .child(render_icon(Icon::Trash, px(13.0), theme::danger()))
@@ -288,7 +289,7 @@ fn render_delete(
                 .id("tag-manager-delete-note")
                 .debug_selector(|| "tag-manager-delete-note".to_string())
                 .relative()
-                .text_size(px(10.5))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .children(text_marker("tag-detail-delete-hint", &hint))
                 .child(hint),

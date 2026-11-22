@@ -396,7 +396,7 @@ impl LuminaApp {
                 .h(px(26.0))
                 .px(px(10.0))
                 .gap(px(6.0))
-                .text_size(px(12.0))
+                .text_size(theme::TEXT_SMALL)
                 .font_weight(FontWeight::NORMAL)
                 .when(!on, |s| s.text_color(theme::t3()))
                 .child(
@@ -521,7 +521,7 @@ impl LuminaApp {
                             .rounded_full()
                             .bg(theme::accent())
                             .text_color(theme::on_accent())
-                            .text_size(px(9.0))
+                            .text_size(theme::TEXT_MICRO)
                             .font_weight(FontWeight::BOLD)
                             .flex()
                             .items_center()
@@ -562,7 +562,7 @@ impl LuminaApp {
                 .py(px(6.0))
                 .border_b_1()
                 .border_color(theme::line())
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(
                     "Items stay here until you empty the trash. \

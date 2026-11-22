@@ -57,7 +57,7 @@ pub(crate) fn confirm_dialog(
             .flex_row()
             .items_center()
             .gap_2()
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .child(label)
     };
     let (backdrop, dialog) = (name("backdrop"), name("dialog"));
@@ -102,13 +102,18 @@ pub(crate) fn confirm_dialog(
                         .gap_1()
                         .child(
                             div()
-                                .text_base()
+                                .text_size(theme::TEXT_LARGE)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::t1())
                                 .truncate()
                                 .child(heading),
                         )
-                        .child(div().text_xs().text_color(theme::t2()).child(body)),
+                        .child(
+                            div()
+                                .text_size(theme::TEXT_SMALL)
+                                .text_color(theme::t2())
+                                .child(body),
+                        ),
                 )
                 .child(
                     div()

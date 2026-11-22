@@ -35,7 +35,7 @@ impl InspectorView {
                 .debug_selector(|| "inspector-empty".to_string())
                 .bg(theme::bg_1())
                 .p_4()
-                .text_sm()
+                .text_size(theme::TEXT_BODY)
                 .text_color(theme::t2())
                 .child(crate::i18n::t("inspector.nothing_selected"))
                 .into_any_element();

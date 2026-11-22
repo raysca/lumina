@@ -71,7 +71,7 @@ impl LuminaApp {
                 .gap(px(11.0))
                 .child(
                     div()
-                        .text_size(px(9.5))
+                        .text_size(theme::TEXT_CAPTION)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t3())
                         // The label is stored in sentence case and drawn in capitals.
@@ -160,7 +160,7 @@ fn card(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme::t1())
                         .child(found.title.clone()),
@@ -168,8 +168,9 @@ fn card(
                 .child(
                     div()
                         .truncate()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(10.0))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .child(sub),
                 ),

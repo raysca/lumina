@@ -149,8 +149,9 @@ pub(crate) fn missing_library_state(props: MissingLibraryProps) -> AnyElement {
                                 .overflow_hidden()
                                 .whitespace_nowrap()
                                 .text_ellipsis_middle()
-                                .font_family(theme::FONT_MONO)
-                                .text_size(px(11.0))
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
+                                .text_size(theme::TEXT_CAPTION)
                                 .text_color(theme::t2())
                                 .child(path),
                         ),
@@ -176,7 +177,7 @@ pub(crate) fn missing_library_state(props: MissingLibraryProps) -> AnyElement {
                         .px(px(6.0))
                         .rounded(theme::RADIUS_MD)
                         .cursor_pointer()
-                        .text_size(px(11.5))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t3())
                         .hover(|s| s.text_color(theme::t1()))
                         .tooltip(theme::tooltip_label(format!(
@@ -193,8 +194,9 @@ pub(crate) fn missing_library_state(props: MissingLibraryProps) -> AnyElement {
                         .debug_selector(|| "missing-library-error".to_string())
                         .mt(px(14.0))
                         .max_w_full()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(10.0))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .text_center()
                         .child(error)

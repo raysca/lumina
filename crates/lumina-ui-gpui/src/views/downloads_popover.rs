@@ -99,7 +99,7 @@ pub(crate) fn header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
         .child(
             div()
                 .font_family(theme::FONT_DISPLAY)
-                .text_size(px(14.0))
+                .text_size(theme::TEXT_BODY)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(t("downloads.title")),
@@ -114,8 +114,9 @@ pub(crate) fn header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                     .bg(theme::accent_soft())
                     .flex()
                     .items_center()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(10.0))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::accent())
                     .child({
                         let text = t_with("downloads.header_active", &[&active.to_string()]);
@@ -170,7 +171,7 @@ pub(crate) fn earlier_head(cx: &mut Context<LuminaApp>) -> Div {
         .pb(px(4.0))
         .child(
             div()
-                .text_size(px(9.5))
+                .text_size(theme::TEXT_CAPTION)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t3())
                 .child(t("downloads.earlier")),
@@ -183,7 +184,7 @@ pub(crate) fn earlier_head(cx: &mut Context<LuminaApp>) -> Div {
                 .aria_label(t("downloads.clear_completed"))
                 .tooltip(theme::tooltip_label(t("downloads.clear_completed")))
                 .cursor_pointer()
-                .text_size(px(11.0))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .hover(|s| s.text_color(theme::t1()))
                 .child(t("downloads.clear"))
@@ -211,7 +212,7 @@ pub(crate) fn footer(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .justify_center()
         .gap(px(6.0))
         .cursor_pointer()
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .font_weight(FontWeight::MEDIUM)
         .text_color(theme::t2())
         .hover(|s| s.bg(theme::bg_2()).text_color(theme::t1()))

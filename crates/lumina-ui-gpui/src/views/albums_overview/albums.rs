@@ -146,7 +146,7 @@ fn head_row(this: &LuminaApp, empty: bool, cx: &mut Context<LuminaApp>) -> Div {
                 .id("albums-head")
                 .role(Role::Heading)
                 .font_family(theme::FONT_DISPLAY)
-                .text_size(px(15.0))
+                .text_size(theme::TEXT_LARGE)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(t("albums.title")),
@@ -170,7 +170,7 @@ fn head_row(this: &LuminaApp, empty: bool, cx: &mut Context<LuminaApp>) -> Div {
                     })
                     .cursor_pointer()
                     .hover(|s| s.bg(theme::bg_2()))
-                    .text_size(px(11.5))
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::accent())
                     .child(format!("{label} ▾"))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -353,7 +353,7 @@ fn album_card(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) -> AnyElem
                         .tooltip(theme::tooltip_label(title.clone()))
                         .min_w_0()
                         .truncate()
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme::t1())
                         .children(text_marker("album-card-title", &title))
@@ -363,8 +363,9 @@ fn album_card(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) -> AnyElem
                     div()
                         .min_w_0()
                         .truncate()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(10.0))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .children(text_marker("album-card-meta", &meta))
                         .child(meta),

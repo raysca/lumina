@@ -205,8 +205,9 @@ fn best_badge(id: u64) -> Stateful<Div> {
         .py(px(2.0))
         .rounded(theme::RADIUS_SM)
         .bg(theme::accent())
-        .font_family(theme::FONT_MONO)
-        .text_size(px(10.0))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::on_accent())
         .child(t("duplicates.best"))
@@ -255,7 +256,7 @@ fn keep_radio(hash: &str, id: MediaId, on: bool, cx: &mut Context<LuminaApp>) ->
         )
         .child(
             div()
-                .text_size(px(12.5))
+                .text_size(theme::TEXT_SMALL)
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if on { theme::accent() } else { theme::t2() })
                 .child(label),
@@ -274,8 +275,9 @@ fn media_tag(text: impl Into<SharedString>) -> Div {
         .py(px(2.0))
         .rounded(theme::RADIUS_SM)
         .bg(theme::media_scrim())
-        .font_family(theme::FONT_MONO)
-        .text_size(px(10.0))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .text_color(theme::on_media())
         .child(text.into())
 }
@@ -290,7 +292,7 @@ fn fact(key: &str, value: String, dim: bool) -> Div {
         .child(
             div()
                 .flex_shrink_0()
-                .text_size(px(11.5))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t3())
                 .child(t(key)),
         )
@@ -298,8 +300,9 @@ fn fact(key: &str, value: String, dim: bool) -> Div {
             div()
                 .min_w_0()
                 .truncate()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(11.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_SMALL)
                 .text_color(if dim { theme::t3() } else { theme::t1() })
                 .child(value),
         )

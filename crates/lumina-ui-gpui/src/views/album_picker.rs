@@ -131,7 +131,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .border_t_1()
                         .border_color(theme::line())
                         .bg(theme::bg_1())
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(theme::kbd("↑"))
                         .child(theme::kbd("↓"))

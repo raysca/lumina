@@ -56,7 +56,7 @@ impl LuminaApp {
             .flex_row()
             .items_center()
             .gap(px(4.0))
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .child(
                 div()
                     .debug_selector(|| "batch-dock-count".to_string())

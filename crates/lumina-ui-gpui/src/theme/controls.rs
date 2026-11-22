@@ -18,7 +18,7 @@ fn control_base(id: impl Into<ElementId>) -> Stateful<Div> {
         .rounded(RADIUS_MD)
         .border_1()
         .cursor_pointer()
-        .text_xs()
+        .text_size(TEXT_SMALL)
 }
 
 /// Toolbar button: 28px tall, 6px radius, 1px border.
@@ -139,7 +139,7 @@ pub fn kbd(label: impl Into<SharedString>) -> Div {
         .bg(bg_2())
         .border_1()
         .border_color(line())
-        .text_xs()
+        .text_size(TEXT_SMALL)
         .font_family(FONT_MONO)
         .text_color(t2())
         .child(label.into())
@@ -175,7 +175,7 @@ pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .justify_center()
         .gap_1()
         .rounded(RADIUS_MD)
-        .text_size(px(12.5))
+        .text_size(TEXT_SMALL)
         .cursor_pointer();
 
     if active {
@@ -203,7 +203,7 @@ impl Render for TooltipLabel {
             .border_1()
             .border_color(line())
             .rounded(RADIUS_MD)
-            .text_xs()
+            .text_size(TEXT_SMALL)
             .text_color(t1())
             .child(self.text.clone())
     }

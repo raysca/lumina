@@ -61,11 +61,16 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                         .gap_1()
                         .child(
                             div()
-                                .text_2xl()
+                                .text_size(theme::TEXT_DISPLAY)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child("Building your library"),
                         )
-                        .child(div().text_sm().text_color(theme::t2()).child(root)),
+                        .child(
+                            div()
+                                .text_size(theme::TEXT_BODY)
+                                .text_color(theme::t2())
+                                .child(root),
+                        ),
                 )
                 // Progress bar, the current file, "X of Y · about N s left".
                 .child(
@@ -96,7 +101,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                 .flex_row()
                                 .justify_between()
                                 .gap_4()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .child(
                                     div()
                                         .id("first-scan-file")
@@ -203,11 +208,16 @@ fn stat(id: &'static str, label: &'static str, value: usize) -> impl IntoElement
         .gap_0p5()
         .child(
             div()
-                .text_lg()
+                .text_size(theme::TEXT_TITLE)
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(value.to_string()),
         )
-        .child(div().text_xs().text_color(theme::t2()).child(label))
+        .child(
+            div()
+                .text_size(theme::TEXT_SMALL)
+                .text_color(theme::t2())
+                .child(label),
+        )
 }
 
 /// ✓ done, ● in progress, ○ waiting.
@@ -222,7 +232,7 @@ fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
         .flex_row()
         .items_center()
         .gap_2()
-        .text_sm()
+        .text_size(theme::TEXT_BODY)
         .text_color(color)
         .child(if done {
             render_icon(Icon::Check, px(13.0), theme::t2()).into_any_element()

@@ -290,7 +290,7 @@ impl LuminaApp {
                                     .debug_selector(move || {
                                         format!("media-card-failed-caption-{}", item_id_num)
                                     })
-                                    .text_xs()
+                                    .text_size(theme::TEXT_SMALL)
                                     .text_color(theme::t2())
                                     .child(crate::i18n::t("grid.no_preview")),
                             )
@@ -541,8 +541,9 @@ fn pill_badge(id: ElementId) -> Stateful<Div> {
         .px(px(6.0))
         .rounded(theme::RADIUS_SM)
         .bg(theme::media_scrim())
-        .font_family(theme::FONT_MONO)
-        .text_size(px(9.5))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .flex()
         .flex_row()
         .items_center()

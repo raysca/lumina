@@ -74,8 +74,9 @@ fn meta_line(id: i64, text: String, color: Rgba) -> Div {
         .debug_selector(move || format!("download-meta-{id}"))
         .relative()
         .min_w_0()
-        .font_family(theme::FONT_MONO)
-        .text_size(px(10.0))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .text_color(color)
         .children(text_marker("download-meta", &marker))
         .child(text)
@@ -230,7 +231,7 @@ pub(crate) fn active_row(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(12.5))
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme::t1())
                         .child(title),
@@ -355,7 +356,7 @@ pub(crate) fn earlier_row(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(12.5))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t1())
                         .child(title),
                 )

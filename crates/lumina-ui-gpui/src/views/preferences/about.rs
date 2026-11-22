@@ -30,7 +30,7 @@ pub(super) fn render_about(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
         )
         .child(
             div()
-                .text_xl()
+                .text_size(theme::TEXT_TITLE)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child("Lumina"),
@@ -38,15 +38,16 @@ pub(super) fn render_about(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
         .child(
             div()
                 .debug_selector(|| "preferences-version".to_string())
-                .font_family(theme::FONT_MONO)
-                .text_xs()
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(format!("Version {}", env!("CARGO_PKG_VERSION"))),
         )
         .child(
             div()
                 .max_w(px(380.0))
-                .text_sm()
+                .text_size(theme::TEXT_BODY)
                 .text_center()
                 .text_color(theme::t2())
                 .child(
@@ -126,7 +127,7 @@ fn render_updates(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                 div()
                     .debug_selector(|| "preferences-update-status".to_string())
                     .max_w(px(380.0))
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_center()
                     .text_color(theme::t2())
                     .children(text_marker(

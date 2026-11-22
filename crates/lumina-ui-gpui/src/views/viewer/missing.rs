@@ -51,7 +51,8 @@ fn bar(drive: Option<&str>, preview: bool) -> AnyElement {
                     .min_w_0()
                     .overflow_hidden()
                     .text_ellipsis_middle()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
                     .children(text_marker("viewer-missing-drive", &name))
                     .child(name.clone()),
                 line(after.to_string().into()),
@@ -92,7 +93,7 @@ fn bar(drive: Option<&str>, preview: bool) -> AnyElement {
         .gap(px(9.0))
         .overflow_hidden()
         .whitespace_nowrap()
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::on_warn())
         .children(text_marker("viewer-missing-bar", &sentence))
         .child(render_icon(Icon::TriangleAlert, px(14.0), theme::warn()).flex_none())

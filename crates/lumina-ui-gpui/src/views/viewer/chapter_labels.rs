@@ -11,8 +11,8 @@ use crate::theme;
 
 /// Height of the label row.
 pub(super) const LABELS_HEIGHT: f32 = 15.0;
-/// Advance of one JetBrains Mono glyph at 9.5px (0.6 em).
-const GLYPH: f32 = 5.7;
+/// Advance of one JetBrains Mono glyph at [`theme::TEXT_MICRO`] (0.6 em).
+const GLYPH: f32 = 5.4;
 /// Minimum space between two labels.
 const LABEL_GAP: f32 = 8.0;
 
@@ -96,8 +96,9 @@ pub(super) fn render(
             .relative()
             .w_full()
             .h(px(LABELS_HEIGHT))
+            // Mono, so the widths estimated from GLYPH hold.
             .font_family(theme::FONT_MONO)
-            .text_size(px(9.5))
+            .text_size(theme::TEXT_MICRO)
             .children(labels.into_iter().map(|label| {
                 let n = label.index + 1;
                 div()

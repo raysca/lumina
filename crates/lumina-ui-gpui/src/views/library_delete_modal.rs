@@ -53,12 +53,17 @@ impl LuminaApp {
                     .gap_3()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(theme::TEXT_BODY)
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::t1())
                             .child(title),
                     )
-                    .child(div().text_xs().text_color(theme::t2()).child(body))
+                    .child(
+                        div()
+                            .text_size(theme::TEXT_SMALL)
+                            .text_color(theme::t2())
+                            .child(body),
+                    )
                     .child(
                         div()
                             .mt_2()
@@ -77,7 +82,7 @@ impl LuminaApp {
                                     .rounded(theme::RADIUS_MD)
                                     .flex()
                                     .items_center()
-                                    .text_xs()
+                                    .text_size(theme::TEXT_SMALL)
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .bg(theme::bg_2())
                                     .text_color(theme::t1())
@@ -98,7 +103,7 @@ impl LuminaApp {
                                     .rounded(theme::RADIUS_MD)
                                     .flex()
                                     .items_center()
-                                    .text_xs()
+                                    .text_size(theme::TEXT_SMALL)
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .bg(theme::danger())
                                     .text_color(theme::bg_0())

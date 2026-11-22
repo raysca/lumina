@@ -110,7 +110,7 @@ fn icon_button(
         .justify_center()
         .rounded(theme::RADIUS_LG)
         .bg(bg)
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .text_color(fg)
         .cursor_pointer()
         .hover(|s| s.opacity(0.85))
@@ -142,8 +142,9 @@ fn remove_button(id: i64, title: &SharedString, cx: &mut Context<LuminaApp>) -> 
 fn mono(text: String, color: Rgba) -> Div {
     div()
         .min_w_0()
-        .font_family(theme::FONT_MONO)
-        .text_size(px(11.0))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .text_color(color)
         .child(text)
 }
@@ -302,7 +303,7 @@ pub(crate) fn card_row(
                                 .flex_1()
                                 .min_w_0()
                                 .truncate()
-                                .text_size(px(13.5))
+                                .text_size(theme::TEXT_BODY)
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::t1())
                                 .child(title),
@@ -355,7 +356,7 @@ fn compact_row(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .text_color(title_color)
                         .child(title_of(entry)),
                 )

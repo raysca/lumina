@@ -77,7 +77,7 @@ pub(super) fn render_aliases(
         .child(section_head(t("tags.aliases")))
         .child(
             div()
-                .text_size(px(10.5))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(t("tags.aliases_hint").replace("{tag}", tag)),
         )
@@ -103,7 +103,7 @@ fn chip(id: impl Into<ElementId>) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap(px(6.0))
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
 }
 
 /// ORGANISE: Merge into… (its target picker while open), Save as Smart
@@ -163,7 +163,7 @@ pub(super) fn render_organise(
         }))
         .children(moving.then(|| {
             div()
-                .text_size(px(10.5))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(t("tags.move_hint"))
         }))
@@ -198,14 +198,14 @@ fn organise_row(selector: &'static str, icon: Icon, label: String, sub: String) 
                 .flex_col()
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t1())
                         .child(label),
                 )
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(10.0))
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .child(sub),
                 ),
@@ -224,7 +224,7 @@ fn render_merge_picker(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Int
     let source = app.tag_manager.focused.clone().unwrap_or_default();
     let list: AnyElement = if options.is_empty() {
         div()
-            .text_size(px(10.5))
+            .text_size(theme::TEXT_CAPTION)
             .text_color(theme::t3())
             .child(t("tags.merge_none"))
             .into_any_element()
@@ -272,7 +272,7 @@ fn render_merge_picker(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Int
         .child(list)
         .child(
             div()
-                .text_size(px(10.5))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(t("tags.merge_hint")),
         )
