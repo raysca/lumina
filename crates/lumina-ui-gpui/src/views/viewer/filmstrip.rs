@@ -21,7 +21,7 @@ const THUMB: f32 = 58.0;
 const CURRENT: f32 = 74.0;
 const GAP: f32 = 6.0;
 const PAD_X: f32 = 20.0;
-const THUMB_RADIUS: f32 = 3.0;
+const THUMB_RADIUS: Pixels = theme::RADIUS_XS;
 
 /// Whether the viewer shows the strip: an item at a view position, and not
 /// immersive, in a slideshow or in edit mode.
@@ -134,7 +134,7 @@ fn thumb(
         .flex_none()
         .relative()
         .size(px(side))
-        .rounded(px(THUMB_RADIUS))
+        .rounded(THUMB_RADIUS)
         .overflow_hidden()
         .bg(theme::bg_2())
         .cursor_pointer()

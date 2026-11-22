@@ -294,7 +294,7 @@ impl LuminaApp {
             .bg(theme::bg_float())
             .border_1()
             .border_color(theme::line_2())
-            .rounded(px(10.0))
+            .rounded(theme::RADIUS_XL)
             // media_scrim is exactly black at 65 %, the design's toast shadow.
             .shadow(vec![BoxShadow::new(
                 px(0.0),
@@ -310,7 +310,7 @@ impl LuminaApp {
                     // where a 3 px wide quad clamps its radius to 1.5 px.
                     .absolute()
                     .inset_0()
-                    .rounded(px(9.0))
+                    .rounded(theme::RADIUS_LG)
                     .border_l(px(3.0))
                     .border_color(colour),
             )

@@ -370,7 +370,7 @@ impl LuminaApp {
                     .top(px(top))
                     .w(px(LENS_RIGHT - left))
                     .h(px(bottom - top))
-                    .rounded(px(5.0))
+                    .rounded(theme::RADIUS_SM)
                     .bg(theme::accent_soft())
                     .border_1()
                     .border_color(theme::accent())
@@ -452,7 +452,7 @@ impl LuminaApp {
                                 })
                                 .w(px(width))
                                 .h(px(BAR_H))
-                                .rounded(px(2.0))
+                                .rounded(theme::RADIUS_XS)
                                 .bg(color)
                                 .group_hover(group, |s| s.bg(theme::accent_hover())),
                         )

@@ -27,7 +27,7 @@ pub(crate) fn logo() -> Div {
     div()
         .size(px(60.0))
         .flex_none()
-        .rounded(px(14.0))
+        .rounded(theme::RADIUS_XL)
         .bg(theme::accent())
         .flex()
         .justify_center()
@@ -222,7 +222,7 @@ fn welcome_button(id: &'static str, primary: bool, label: &str, icon: Icon) -> S
     empty_button(id, primary, label.to_string().into(), Some(icon), px(40.0))
         .px(px(18.0))
         .gap(px(8.0))
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .text_size(theme::TEXT_BODY)
 }
 
@@ -237,7 +237,7 @@ fn hint_card(i: usize, icon: Icon, title_key: &str, body_key: &str) -> Div {
         .flex()
         .flex_col()
         .gap(px(7.0))
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .bg(theme::bg_1())
         .border_1()
         .border_color(theme::line())

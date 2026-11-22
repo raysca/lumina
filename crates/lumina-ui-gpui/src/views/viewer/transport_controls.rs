@@ -378,7 +378,7 @@ fn hud_pill(
         .tooltip(theme::tooltip_label(label))
         .h(px(28.0))
         .px(px(10.0))
-        .rounded(px(7.0))
+        .rounded(theme::RADIUS_MD)
         .flex()
         .items_center()
         .hover(|s| s.bg(theme::bg_3()))

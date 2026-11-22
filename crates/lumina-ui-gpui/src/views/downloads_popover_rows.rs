@@ -219,7 +219,7 @@ pub(crate) fn active_row(
     shell(app, entry, cx)
         .p(px(10.0))
         .gap(px(9.0))
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .child(thumb(app, entry, 56.0, 34.0))
         .child(
             div()
@@ -334,7 +334,7 @@ pub(crate) fn earlier_row(
         .h(px(44.0))
         .px(px(10.0))
         .gap(px(10.0))
-        .rounded(px(8.0))
+        .rounded(theme::RADIUS_LG)
         .child(
             div()
                 .size(px(18.0))

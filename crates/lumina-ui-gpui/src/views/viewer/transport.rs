@@ -95,7 +95,7 @@ fn playhead_pill(pct: f32, time: f64) -> Div {
                 .left(px(-width / 2.0))
                 .w(px(width))
                 .h(px(PILL_HEIGHT))
-                .rounded(px(4.0))
+                .rounded(theme::RADIUS_SM)
                 .bg(theme::accent())
                 .flex()
                 .items_center()
@@ -282,7 +282,7 @@ impl ViewerTransport {
                     .child(
                         div()
                             .size_full()
-                            .rounded(px(3.0))
+                            .rounded(theme::RADIUS_XS)
                             .overflow_hidden()
                             .bg(theme::bg_2())
                             .flex()

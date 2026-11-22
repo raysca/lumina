@@ -199,7 +199,7 @@ fn render_file_header(item: &MediaItem) -> Div {
                             .flex_none()
                             .h(px(18.0))
                             .px(px(6.0))
-                            .rounded(px(4.0))
+                            .rounded(theme::RADIUS_SM)
                             .bg(theme::accent_soft())
                             .flex()
                             .items_center()

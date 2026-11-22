@@ -317,7 +317,7 @@ impl Render for FloatingPipPlayerView {
             .bg(theme::bg_media())
             // The design card: radius 10 and a line-2 outline. The window's
             // own shadow and corner clip come from macOS.
-            .rounded(px(10.0))
+            .rounded(theme::RADIUS_XL)
             .border_1()
             .border_color(theme::line_2())
             .relative()

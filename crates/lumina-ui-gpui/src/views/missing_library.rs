@@ -131,7 +131,7 @@ pub(crate) fn missing_library_state(props: MissingLibraryProps) -> AnyElement {
                         .h(px(30.0))
                         .max_w_full()
                         .px(px(11.0))
-                        .rounded(px(6.0))
+                        .rounded(theme::RADIUS_MD)
                         .bg(theme::bg_1())
                         .border_1()
                         .border_color(theme::line())

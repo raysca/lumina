@@ -69,7 +69,7 @@ pub(super) fn card(
         .aria_label(item.file_name.clone())
         .flex_1()
         .min_w(px(CARD_MIN_WIDTH))
-        .rounded(px(12.0))
+        .rounded(theme::RADIUS_XL)
         .bg(if selected {
             theme::bg_3()
         } else {

@@ -417,7 +417,7 @@ impl LuminaApp {
                 // counts its stroke, so 1px border + 2px padding + 26.
                 .h(px(32.0))
                 .p(px(2.0))
-                .rounded(px(9.0))
+                .rounded(theme::RADIUS_LG)
                 // The header fill, not the settings segmented look.
                 .bg(theme::bg_2())
                 .border_color(theme::line())

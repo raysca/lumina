@@ -64,14 +64,21 @@ pub fn tabular_figures() -> gpui::FontFeatures {
     gpui::FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)]))
 }
 
-// Corner radii (v3.1). Photo thumbnails stay square wherever they appear;
-// icon tiles keep their own shape.
+// Corner radii. Photo thumbnails stay square wherever they appear. Every
+// radius in the app is one of these or `rounded_full`.
+/// Hairline marks: progress bars, the scrub track, tiny swatches.
+pub const RADIUS_XS: Pixels = px(2.0);
 /// Chips, badges, swatches, and rows nested in an 8px menu.
 pub const RADIUS_SM: Pixels = px(4.0);
 /// Buttons, fields, rows and segmented controls.
 pub const RADIUS_MD: Pixels = px(6.0);
-/// Floating surfaces: menus, popovers, toasts, dialogs, the palette.
+/// Floating surfaces: menus, popovers, toasts, the palette; segmented
+/// control wells.
 pub const RADIUS_LG: Pixels = px(8.0);
+/// Cards and panels: settings groups, duplicate cards, previews.
+pub const RADIUS_XL: Pixels = px(12.0);
+/// Large sheets and dialogs.
+pub const RADIUS_2XL: Pixels = px(16.0);
 
 macro_rules! tokens {
     ($($(#[$m:meta])* $name:ident = $hex:literal;)*) => {
@@ -315,6 +322,24 @@ mod tests {
         assert!(
             raw.is_empty(),
             "icon sizes use the ICON_* tokens, not raw sizes: {raw:#?}"
+        );
+    }
+
+    #[test]
+    fn radii_come_from_the_radius_scale() {
+        let raw: Vec<String> = ui_sources()
+            .into_iter()
+            .flat_map(|(path, text)| {
+                text.lines()
+                    .enumerate()
+                    .filter(|(_, line)| line.contains(concat!("rounded(", "px(")))
+                    .map(|(i, _)| format!("{}:{}", path.display(), i + 1))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(
+            raw.is_empty(),
+            "radii use the RADIUS_* tokens, not raw sizes: {raw:#?}"
         );
     }
 

@@ -174,7 +174,7 @@ impl LuminaApp {
                                             .debug_selector(move || format!("empty-rule-chip-{i}"))
                                             .h(px(24.0))
                                             .px(px(9.0))
-                                            .rounded(px(6.0))
+                                            .rounded(theme::RADIUS_MD)
                                             .bg(theme::bg_1())
                                             .border_1()
                                             .border_color(theme::line())

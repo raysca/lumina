@@ -212,7 +212,7 @@ fn kind_badge() -> Div {
         .px(px(7.0))
         .flex()
         .items_center()
-        .rounded(px(5.0))
+        .rounded(theme::RADIUS_SM)
         .bg(theme::accent_soft())
         .font_family(theme::FONT_SANS)
         .font_features(theme::tabular_figures())

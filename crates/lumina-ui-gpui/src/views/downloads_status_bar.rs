@@ -103,7 +103,7 @@ pub(crate) fn render(app: &LuminaApp) -> Option<Div> {
         div()
             .w(px(3.0))
             .h(px(height))
-            .rounded(px(1.0))
+            .rounded(theme::RADIUS_XS)
             .bg(theme::accent())
             .opacity(if newest { 1.0 } else { 0.4 })
     });
@@ -143,7 +143,7 @@ pub(crate) fn render(app: &LuminaApp) -> Option<Div> {
             .flex_shrink_0()
             .px(px(18.0))
             .bg(theme::bg_1())
-            .rounded(px(12.0))
+            .rounded(theme::RADIUS_XL)
             .border_1()
             .border_color(theme::line())
             .flex()

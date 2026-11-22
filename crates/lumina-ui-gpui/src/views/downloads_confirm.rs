@@ -49,7 +49,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .bg(theme::bg_1())
                 .border_1()
                 .border_color(theme::line_2())
-                .rounded(px(16.0))
+                .rounded(theme::RADIUS_2XL)
                 .overflow_hidden()
                 .shadow_2xl()
                 .flex()
