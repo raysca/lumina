@@ -1,7 +1,7 @@
 //! The viewer's full-size frame is decoded only for the open viewer, once
 //! stepping pauses, and only the latest request's answer is shown.
 
-use super::helpers::{app_with_library, render_ui, seed_library, tiny_decoded_frame};
+use super::helpers::{app_with_library, leak, render_ui, seed_library, tiny_decoded_frame};
 use super::viewer_stage::open_at;
 use crate::app::viewer_frame::VIEWER_FRAME_REQUESTS;
 use crate::app::UiMessage;
@@ -143,5 +143,94 @@ fn the_viewer_asks_for_a_frame_when_the_grid_thumbnail_failed() {
             before + 1,
             "a failed grid thumbnail must not stop the viewer's own decode"
         );
+    });
+}
+
+fn library_builds() -> usize {
+    crate::app::render::LIBRARY_BUILDS.with(|n| n.get())
+}
+
+/// Behind the open viewer the library is not built (video playback repaints
+/// the root every frame); it is built through the viewer's fade-in and comes
+/// back, at the same scroll, when the viewer closes.
+#[core::prelude::v1::test]
+fn the_library_is_not_built_under_the_open_viewer_and_returns_on_close() {
+    let (_dir, engine) = seed_library("viewer_covers_library", 200);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.grid_columns = 4;
+        cx.notify();
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        app.grid_state
+            .as_ref()
+            .unwrap()
+            .scroll_handle
+            .scroll_to_item_strict(20, gpui::ScrollStrategy::Top);
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    let (top_row, card) = view.update(vcx, |app, _| {
+        let item = app
+            .displayed_rows(80..81)
+            .into_iter()
+            .next()
+            .expect("row 20 is shown");
+        (
+            app.grid_top_row(),
+            leak(format!("media-card-{}", item.id.0)),
+        )
+    });
+    assert!(
+        vcx.debug_bounds(card).is_some(),
+        "control: the grid paints the card"
+    );
+
+    view.update(vcx, |app, cx| {
+        let item = app.displayed_rows(80..81).into_iter().next().unwrap();
+        app.select_item_at(item.clone(), 80, cx);
+        app.open_viewer(item, cx);
+    });
+    let before = library_builds();
+    render_ui(vcx);
+    assert!(
+        library_builds() > before,
+        "the library is still built while the viewer fades in over it"
+    );
+    vcx.executor().advance_clock(Duration::from_millis(200));
+    render_ui(vcx);
+    let covered = library_builds();
+    render_ui(vcx);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-viewport").is_some(),
+        "control: the viewer paints"
+    );
+    let state = view.update(vcx, |app, cx| {
+        format!(
+            "shown since {:?}, now {:?}, viewer open {}, item {:?}",
+            app.viewer_shown_since,
+            cx.background_executor().now(),
+            app.is_fullscreen_viewer,
+            app.selected_item.as_ref().map(|item| item.id)
+        )
+    });
+    assert_eq!(
+        library_builds(),
+        covered,
+        "the library must not be built under the open viewer ({state})"
+    );
+
+    view.update(vcx, |app, cx| app.close_viewer(cx));
+    render_ui(vcx);
+    render_ui(vcx);
+    assert!(
+        library_builds() > covered && vcx.debug_bounds(card).is_some(),
+        "closing the viewer builds the library again"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.grid_top_row(), top_row, "the grid keeps its scroll");
     });
 }

@@ -20,7 +20,7 @@ pub const MOTION_BASE: Duration = Duration::from_millis(160);
 pub const MOTION_SLOW: Duration = Duration::from_millis(220);
 
 /// Menus, dialogs, sheets and the palette.
-const OVERLAY_IN: Duration = MOTION_BASE;
+pub(crate) const OVERLAY_IN: Duration = MOTION_BASE;
 /// Every close: overlays, menus and toasts.
 pub const EXIT: Duration = MOTION_FAST;
 /// A toast rises 8px while it fades in.

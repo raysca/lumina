@@ -131,11 +131,17 @@ impl Render for LuminaApp {
                 .into_any_element();
         }
 
-        // Settings is an opaque full-window page: the library under it is
-        // not laid out, refreshed or asked for thumbnails until it closes.
-        let library_shown = !self.preferences_open;
-        if library_shown {
+        // Settings is an opaque full-window page, and so is the viewer once
+        // its fade-in is over: the library under them is not laid out,
+        // refreshed or asked for thumbnails until they close. Video playback
+        // repaints the root every frame, so this keeps the library out of it.
+        let library_shown = !self.preferences_open && !self.viewer_covers_library(cx);
+        // The viewer steps through the active view's items and follows
+        // writes made in it (trash, rotate), so that view stays fresh.
+        if !self.preferences_open {
             self.refresh_active_view(cx);
+        }
+        if library_shown {
             self.refresh_top_matches(cx);
             self.refresh_map_points(cx);
             self.prepare_albums_overview(window, cx);
@@ -219,6 +225,8 @@ impl Render for LuminaApp {
             // Duplicates hides it too: the compare cards show each copy's
             // facts.
             let inspector_shown = self.docked_inspector_shown();
+            #[cfg(test)]
+            LIBRARY_BUILDS.with(|n| n.set(n.get() + 1));
             // Sidebar (full height) + resizer + main column (banner,
             // header, canvas, inspector)
             root.child(self.render_library_columns(
@@ -235,7 +243,27 @@ impl Render for LuminaApp {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Root renders on this test thread that built the library columns.
+    /// (Elements under the viewer report no debug bounds either way.)
+    pub(crate) static LIBRARY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl LuminaApp {
+    /// Whether the open viewer hides the whole library. During its fade-in
+    /// (`motion::OVERLAY_IN`) the library still shows through, so it is
+    /// built until the fade is over.
+    fn viewer_covers_library(&mut self, cx: &Context<Self>) -> bool {
+        if !self.viewer_shown() {
+            self.viewer_shown_since = None;
+            return false;
+        }
+        let now = cx.background_executor().now();
+        let since = *self.viewer_shown_since.get_or_insert(now);
+        now.saturating_duration_since(since) >= crate::motion::OVERLAY_IN
+    }
+
     /// Saves the window bounds as the user moves or resizes the window,
     /// throttled while a live resize runs. Subscribes once.
     fn observe_window_bounds(&mut self, window: &mut Window, cx: &mut Context<Self>) {
