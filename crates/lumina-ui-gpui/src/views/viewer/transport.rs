@@ -95,15 +95,17 @@ fn playhead_pill(pct: f32, time: f64) -> Div {
                 .left(px(-width / 2.0))
                 .w(px(width))
                 .h(px(PILL_HEIGHT))
-                .rounded(px(4.0))
-                .bg(theme::accent())
+                .rounded(theme::RADIUS_SM)
+                .bg(theme::bg_float())
+                .border_1()
+                .border_color(theme::line_2())
                 .flex()
                 .items_center()
                 .justify_center()
                 .font_family(theme::FONT_SANS)
                 .font_features(theme::tabular_figures())
                 .text_size(theme::TEXT_CAPTION)
-                .text_color(theme::on_accent())
+                .text_color(theme::t1())
                 .children(crate::views::page_header::text_marker(
                     "video-playhead-time",
                     &text,
@@ -188,7 +190,9 @@ impl ViewerTransport {
             .filter(|strip| this.video.item.as_ref().map(|i| i.id) == Some(strip.item))
             .map(|strip| strip.frames.clone())
             .unwrap_or_default();
-        let has_frames = !frames.is_empty();
+        // The frames show only while the pointer is on the track or a scrub
+        // runs; while watching, the track is a plain progress bar.
+        let has_frames = !frames.is_empty() && (is_scrubbing || hover_pct.is_some());
         // The track spans the stage less the 28px side padding; labels are
         // laid out against it before layout measures it.
         let track_width = super::stage_width(this).unwrap_or(1280.0) - 56.0;
@@ -282,20 +286,22 @@ impl ViewerTransport {
                     .child(
                         div()
                             .size_full()
-                            .rounded(px(3.0))
+                            .rounded(theme::RADIUS_XS)
                             .overflow_hidden()
                             .bg(theme::bg_2())
                             .flex()
                             .flex_row()
                             .gap(px(1.0))
-                            .children(frames.iter().enumerate().map(|(i, (_, image))| {
-                                img(image.clone())
-                                    .debug_selector(move || format!("video-strip-frame-{i}"))
-                                    .flex_1()
-                                    .min_w_0()
-                                    .h_full()
-                                    .object_fit(ObjectFit::Cover)
-                            })),
+                            .children(frames.iter().filter(|_| has_frames).enumerate().map(
+                                |(i, (_, image))| {
+                                    img(image.clone())
+                                        .debug_selector(move || format!("video-strip-frame-{i}"))
+                                        .flex_1()
+                                        .min_w_0()
+                                        .h_full()
+                                        .object_fit(ObjectFit::Cover)
+                                },
+                            )),
                     )
                     // Frames after the playhead are dimmed.
                     .when(has_frames, |track| {

@@ -203,7 +203,7 @@ pub fn dialog_footer_button_with(
         .flex_none()
         .h(px(36.0))
         .px(px(12.0))
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .border_1()
         .flex()
         .flex_row()
@@ -241,7 +241,7 @@ pub fn dialog_footer_button_with(
             .min_w(px(22.0))
             .h(px(20.0))
             .px(px(4.0))
-            .rounded(px(5.0))
+            .rounded(theme::RADIUS_SM)
             .bg(hint_bg)
             .flex()
             .items_center()
@@ -261,13 +261,13 @@ pub fn progress_bar(id: &'static str, fraction: f32, width: f32) -> Div {
         .debug_selector(move || id.to_string())
         .w(px(width))
         .h(px(4.0))
-        .rounded(px(2.0))
+        .rounded(theme::RADIUS_XS)
         .bg(theme::bg_2())
         .child(
             div()
                 .h_full()
                 .w(px(width * fraction.clamp(0.0, 1.0)))
-                .rounded(px(2.0))
+                .rounded(theme::RADIUS_XS)
                 .bg(theme::accent()),
         )
 }

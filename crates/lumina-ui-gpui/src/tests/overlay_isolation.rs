@@ -152,24 +152,31 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
     });
     render_ui(vcx);
 
+    assert!(
+        vcx.debug_bounds("viewer-center-play").is_none(),
+        "no second play button over the picture: the transport has one"
+    );
     let play_center = vcx
-        .debug_bounds("viewer-center-play")
-        .expect("a paused video must paint the centre play badge")
+        .debug_bounds("viewer-media")
+        .expect("a paused video paints its picture")
         .center();
     let covered = cards.iter().any(|bounds| bounds.contains(&play_center));
     assert!(
         covered,
-        "test premise: a grid card must sit under the play badge"
+        "test premise: a grid card must sit under the picture"
     );
 
-    click(vcx, "viewer-center-play");
+    crate::tests::helpers::click_point(vcx, f32::from(play_center.x), f32::from(play_center.y));
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_item.as_ref().map(|item| item.id.0),
             Some(expected_id),
             "starting playback must not change the selected media"
         );
-        assert!(app.video.is_playing, "the play badge must start playback");
+        assert!(
+            app.video.is_playing,
+            "a click on the paused picture starts playback"
+        );
     });
 }
 

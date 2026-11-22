@@ -115,7 +115,7 @@ impl LuminaApp {
             .flex_row()
             .items_center()
             .gap(px(6.0))
-            .rounded(px(7.0))
+            .rounded(theme::RADIUS_MD)
             .border_1()
             .border_color(theme::line_2())
             .bg(theme::bg_3())

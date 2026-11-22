@@ -54,7 +54,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElemen
             .absolute()
             .size(px(HANDLE))
             .bg(theme::t1())
-            .rounded(px(2.0))
+            .rounded(theme::RADIUS_XS)
             .cursor(CursorStyle::Crosshair)
             .on_mouse_down(
                 MouseButton::Left,

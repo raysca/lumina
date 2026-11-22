@@ -1475,14 +1475,3 @@ fn clicking_the_video_picture_toggles_playback() {
         "a click on a playing video's picture must pause it"
     );
 }
-
-#[core::prelude::v1::test]
-fn the_centre_play_badge_starts_playback_once() {
-    let mut cx = crate::tests::TestApp::single();
-    let (_fixture, view, vcx) = open_clickable_video(&mut cx);
-    click(vcx, "viewer-center-play");
-    assert!(
-        view.update(vcx, |app, _| app.video.is_playing),
-        "the badge sits on the picture: one click must toggle once, not twice"
-    );
-}

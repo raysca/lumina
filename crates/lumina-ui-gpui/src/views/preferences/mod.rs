@@ -164,7 +164,7 @@ fn reset_button(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap(px(6.0))
-        .rounded(px(8.0))
+        .rounded(theme::RADIUS_LG)
         .border_1()
         .border_color(rows::focus_border(app, button, theme::line()))
         .bg(theme::bg_2())

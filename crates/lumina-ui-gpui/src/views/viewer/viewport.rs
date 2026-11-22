@@ -77,7 +77,7 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
 }
 
 /// Corner radius of the photo or video frame at Fit (Designs 02 and 06).
-const PHOTO_RADIUS: f32 = 3.0;
+const PHOTO_RADIUS: Pixels = theme::RADIUS_XS;
 
 /// The drop shadow (0 16 48) under the contain-fitted photo or video frame. The
 /// media element fills the letterboxed canvas, so a box shadow on it would
@@ -93,7 +93,7 @@ fn photo_shadow(image_size: Size<DevicePixels>) -> impl IntoElement {
             let picture = ObjectFit::Contain.get_bounds(bounds, image_size);
             window.paint_drop_shadows(
                 picture,
-                Corners::all(px(PHOTO_RADIUS)),
+                Corners::all(PHOTO_RADIUS),
                 &[BoxShadow {
                     color: theme::media_scrim().into(),
                     offset: point(px(0.0), px(16.0)),
@@ -265,7 +265,7 @@ impl ViewerViewport {
                             .object_fit(ObjectFit::Contain)
                             // GPUI rounds the fitted picture, not the
                             // letterboxed element.
-                            .rounded(px(PHOTO_RADIUS))
+                            .rounded(PHOTO_RADIUS)
                             .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
                                 // The element fills the canvas; only the
                                 // visible media (not its letterbox) toggles.
@@ -410,42 +410,7 @@ impl ViewerViewport {
                         .size_full()
                     })
                     // Crop mode's rectangle and handles, over the frame.
-                    .children(super::crop_overlay::render(this, cx))
-                    // Large Circular Play Indicator (Centered on Video when paused).
-                    // Not while PiP owns the player: this is a poster then.
-                    .child(
-                        if is_video
-                            && !this.video.in_pip
-                            && !this.video.is_playing
-                            && !this.playback_failed_shown()
-                        {
-                            div()
-                                .id("viewer-center-play-indicator")
-                                .debug_selector(|| "viewer-center-play".to_string())
-                                .absolute()
-                                .size(px(68.0))
-                                .rounded_full()
-                                .bg(theme::scrim())
-                                .border_1()
-                                .border_color(theme::line_2())
-                                .hover(|s| s.bg(theme::bg_float()).border_color(theme::t2()))
-                                .flex()
-                                .justify_center()
-                                .items_center()
-                                .cursor_pointer()
-                                .shadow_xl()
-                                .child(render_icon(Icon::Play, theme::ICON_XL, theme::t1()))
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                    this.toggle_video_play(cx);
-                                    // The badge sits on the picture, whose own
-                                    // click toggles too; one click, one toggle.
-                                    cx.stop_propagation();
-                                }))
-                                .into_any_element()
-                        } else {
-                            Empty.into_any_element()
-                        },
-                    ),
+                    .children(super::crop_overlay::render(this, cx)),
             )
             // The cached thumbnail may still show; say why it goes no further.
             .children(super::missing::render(this, cx))

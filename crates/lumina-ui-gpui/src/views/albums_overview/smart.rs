@@ -194,7 +194,7 @@ fn card(this: &LuminaApp, album: &SmartAlbum, cx: &mut Context<LuminaApp>) -> An
         .flex()
         .flex_row()
         .gap(px(13.0))
-        .rounded(px(10.0))
+        .rounded(theme::RADIUS_XL)
         .bg(theme::bg_1())
         // Always a border, so the ring never moves the content.
         .border_1()
@@ -284,7 +284,7 @@ fn mosaic(this: &LuminaApp, id: i64) -> Div {
                 .debug_selector(move || format!("smart-card-tile-{id}-{n}"))
                 .w(px((MOSAIC_WIDTH - TILE_GAP) / 2.0))
                 .h(px(TILE_HEIGHT))
-                .rounded(px(3.0))
+                .rounded(theme::RADIUS_XS)
                 .overflow_hidden()
                 .bg(theme::bg_2())
                 .children(
@@ -308,7 +308,7 @@ fn chips(album: &SmartAlbum) -> Div {
             .flex_row()
             .items_center()
             .gap(px(5.0))
-            .rounded(px(5.0))
+            .rounded(theme::RADIUS_SM)
             .bg(theme::bg_0())
             .font_family(theme::FONT_SANS)
             .font_features(theme::tabular_figures())

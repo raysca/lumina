@@ -133,7 +133,7 @@ fn card(
         } else {
             theme::line()
         })
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .cursor_pointer()
         .hover(|s| s.bg(theme::bg_2()))
         .child(

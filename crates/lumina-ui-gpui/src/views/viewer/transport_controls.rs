@@ -39,11 +39,7 @@ fn round_button(id: &'static str, icon: Icon, label: String, on: bool) -> Statef
         .cursor_pointer()
         .when(on, |b| b.bg(theme::bg_3()))
         .hover(|s| s.bg(theme::bg_3()))
-        .child(render_icon(
-            icon,
-            theme::ICON_MD,
-            if on { theme::accent() } else { theme::t1() },
-        ))
+        .child(render_icon(icon, theme::ICON_MD, theme::t1()))
 }
 
 /// The controls row under the scrubber.
@@ -80,8 +76,8 @@ pub(super) fn render(
                 .flex_none()
                 .size(px(PLAY))
                 .rounded_full()
-                .bg(theme::accent())
-                .hover(|s| s.bg(theme::accent_hover()))
+                .bg(theme::t1())
+                .hover(|s| s.bg(theme::t2()))
                 .flex()
                 .justify_center()
                 .items_center()
@@ -93,7 +89,7 @@ pub(super) fn render(
                         Icon::Play
                     },
                     theme::ICON_MD,
-                    theme::on_accent(),
+                    theme::bg_0(),
                 ))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.toggle_video_play(cx);
@@ -378,7 +374,7 @@ fn hud_pill(
         .tooltip(theme::tooltip_label(label))
         .h(px(28.0))
         .px(px(10.0))
-        .rounded(px(7.0))
+        .rounded(theme::RADIUS_MD)
         .flex()
         .items_center()
         .hover(|s| s.bg(theme::bg_3()))

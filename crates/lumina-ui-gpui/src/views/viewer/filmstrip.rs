@@ -21,7 +21,7 @@ const THUMB: f32 = 58.0;
 const CURRENT: f32 = 74.0;
 const GAP: f32 = 6.0;
 const PAD_X: f32 = 20.0;
-const THUMB_RADIUS: f32 = 3.0;
+const THUMB_RADIUS: Pixels = theme::RADIUS_XS;
 
 /// Whether the viewer shows the strip: an item at a view position, and not
 /// immersive, in a slideshow or in edit mode.
@@ -88,6 +88,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
         let failed = this.missing_items.contains(&item.id) || state.is_failed(item.id);
         thumb(item, index, selected == Some(item.id), texture, failed, cx)
     });
+    // While a video plays the strip keeps its space (the frame never jumps)
+    // but fades out until the pointer is over it.
+    let playing = this.video.is_playing && this.video.item.is_some();
     Some(
         div()
             .id("viewer-filmstrip")
@@ -104,6 +107,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
             .justify_center()
             .gap(px(GAP))
             .overflow_hidden()
+            .when(playing, |strip| {
+                strip.opacity(0.0).hover(|s| s.opacity(1.0))
+            })
             .children(thumbs)
             .into_any_element(),
     )
@@ -134,7 +140,7 @@ fn thumb(
         .flex_none()
         .relative()
         .size(px(side))
-        .rounded(px(THUMB_RADIUS))
+        .rounded(THUMB_RADIUS)
         .overflow_hidden()
         .bg(theme::bg_2())
         .cursor_pointer()

@@ -694,6 +694,17 @@ fn scrubber_is_a_strip_with_playhead_pill() {
         cx.notify();
     });
     render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("video-strip-frame-0").is_none(),
+        "while watching, the track stays a plain progress bar"
+    );
+    // The frames show while the pointer is on the track.
+    view.update(vcx, |app, cx| {
+        app.video.hover_pct = Some(0.5);
+        app.video.hover_time = Some(30.0);
+        cx.notify();
+    });
+    render_ui(vcx);
     let first = vcx
         .debug_bounds("video-strip-frame-0")
         .expect("with a strip the frames tile the track");

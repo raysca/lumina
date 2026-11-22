@@ -145,7 +145,7 @@ pub fn kbd(label: impl Into<SharedString>) -> Div {
         .child(label.into())
 }
 
-/// Segmented control container: `bg_0`, 9px radius,
+/// Segmented control container: `bg_0`, 8px radius,
 /// `line_2` outline, 3px inset, 2px between segments.
 pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
     div()
@@ -155,7 +155,7 @@ pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap(px(2.0))
-        .rounded(px(9.0))
+        .rounded(RADIUS_LG)
         .bg(bg_0())
         .border_1()
         .border_color(line_2())

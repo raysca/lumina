@@ -41,7 +41,7 @@ pub(crate) fn named_popover_button(
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(7.0))
+        .rounded(theme::RADIUS_MD)
         .bg(bg)
         .cursor_pointer()
         .hover(|s| s.bg(theme::bg_3()))

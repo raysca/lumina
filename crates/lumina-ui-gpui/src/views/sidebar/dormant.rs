@@ -108,7 +108,7 @@ fn hint(label: String, text: String) -> Div {
                 .px(px(10.0))
                 .flex()
                 .items_center()
-                .rounded(px(7.0))
+                .rounded(theme::RADIUS_MD)
                 .border_1()
                 .border_color(theme::line())
                 .text_size(theme::TEXT_CAPTION)

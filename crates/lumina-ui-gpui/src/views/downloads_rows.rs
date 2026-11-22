@@ -31,7 +31,7 @@ fn row_shell(app: &LuminaApp, entry: &DownloadEntry, cx: &mut Context<LuminaApp>
         .flex()
         .flex_row()
         .items_center()
-        .rounded(px(12.0))
+        .rounded(theme::RADIUS_XL)
         .border_1()
         .border_color(if focused {
             theme::focus_ring()
@@ -219,12 +219,12 @@ pub(crate) fn card_row(
         div()
             .h(px(4.0))
             .w_full()
-            .rounded(px(2.0))
+            .rounded(theme::RADIUS_XS)
             .bg(theme::bg_3())
             .child(
                 div()
                     .h_full()
-                    .rounded(px(2.0))
+                    .rounded(theme::RADIUS_XS)
                     .bg(fill)
                     .w(relative(fraction.unwrap_or(0.0))),
             )
