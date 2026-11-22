@@ -23,7 +23,9 @@
   <img src="https://img.shields.io/badge/built%20with-Rust%20%2B%20GPUI-2A2A2C" alt="Built with Rust and GPUI">
 </p>
 
-<!-- HERO SCREENSHOT: docs/assets/screenshots/hero.png (Mosaic grid with the inspector open), added after the Safelight redesign lands. -->
+<p align="center">
+  <img src="docs/assets/screenshots/hero.webp" width="900" alt="The Lumina library: a mosaic of photos sorted by rating, with the inspector open on a five-star photo">
+</p>
 
 ---
 
@@ -47,6 +49,8 @@ outline and the geocoder is built in, so no tile server ever learns where your
 photos were taken. Lumina only goes online when you ask it to (see
 [what Lumina sends over the network](#what-lumina-sends-over-the-network)).
 
+<img src="docs/assets/screenshots/map.webp" alt="The offline Places map with clustered pins for where photos were taken">
+
 ### ⚡ Fast and native
 
 A virtualized grid that scrolls at up to 120 FPS on ProMotion displays, Mosaic
@@ -54,7 +58,7 @@ and Years / Months / Days browsing, and a viewer with instant zoom, pan and 1:1
 pixel inspection. Decoding, cataloguing and search run in a headless core, so
 the interface never waits on your disk.
 
-<!-- SCREENSHOT: docs/assets/screenshots/grid.png -->
+<img src="docs/assets/screenshots/grid.webp" alt="Browsing the library by month, with a timeline scrubber on the right">
 
 ### 🎬 Video, built in
 
@@ -65,7 +69,7 @@ Picture-in-Picture. Paste a link from YouTube, another video site or an HLS
 stream and Lumina imports it into your library, with a downloads queue. See
 [Import Video from URL](docs/network-import.md).
 
-<!-- SCREENSHOT: docs/assets/screenshots/video.png -->
+<img src="docs/assets/screenshots/video.webp" alt="The built-in video player with scrub bar, playback speed, loop and full-screen controls">
 
 ### 🎯 Cull a shoot from the keyboard
 
@@ -74,7 +78,7 @@ side with one shared zoom, review RAW + JPEG pairs and bursts as similar-shot
 stacks, then send the rejects to the Trash in one step. Every action is in the
 `⌘K` command palette, and almost everything can be undone.
 
-<!-- SCREENSHOT: docs/assets/screenshots/compare.png -->
+<img src="docs/assets/screenshots/compare.webp" alt="Comparing two shots side by side: one marked Pick with five stars, the other Reject">
 
 ### 🔎 Find anything
 
@@ -90,7 +94,7 @@ a live count and preview.
 Keywords can be hierarchies (`places/japan/kyoto`) with aliases. See the
 [search syntax](docs/search.md).
 
-<!-- SCREENSHOT: docs/assets/screenshots/search.png -->
+<img src="docs/assets/screenshots/search.webp" alt="A search for photos tagged places/europe rated 4 stars or more, shown as filter chips with 21 results">
 
 ### 📦 Your metadata, portable forever
 
