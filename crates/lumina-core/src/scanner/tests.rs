@@ -195,3 +195,28 @@ fn no_embedded_date_uses_the_older_of_birth_and_modification_time() {
         "macOS reports a birth time"
     );
 }
+
+#[test]
+fn file_time_takes_the_older_of_birth_and_mtime_and_keeps_an_mtime_of_zero() {
+    assert_eq!(
+        older_file_time(Some(100), 200),
+        100,
+        "an older birth time wins"
+    );
+    assert_eq!(
+        older_file_time(Some(300), 200),
+        200,
+        "a later birth time loses"
+    );
+    assert_eq!(older_file_time(None, 200), 200, "no birth time: the mtime");
+    assert_eq!(
+        older_file_time(Some(0), 200),
+        200,
+        "a birth time of 0 is unknown"
+    );
+    assert_eq!(
+        older_file_time(Some(300), 0),
+        0,
+        "an mtime of 0 stays undated even when the birth time is known (Linux)"
+    );
+}

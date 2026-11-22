@@ -446,10 +446,15 @@ fn file_capture_time(metadata: &std::fs::Metadata, mtime_epoch_ms: i64) -> i64 {
         .created()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as i64)
-        .filter(|&b| b > 0);
-    match birth {
-        Some(b) if b <= mtime_epoch_ms || mtime_epoch_ms == 0 => b,
+        .map(|d| d.as_millis() as i64);
+    older_file_time(birth, mtime_epoch_ms)
+}
+
+/// The birth time when known and not after the modification time, else the
+/// modification time. An mtime of 0 stays 0 (undated), whatever the birth.
+fn older_file_time(birth_epoch_ms: Option<i64>, mtime_epoch_ms: i64) -> i64 {
+    match birth_epoch_ms {
+        Some(b) if b > 0 && b <= mtime_epoch_ms => b,
         _ => mtime_epoch_ms,
     }
 }
