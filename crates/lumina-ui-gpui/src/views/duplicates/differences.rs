@@ -82,7 +82,7 @@ pub(super) fn render(this: &LuminaApp, group: &DuplicateGroup) -> Div {
         .mb(px(20.0))
         .px(px(14.0))
         .py(px(12.0))
-        .rounded(px(10.0))
+        .rounded(theme::RADIUS_XL)
         .bg(theme::bg_2())
         .flex()
         .flex_row()

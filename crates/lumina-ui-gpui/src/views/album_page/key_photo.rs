@@ -170,7 +170,7 @@ pub(crate) fn section(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) ->
                         .flex_none()
                         .w(px(76.0))
                         .h(px(50.0))
-                        .rounded(px(5.0))
+                        .rounded(theme::RADIUS_SM)
                         .overflow_hidden()
                         .bg(theme::bg_2())
                         .when(picking, |well| {
@@ -228,7 +228,7 @@ pub(crate) fn badge(item_id: u64) -> Stateful<Div> {
         .aria_label(label.clone())
         .h(px(19.0))
         .px(px(7.0))
-        .rounded(px(4.0))
+        .rounded(theme::RADIUS_SM)
         .bg(theme::key_photo_scrim())
         .flex()
         .flex_row()

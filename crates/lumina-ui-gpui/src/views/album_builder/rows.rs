@@ -132,7 +132,7 @@ fn row_control(control: Stateful<Div>) -> Stateful<Div> {
     control
         .h(px(38.0))
         .px(px(12.0))
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .bg(theme::bg_0())
         .text_size(theme::TEXT_BODY)
 }
@@ -150,7 +150,7 @@ pub(super) fn square_button(
         .debug_selector(move || sel.clone())
         .flex_none()
         .size(px(34.0))
-        .rounded(px(8.0))
+        .rounded(theme::RADIUS_LG)
         .bg(theme::bg_1())
         .justify_center()
         .border_color(ring(focused))
@@ -228,7 +228,7 @@ fn keyword_tokens(
             .debug_selector(move || chip_sel.clone())
             .h(px(24.0))
             .px(px(7.0))
-            .rounded(px(6.0))
+            .rounded(theme::RADIUS_MD)
             .bg(theme::accent_soft())
             // The ←/→ highlight ⌫ removes; transparent keeps chips one size.
             .border_1()
@@ -267,7 +267,7 @@ fn keyword_tokens(
         .min_h(px(38.0))
         .py(px(6.0))
         .px(px(8.0))
-        .rounded(px(9.0))
+        .rounded(theme::RADIUS_LG)
         .bg(theme::bg_0())
         .border_1()
         .border_color(ring(focused))

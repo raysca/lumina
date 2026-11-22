@@ -122,7 +122,7 @@ fn chapter_row(weak_app: WeakEntity<LuminaApp>, row: ChapterRow) -> Stateful<Div
         .aria_label(row.name.clone())
         .h(px(44.0))
         .px(px(8.0))
-        .rounded(px(7.0))
+        .rounded(theme::RADIUS_MD)
         .border_1()
         .border_color(if row.current {
             theme::accent()
@@ -145,7 +145,7 @@ fn chapter_row(weak_app: WeakEntity<LuminaApp>, row: ChapterRow) -> Stateful<Div
                 .flex_none()
                 .w(px(50.0))
                 .h(px(28.0))
-                .rounded(px(3.0))
+                .rounded(theme::RADIUS_XS)
                 .object_fit(ObjectFit::Cover)
                 .into_any_element(),
             // No strip (yet): a neutral box.
@@ -153,7 +153,7 @@ fn chapter_row(weak_app: WeakEntity<LuminaApp>, row: ChapterRow) -> Stateful<Div
                 .flex_none()
                 .w(px(50.0))
                 .h(px(28.0))
-                .rounded(px(3.0))
+                .rounded(theme::RADIUS_XS)
                 .bg(theme::bg_2())
                 .into_any_element(),
         })

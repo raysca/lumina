@@ -104,7 +104,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         } else {
                             theme::accent()
                         })
-                        .rounded(px(10.0))
+                        .rounded(theme::RADIUS_XL)
                         .flex()
                         .items_center()
                         .gap(px(10.0))
@@ -257,7 +257,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             div()
                 .flex_none()
                 .size(px(30.0))
-                .rounded(px(9.0))
+                .rounded(theme::RADIUS_LG)
                 .bg(theme::accent_soft())
                 .flex()
                 .items_center()
@@ -325,7 +325,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .bg(theme::bg_1())
                 .border_1()
                 .border_color(theme::line_2())
-                .rounded(px(16.0))
+                .rounded(theme::RADIUS_2XL)
                 .overflow_hidden()
                 // key_photo_scrim is exactly black at 70 %, the design's shadow.
                 .shadow(vec![BoxShadow::new(

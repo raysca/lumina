@@ -77,7 +77,7 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
 }
 
 /// Corner radius of the photo or video frame at Fit (Designs 02 and 06).
-const PHOTO_RADIUS: f32 = 3.0;
+const PHOTO_RADIUS: Pixels = theme::RADIUS_XS;
 
 /// The drop shadow (0 16 48) under the contain-fitted photo or video frame. The
 /// media element fills the letterboxed canvas, so a box shadow on it would
@@ -93,7 +93,7 @@ fn photo_shadow(image_size: Size<DevicePixels>) -> impl IntoElement {
             let picture = ObjectFit::Contain.get_bounds(bounds, image_size);
             window.paint_drop_shadows(
                 picture,
-                Corners::all(px(PHOTO_RADIUS)),
+                Corners::all(PHOTO_RADIUS),
                 &[BoxShadow {
                     color: theme::media_scrim().into(),
                     offset: point(px(0.0), px(16.0)),
@@ -265,7 +265,7 @@ impl ViewerViewport {
                             .object_fit(ObjectFit::Contain)
                             // GPUI rounds the fitted picture, not the
                             // letterboxed element.
-                            .rounded(px(PHOTO_RADIUS))
+                            .rounded(PHOTO_RADIUS)
                             .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
                                 // The element fills the canvas; only the
                                 // visible media (not its letterbox) toggles.

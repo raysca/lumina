@@ -21,7 +21,7 @@ pub(super) fn render_about(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
         .child(
             div()
                 .size(px(72.0))
-                .rounded(px(16.0))
+                .rounded(theme::RADIUS_2XL)
                 .bg(theme::accent())
                 .flex()
                 .items_center()
