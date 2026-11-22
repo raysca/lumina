@@ -350,7 +350,7 @@ impl ViewerViewport {
                             )
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_size(theme::TEXT_BODY)
                                     .text_color(theme::t2())
                                     .child(crate::i18n::t("viewer.open_default_hint")),
                             )

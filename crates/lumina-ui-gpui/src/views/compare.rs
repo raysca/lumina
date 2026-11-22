@@ -103,7 +103,7 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .border_color(theme::line())
         .child(
             div()
-                .text_sm()
+                .text_size(theme::TEXT_BODY)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(format!("{} ({})", t("compare.title"), state.items.len())),
@@ -111,7 +111,7 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .child(
             div()
                 .flex_1()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(t("compare.hint")),
         )
@@ -181,7 +181,7 @@ fn pane(
             }
         }
         None if state.failed.contains(&item.id) => div()
-            .text_sm()
+            .text_size(theme::TEXT_BODY)
             .text_color(theme::t2())
             .child(t("viewer.preview_failed"))
             .into_any_element(),
@@ -242,7 +242,7 @@ fn pane(
                 .flex()
                 .flex_row()
                 .gap_2()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .child(
                     div()
                         .flex_1()

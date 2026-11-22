@@ -110,7 +110,7 @@ impl DeleteConfirmModal {
                         div()
                             .id("delete-title")
                             .debug_selector(|| "delete-title".to_string())
-                            .text_base()
+                            .text_size(theme::TEXT_LARGE)
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::t1())
                             .child(title),
@@ -119,7 +119,7 @@ impl DeleteConfirmModal {
                         div()
                             .id("delete-summary")
                             .debug_selector(|| "delete-summary".to_string())
-                            .text_xs()
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(theme::t2())
                             .child(summary_line(state.photos, state.videos, state.total_bytes)),
                     ),
@@ -151,10 +151,15 @@ impl DeleteConfirmModal {
                         .justify_center()
                         .children(on.then(|| render_icon(Icon::Check, px(10.0), theme::bg_0()))),
                 )
-                .child(div().text_xs().text_color(theme::danger()).child(format!(
+                .child(
+                    div()
+                        .text_size(theme::TEXT_SMALL)
+                        .text_color(theme::danger())
+                        .child(format!(
                     "I understand {} will be deleted from disk and can't be recovered. (Space)",
                     items
-                )))
+                )),
+                )
         });
 
         let footer = div()
@@ -177,7 +182,7 @@ impl DeleteConfirmModal {
                     .flex_row()
                     .items_center()
                     .gap_2()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t1())
                     .child("Cancel")
                     .child(theme::kbd("Esc"))
@@ -194,7 +199,7 @@ impl DeleteConfirmModal {
                     .rounded(theme::RADIUS_MD)
                     .flex()
                     .items_center()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .font_weight(FontWeight::SEMIBOLD)
                     .bg(if destructive {
                         theme::danger()
@@ -302,7 +307,7 @@ impl DeleteConfirmModal {
                 div()
                     .id("delete-hint")
                     .debug_selector(|| "delete-hint".to_string())
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .child(
                         "Trashed items stay in Library › Recently Deleted. ↑↓ choose · ↵ confirm",
@@ -384,7 +389,7 @@ fn render_option_card(
                         .gap_2()
                         .child(
                             div()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 // The permanent option's title is always red.
                                 .text_color(if is_destructive {
@@ -399,13 +404,18 @@ fn render_option_card(
                                 .px_1p5()
                                 .rounded(theme::RADIUS_SM)
                                 .bg(theme::bg_3())
-                                .text_size(px(11.0))
+                                .text_size(theme::TEXT_CAPTION)
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::accent())
                                 .child("Recommended")
                         })),
                 )
-                .child(div().text_xs().text_color(theme::t2()).child(description)),
+                .child(
+                    div()
+                        .text_size(theme::TEXT_SMALL)
+                        .text_color(theme::t2())
+                        .child(description),
+                ),
         )
 }
 

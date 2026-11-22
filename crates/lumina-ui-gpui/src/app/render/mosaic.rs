@@ -265,7 +265,7 @@ impl LuminaApp {
                         div()
                             .debug_selector(move || format!("mosaic-day-{day}"))
                             .font_family(theme::FONT_DISPLAY)
-                            .text_size(px(15.0))
+                            .text_size(theme::TEXT_LARGE)
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::t1())
                             .child(header.date),
@@ -281,7 +281,7 @@ impl LuminaApp {
                             .child(
                                 div()
                                     .font_family(theme::FONT_SANS)
-                                    .text_size(px(12.0))
+                                    .text_size(theme::TEXT_SMALL)
                                     .text_color(theme::t2())
                                     .child(place),
                             )
@@ -289,8 +289,9 @@ impl LuminaApp {
                     .child(
                         div()
                             .debug_selector(move || format!("mosaic-day-count-{day}"))
-                            .font_family(theme::FONT_MONO)
-                            .text_size(px(10.0))
+                            .font_family(theme::FONT_SANS)
+                            .font_features(theme::tabular_figures())
+                            .text_size(theme::TEXT_CAPTION)
                             .text_color(theme::t3())
                             .child(header.count),
                     )
@@ -312,7 +313,7 @@ impl LuminaApp {
                             .items_center()
                             .gap(px(2.0))
                             .font_family(theme::FONT_SANS)
-                            .text_size(px(11.5))
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(theme::t3())
                             .hover(|s| s.text_color(theme::t1()))
                             .child(crate::i18n::t("mosaic.select"))

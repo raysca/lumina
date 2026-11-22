@@ -70,7 +70,8 @@ pub fn render_location_tab(
                 .border_color(theme::focus_ring())
                 .rounded(theme::RADIUS_MD)
                 .text_size(theme::TEXT_BODY)
-                .font_family(theme::FONT_MONO)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(theme::t1())
                 .children(field_input.clone())
         }))
@@ -124,7 +125,7 @@ fn location_button(id: &'static str, label: &'static str, destructive: bool) -> 
         .bg(theme::bg_2())
         .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
-        .text_xs()
+        .text_size(theme::TEXT_SMALL)
         .text_color(if destructive {
             theme::label_red()
         } else {

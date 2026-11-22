@@ -360,7 +360,7 @@ impl LuminaApp {
                         .items_center()
                         .rounded_full()
                         .font_family(theme::FONT_SANS)
-                        .text_size(px(11.5))
+                        .text_size(theme::TEXT_SMALL)
                         .map(|d| {
                             if on {
                                 d.bg(theme::accent())

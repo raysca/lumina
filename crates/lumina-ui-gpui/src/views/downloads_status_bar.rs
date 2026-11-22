@@ -121,14 +121,14 @@ pub(crate) fn render(app: &LuminaApp) -> Option<Div> {
             .child(
                 div()
                     .font_family(theme::FONT_DISPLAY)
-                    .text_size(px(21.0))
+                    .text_size(theme::TEXT_TITLE)
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme::t1())
                     .child(percent),
             )
             .child(
                 div()
-                    .text_size(px(9.5))
+                    .text_size(theme::TEXT_CAPTION)
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme::t3())
                     .child(t("downloads.overall")),
@@ -169,7 +169,7 @@ pub(crate) fn render(app: &LuminaApp) -> Option<Div> {
                             .min_w_0()
                             .truncate()
                             .font_family(theme::FONT_DISPLAY)
-                            .text_size(px(15.0))
+                            .text_size(theme::TEXT_LARGE)
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::t1())
                             .children(text_marker("downloads-status-headline", &headline))
@@ -179,8 +179,9 @@ pub(crate) fn render(app: &LuminaApp) -> Option<Div> {
                         div()
                             .min_w_0()
                             .truncate()
-                            .font_family(theme::FONT_MONO)
-                            .text_size(px(11.0))
+                            .font_family(theme::FONT_SANS)
+                            .font_features(theme::tabular_figures())
+                            .text_size(theme::TEXT_CAPTION)
                             .text_color(theme::t2())
                             .children(text_marker("downloads-status-detail", &detail))
                             .child(detail),

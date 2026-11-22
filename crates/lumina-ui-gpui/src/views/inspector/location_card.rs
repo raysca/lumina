@@ -31,7 +31,7 @@ pub(crate) fn render_location_section(
         .role(Role::Button)
         .aria_label(t("inspector.open_map"))
         .tooltip(theme::tooltip_label(t("inspector.open_map_tooltip")))
-        .text_size(px(11.0))
+        .text_size(theme::TEXT_CAPTION)
         .text_color(theme::accent())
         .cursor_pointer()
         .child(t("inspector.open_map"))
@@ -131,8 +131,9 @@ fn render_card(center: (f32, f32), label: String) -> Stateful<Div> {
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
-                        .text_size(px(9.5))
-                        .font_family(theme::FONT_MONO)
+                        .text_size(theme::TEXT_CAPTION)
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
                         .text_color(theme::on_media())
                         .child(label),
                 ),

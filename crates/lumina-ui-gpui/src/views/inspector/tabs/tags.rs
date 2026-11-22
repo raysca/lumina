@@ -152,7 +152,7 @@ pub(crate) fn render_suggestions(
                     .when(focused, |chip| chip.bg(theme::bg_3()))
                     .hover(|s| s.bg(theme::bg_3()))
                     .cursor_pointer()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .child(label)
                     .on_click(move |_e, _window, cx| {
@@ -191,14 +191,14 @@ pub fn render_tags_section(
                 .child(theme::section_label(heading))
                 .child(
                     div()
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(format!("{} tags", tags.len())),
                 ),
         )
         .child(if tags.is_empty() {
             div()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child("No tags yet.")
                 .into_any_element()
@@ -239,7 +239,7 @@ pub fn render_tags_section(
                                 })
                                 .tooltip(theme::tooltip_label("Show items with this tag"))
                                 .cursor_pointer()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::t1())
                                 .child(tag_name.clone())
@@ -311,7 +311,7 @@ pub fn render_tags_section(
                 .id("open-tag-manager-link")
                 .debug_selector(|| "open-tag-manager-link".to_string())
                 .cursor_pointer()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .hover(|s| s.text_color(theme::t1()))
                 .child(crate::i18n::t("command.open_tag_manager"))

@@ -68,8 +68,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<
                 div()
                     .debug_selector(|| "duplicates-sorted".to_string())
                     .flex_shrink_0()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(10.5))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t3())
                     .child(t("duplicates.sorted")),
             )
@@ -108,8 +109,9 @@ fn chip(
         .child(label)
         .children(count.map(|n| {
             div()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(if on { theme::accent() } else { theme::t3() })
                 .child(crate::i18n::count(n))
         }))

@@ -96,7 +96,8 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .w(px(64.0))
                 .flex()
                 .justify_center()
-                .font_family(theme::FONT_MONO)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(theme::t1())
                 .child(exposure),
         )
@@ -179,7 +180,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .flex_row()
         .justify_between()
         .items_center()
-        .text_xs()
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .child(
             div()
@@ -234,7 +235,7 @@ fn aspect_buttons(current: CropAspect, cx: &mut Context<LuminaApp>) -> Div {
         .border_b_1()
         .border_color(theme::line())
         .justify_center()
-        .text_xs()
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .flex()
         .flex_row()

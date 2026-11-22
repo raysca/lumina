@@ -24,7 +24,7 @@ pub fn render_template_section(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>)
             .cursor_pointer()
             .flex()
             .items_center()
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t1())
             .child(label)
     };
@@ -41,7 +41,7 @@ pub fn render_template_section(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>)
         return row
             .child(
                 div()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .child(t("template.none_yet")),
             )

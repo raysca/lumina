@@ -30,7 +30,7 @@ pub(super) fn render_library(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
             .min_h(px(43.5))
             .flex()
             .items_center()
-            .text_size(px(11.5))
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t2())
             .child("No libraries yet.")]
     } else {
@@ -135,7 +135,7 @@ fn known_library_row(
                 .gap(px(2.0))
                 .child(
                     div()
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .line_height(px(18.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme::t1())
@@ -150,8 +150,9 @@ fn known_library_row(
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis_middle()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.5))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t3())
                         .child(full_path),
                 ),
@@ -159,14 +160,14 @@ fn known_library_row(
         .children(is_open.then(|| {
             div()
                 .flex_shrink_0()
-                .text_size(px(11.0))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::positive())
                 .child("Open now")
         }))
         .children(unavailable.then(|| {
             div()
                 .flex_shrink_0()
-                .text_size(px(11.0))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t2())
                 .child("Not available")
         }))

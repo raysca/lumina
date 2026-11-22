@@ -62,12 +62,12 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .gap_1()
                         .child(
                             div()
-                                .text_base()
+                                .text_size(theme::TEXT_LARGE)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::t1())
                                 .child(format!("{running} {question}")),
                         )
-                        .child(div().text_size(px(13.0)).text_color(theme::t2()).child(
+                        .child(div().text_size(theme::TEXT_BODY).text_color(theme::t2()).child(
                             "They stop now and wait in your downloads, paused, for you to resume.",
                         )),
                 )

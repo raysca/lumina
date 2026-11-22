@@ -30,7 +30,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .flex_row()
             .items_center()
             .gap_2()
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .child(label)
     };
 
@@ -66,7 +66,12 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .flex()
             .flex_col()
             .gap_1()
-            .child(div().text_xs().text_color(theme::t2()).child(label.clone()))
+            .child(
+                div()
+                    .text_size(theme::TEXT_SMALL)
+                    .text_color(theme::t2())
+                    .child(label.clone()),
+            )
             .child(
                 theme::field(SharedString::from(format!(
                     "template-field-{}",
@@ -143,14 +148,14 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .gap_1()
                         .child(
                             div()
-                                .text_base()
+                                .text_size(theme::TEXT_LARGE)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::t1())
                                 .child(t("template.title")),
                         )
                         .child(
                             div()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::t2())
                                 .child(t("template.intro")),
                         ),
@@ -177,7 +182,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .children(error.map(|error| {
                     div()
                         .debug_selector(|| "template-error".to_string())
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::danger())
                         .child(error)
                 }))
@@ -203,7 +208,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .child(
                             div()
                                 .flex_1()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::t2())
                                 .child(t("template.keys_hint")),
                         )
@@ -253,7 +258,7 @@ fn list_row(
         .cursor_pointer()
         .flex()
         .items_center()
-        .text_xs()
+        .text_size(theme::TEXT_SMALL)
         .truncate()
         .map(|row| {
             if selected {

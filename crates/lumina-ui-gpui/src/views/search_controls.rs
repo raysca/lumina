@@ -52,7 +52,7 @@ impl LuminaApp {
             .child(
                 div()
                     .flex_shrink_0()
-                    .text_size(px(11.0))
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t3())
                     .child(t("search.narrow_by")),
             )
@@ -119,7 +119,7 @@ impl LuminaApp {
             .border_1()
             .border_color(theme::line_2())
             .bg(theme::bg_3())
-            .text_size(px(11.5))
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t1())
             .child(render_icon(Icon::Sparkles, px(12.0), theme::t1()))
             .child(label)

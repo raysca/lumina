@@ -33,7 +33,7 @@ fn video_title_block(item: &MediaItem) -> Stateful<Div> {
         .min_w_0()
         .truncate()
         .font_family(theme::FONT_DISPLAY)
-        .text_size(px(15.0))
+        .text_size(theme::TEXT_LARGE)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::t1())
         .child(crate::views::inspector::body::display_title(item))
@@ -115,7 +115,7 @@ fn rate_card(rating: u8, cx: &mut Context<LuminaApp>) -> Div {
         )
         .child(
             div()
-                .text_size(px(11.0))
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(t("viewer.rate_hint")),
         )
@@ -152,8 +152,9 @@ impl ViewerTopBar {
                     .debug_selector(|| "viewer-position".to_string())
                     .min_w_0()
                     .truncate()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(11.0))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t3())
                     .child(position_label(index, this.displayed_count()))
             }));
@@ -183,7 +184,7 @@ impl ViewerTopBar {
                         .debug_selector(|| "viewer-back-label".to_string())
                         .max_w(px(220.0))
                         .truncate()
-                        .text_size(px(12.0))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(view_label),
                 )
@@ -213,7 +214,7 @@ impl ViewerTopBar {
             .flex_row()
             .justify_between()
             .items_center()
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t1())
             // Left: the macOS traffic lights sit here while windowed, then
             // the single Back control (Escape stays equivalent).

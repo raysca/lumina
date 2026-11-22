@@ -100,7 +100,7 @@ pub(super) fn render_options(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> im
             .child(box_)
             .child(
                 div()
-                    .text_size(px(12.5))
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(if on { theme::t1() } else { theme::t2() })
                     .child(label),
             )
@@ -152,14 +152,15 @@ pub(super) fn render_preview(app: &LuminaApp) -> impl IntoElement {
             .children(marker)
             .child(
                 div()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(14.0))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_BODY)
                     .text_color(theme::t1())
                     .child(more),
             )
             .child(
                 div()
-                    .text_size(px(10.5))
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t3())
                     .child(t("smart_album.more")),
             )
@@ -167,7 +168,7 @@ pub(super) fn render_preview(app: &LuminaApp) -> impl IntoElement {
     let strip = if draft.match_count == Some(0) {
         div()
             .debug_selector(|| "album-builder-preview-empty".to_string())
-            .text_size(px(12.0))
+            .text_size(theme::TEXT_SMALL)
             .text_color(theme::t3())
             .child(t("smart_album.preview_empty"))
     } else {
@@ -193,7 +194,7 @@ pub(super) fn render_preview(app: &LuminaApp) -> impl IntoElement {
                 .child(
                     div()
                         .debug_selector(|| "album-builder-preview-help".to_string())
-                        .text_size(px(12.0))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(t("smart_album.preview_help")),
                 ),
@@ -210,8 +211,9 @@ fn key_hint(label: String, bg: Rgba, color: Rgba) -> Div {
         .bg(bg)
         .flex()
         .items_center()
-        .font_family(theme::FONT_MONO)
-        .text_size(px(11.0))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .text_color(color)
         .child(label)
 }
@@ -240,7 +242,7 @@ pub(super) fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> imp
             .flex_row()
             .items_center()
             .gap(px(8.0))
-            .text_size(px(13.0))
+            .text_size(theme::TEXT_BODY)
             .cursor_pointer()
     };
     let save_text: SharedString = save_label(draft.editing_album_id.is_some()).into();
@@ -311,7 +313,7 @@ pub(super) fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> imp
                 .child(
                     div()
                         .debug_selector(|| "album-builder-count".to_string())
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(color)
                         .truncate()
@@ -320,7 +322,7 @@ pub(super) fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> imp
                 .when(valid, |el| {
                     el.child(
                         div()
-                            .text_size(px(12.0))
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(theme::t3())
                             .child(t("smart_album.stays_current")),
                     )

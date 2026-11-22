@@ -81,14 +81,14 @@ pub fn render_camera_tab(item: &MediaItem, details: Option<&InfoDetails>) -> Any
                             .when(i > 0, |cell| cell.border_l_1().border_color(theme::line()))
                             .child(
                                 div()
-                                    .text_size(px(15.0))
+                                    .text_size(theme::TEXT_LARGE)
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme::t1())
                                     .child(value.unwrap_or_else(|| "—".to_string())),
                             )
                             .child(
                                 div()
-                                    .text_size(px(11.0))
+                                    .text_size(theme::TEXT_CAPTION)
                                     .text_color(theme::t3())
                                     .child(label),
                             )
@@ -106,7 +106,7 @@ pub fn render_camera_tab(item: &MediaItem, details: Option<&InfoDetails>) -> Any
                 .into_any_element()
         } else {
             div()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child("This file has no camera information.")
                 .into_any_element()

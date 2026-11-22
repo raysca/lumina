@@ -81,7 +81,7 @@ impl AlbumBuilderModal {
                                     .flex_row()
                                     .items_center()
                                     .gap_2()
-                                    .text_size(px(13.5))
+                                    .text_size(theme::TEXT_BODY)
                                     .text_color(theme::t2())
                                     .child("Match")
                                     .child(
@@ -98,7 +98,7 @@ impl AlbumBuilderModal {
                                         .px(px(12.0))
                                         .rounded(px(9.0))
                                         .bg(theme::bg_0())
-                                        .text_size(px(13.0))
+                                        .text_size(theme::TEXT_BODY)
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(theme::t1()),
                                     )
@@ -191,7 +191,7 @@ fn render_header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
             // letter-spacing) and the shared text input's t1 caret, not a 2×20
             // accent one.
             .font_family(theme::FONT_DISPLAY)
-            .text_size(px(17.0))
+            .text_size(theme::TEXT_TITLE)
             .font_weight(FontWeight::SEMIBOLD),
         )
         .child(div().flex_1())
@@ -228,7 +228,7 @@ fn render_empty_conditions(focus: DraftFocus, cx: &mut Context<LuminaApp>) -> im
         .flex_row()
         .items_center()
         .justify_between()
-        .text_sm()
+        .text_size(theme::TEXT_BODY)
         .text_color(theme::t2())
         .child("No conditions — every item matches.")
         .child(rows::square_button(

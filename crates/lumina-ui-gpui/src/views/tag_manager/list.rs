@@ -121,7 +121,7 @@ pub fn render_list(
                 .gap(px(GAP))
                 .border_b_1()
                 .border_color(theme::line())
-                .text_size(px(9.5))
+                .text_size(theme::TEXT_CAPTION)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t3())
                 .child(
@@ -144,13 +144,17 @@ pub fn render_list(
         )
         .map(|col| {
             if rows.is_empty() {
-                col.child(div().p_4().text_xs().text_color(theme::t2()).child(
-                    if app.library_tag_counts.is_empty() {
-                        "No tags yet. Add tags from the inspector."
-                    } else {
-                        "No tags match the filter."
-                    },
-                ))
+                col.child(
+                    div()
+                        .p_4()
+                        .text_size(theme::TEXT_SMALL)
+                        .text_color(theme::t2())
+                        .child(if app.library_tag_counts.is_empty() {
+                            "No tags yet. Add tags from the inspector."
+                        } else {
+                            "No tags match the filter."
+                        }),
+                )
             } else {
                 // Virtualised: thousands of keywords build only the rows on
                 // screen, all ROW_HEIGHT tall. The rows come from cached
@@ -320,7 +324,7 @@ fn render_row(
                         .debug_selector(move || path_selector.clone())
                         .min_w_0()
                         .truncate()
-                        .text_size(px(13.0))
+                        .text_size(theme::TEXT_BODY)
                         .text_color(if row.count.is_none() {
                             theme::t2()
                         } else {
@@ -335,7 +339,7 @@ fn render_row(
                         div()
                             .debug_selector(move || aliases_selector.clone())
                             .flex_none()
-                            .text_size(px(10.5))
+                            .text_size(theme::TEXT_CAPTION)
                             .text_color(theme::t3())
                             .children(text_marker("tag-row-aliases", &marker))
                             .child(aliases),
@@ -382,8 +386,9 @@ fn render_row(
                             .flex_1()
                             .flex()
                             .justify_end()
-                            .font_family(theme::FONT_MONO)
-                            .text_size(px(11.0))
+                            .font_family(theme::FONT_SANS)
+                            .font_features(theme::tabular_figures())
+                            .text_size(theme::TEXT_CAPTION)
                             .text_color(theme::t2())
                             .child(row.count.map_or(String::new(), |n| n.to_string())),
                     ),

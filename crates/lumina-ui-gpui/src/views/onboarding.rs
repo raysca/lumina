@@ -113,13 +113,13 @@ impl OnboardingView {
                         // 0.3.11 has no letter-spacing style.
                         empty_headline("welcome-title", t("welcome.empty_title").into())
                             .mt(px(20.0))
-                            .text_size(px(28.0)),
+                            .text_size(theme::TEXT_DISPLAY),
                     )
                     .child(
                         empty_body("welcome-intro", t("welcome.empty_body").into())
                             .mt(px(12.0))
                             .max_w(px(470.0))
-                            .text_size(px(13.5))
+                            .text_size(theme::TEXT_BODY)
                             .line_height(px(21.0)),
                     )
                     .child(
@@ -219,7 +219,7 @@ fn welcome_button(id: &'static str, primary: bool, label: &str, icon: Icon) -> S
         .px(px(18.0))
         .gap(px(8.0))
         .rounded(px(9.0))
-        .text_size(px(13.0))
+        .text_size(theme::TEXT_BODY)
 }
 
 /// One of the three equal hint cards under the links (`welcome-hint-{i}`).
@@ -240,14 +240,14 @@ fn hint_card(i: usize, icon: Icon, title_key: &str, body_key: &str) -> Div {
         .child(render_icon(icon, px(16.0), theme::accent()))
         .child(
             div()
-                .text_size(px(12.5))
+                .text_size(theme::TEXT_SMALL)
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme::t1())
                 .child(t(title_key)),
         )
         .child(
             div()
-                .text_size(px(11.0))
+                .text_size(theme::TEXT_CAPTION)
                 .line_height(px(16.0))
                 .text_color(theme::t3())
                 .child(t(body_key)),
@@ -280,7 +280,7 @@ fn text_link(
         .flex_row()
         .items_center()
         .gap_2()
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .map(|link| {
             // Busy (the sample is being written): dimmed, and a click does nothing.
             if busy {
@@ -400,8 +400,9 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .text_ellipsis_middle()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.0))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .tooltip(theme::tooltip_label(path.clone()))
                 .children(crate::views::page_header::text_marker(
@@ -416,7 +417,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                 div()
                     .debug_selector(move || unavailable_selector.clone())
                     .flex_none()
-                    .text_size(px(11.0))
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t2())
                     .child(t("welcome.not_available")),
             )
@@ -492,7 +493,7 @@ pub(crate) fn button(
         .justify_center()
         .items_center()
         .gap_2()
-        .text_sm()
+        .text_size(theme::TEXT_BODY)
         .font_weight(FontWeight::SEMIBOLD)
         .map(|b| {
             if primary {

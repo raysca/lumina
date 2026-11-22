@@ -144,7 +144,7 @@ fn header_button(selector: &'static str, icon: Icon, label: String, hint: String
         .border_color(theme::line())
         .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
-        .text_size(px(12.5))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .child(render_icon(icon, px(14.0), theme::t2()))
         .child(label)

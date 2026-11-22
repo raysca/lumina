@@ -161,7 +161,7 @@ impl Render for FloatingPipPlayerView {
                     .flex()
                     .justify_center()
                     .items_center()
-                    .text_sm()
+                    .text_size(theme::TEXT_BODY)
                     .text_color(theme::t2())
                     .child(t("pip.main_window_closed"))
                     .into_any_element();
@@ -295,8 +295,9 @@ impl Render for FloatingPipPlayerView {
         let mono = |text: String, alpha: f32| {
             div()
                 .flex_none()
-                .text_size(px(10.0))
-                .font_family(theme::FONT_MONO)
+                .text_size(theme::TEXT_CAPTION)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(theme::on_media().opacity(alpha))
                 .child(text)
         };
@@ -342,7 +343,7 @@ impl Render for FloatingPipPlayerView {
                             .flex()
                             .justify_center()
                             .items_center()
-                            .text_xs()
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(theme::t2())
                             .child(t(if has_player {
                                 "pip.loading"
@@ -394,8 +395,9 @@ impl Render for FloatingPipPlayerView {
                             .child(render_icon(Icon::Pip, px(10.0), theme::accent()))
                             .child(
                                 div()
-                                    .text_size(px(8.5))
-                                    .font_family(theme::FONT_MONO)
+                                    .text_size(theme::TEXT_MICRO)
+                                    .font_family(theme::FONT_SANS)
+                                    .font_features(theme::tabular_figures())
                                     .text_color(theme::accent())
                                     .child(t("pip.badge")),
                             ),
@@ -454,7 +456,7 @@ impl Render for FloatingPipPlayerView {
                         div()
                             .debug_selector(|| "pip-title".to_string())
                             .truncate()
-                            .text_size(px(13.0))
+                            .text_size(theme::TEXT_BODY)
                             .font_family(theme::FONT_SANS)
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme::on_media())

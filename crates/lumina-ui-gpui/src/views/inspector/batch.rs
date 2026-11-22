@@ -105,7 +105,7 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                 .py(px(10.0))
                 .border_t_1()
                 .border_color(theme::line())
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(format!(
                     "{count} selected · ⌘-click to add or remove · ⇧-click for a range · ⌘A selects all"
@@ -195,7 +195,7 @@ fn render_header(app: &LuminaApp) -> Div {
                     div()
                         .id("batch-count")
                         .debug_selector(|| "batch-count".to_string())
-                        .text_base()
+                        .text_size(theme::TEXT_LARGE)
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(plural(summary.count, "item", "items")),
                 )
@@ -203,7 +203,7 @@ fn render_header(app: &LuminaApp) -> Div {
                     div()
                         .id("batch-mix")
                         .debug_selector(|| "batch-mix".to_string())
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(mix),
                 )
@@ -211,7 +211,7 @@ fn render_header(app: &LuminaApp) -> Div {
                     div()
                         .id("batch-size-range")
                         .debug_selector(|| "batch-size-range".to_string())
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(if summary.pending {
                             "…".to_string()
@@ -262,13 +262,13 @@ fn render_rating(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
             div()
                 .id("batch-rating-note")
                 .debug_selector(|| "batch-rating-note".to_string())
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(note),
         )
         .child(
             div()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t3())
                 .child("· click sets all"),
         )
@@ -364,8 +364,9 @@ fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize
             .child(tag.clone())
             .child(
                 div()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(11.0))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t2())
                     .child(format!("{n}/{total}")),
             )
@@ -474,7 +475,7 @@ fn render_batch_metadata_row(
                 .items_center()
                 .child(
                     div()
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t2())
                         .child(label),
@@ -488,7 +489,7 @@ fn render_batch_metadata_row(
                         .border_1()
                         .border_color(theme::line_2())
                         .bg(theme::bg_2())
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t2())
                         .child("Mixed")
@@ -502,8 +503,9 @@ fn render_batch_metadata_row(
             row.child(
                 div()
                     .debug_selector(move || format!("{selector}-value"))
-                    .text_xs()
-                    .font_family(theme::FONT_MONO)
+                    .text_size(theme::TEXT_SMALL)
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
                     .text_color(theme::t1())
                     .child(match input {
                         Some(input) => input.into_any_element(),
@@ -511,7 +513,12 @@ fn render_batch_metadata_row(
                     }),
             )
         })
-        .child(div().text_xs().text_color(theme::t3()).child(hint))
+        .child(
+            div()
+                .text_size(theme::TEXT_SMALL)
+                .text_color(theme::t3())
+                .child(hint),
+        )
         .on_click(move |_e, _window, cx| {
             if let Some(app) = app.upgrade() {
                 app.update(cx, |this, cx| match row {

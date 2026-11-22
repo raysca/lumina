@@ -46,7 +46,7 @@ impl SearchBarView {
                 theme::bg_0()
             })
             .cursor_text()
-            .text_size(px(12.5))
+            .text_size(theme::TEXT_SMALL)
             // Keeps the app root from blurring search under the click (the
             // Search screen would shrink the header between down and up).
             .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
@@ -82,7 +82,7 @@ impl SearchBarView {
                         .debug_selector(|| "search-shortcut".to_string())
                         .flex_none()
                         .font_family(theme::FONT_MONO)
-                        .text_size(px(10.0))
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .child(crate::i18n::t("search.shortcut")),
                 )
@@ -95,8 +95,9 @@ impl SearchBarView {
                     .gap_1p5()
                     .child(
                         div()
-                            .font_family(theme::FONT_MONO)
-                            .text_size(px(10.0))
+                            .font_family(theme::FONT_SANS)
+                            .font_features(theme::tabular_figures())
+                            .text_size(theme::TEXT_CAPTION)
                             .text_color(theme::t3())
                             .child(crate::i18n::count(this.displayed_count())),
                     )
@@ -204,7 +205,7 @@ impl SearchBarView {
                     .rounded(theme::RADIUS_SM)
                     .overflow_hidden()
                     .whitespace_nowrap()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .cursor_pointer();
                 let row = if active {
                     row.bg(theme::bg_3()).text_color(theme::t1())
@@ -238,7 +239,7 @@ impl SearchBarView {
                     .aria_label(text.clone())
                     .px_2()
                     .py_1()
-                    .text_xs()
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .child(text)
             }));

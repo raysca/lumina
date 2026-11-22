@@ -61,7 +61,7 @@ pub fn sort_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(if selected {
                     theme::accent()
                 } else {
@@ -90,7 +90,7 @@ pub fn sort_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                         .py_1()
                         .rounded(theme::RADIUS_MD)
                         .cursor_pointer()
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_center()
                         .text_color(if current.direction == SortDirection::Ascending {
                             theme::accent()
@@ -116,7 +116,7 @@ pub fn sort_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                         .py_1()
                         .rounded(theme::RADIUS_MD)
                         .cursor_pointer()
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_center()
                         .text_color(if current.direction == SortDirection::Descending {
                             theme::accent()

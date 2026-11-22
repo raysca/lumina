@@ -125,7 +125,7 @@ pub(crate) fn section(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) ->
                 .justify_between()
                 .child(
                     div()
-                        .text_size(px(9.5))
+                        .text_size(theme::TEXT_CAPTION)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t3())
                         .child(t("album_panel.key_photo")),
@@ -137,7 +137,7 @@ pub(crate) fn section(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) ->
                         .role(Role::Button)
                         .aria_label(change.clone())
                         .tooltip(theme::tooltip_label(t("album_panel.change_tooltip")))
-                        .text_size(px(11.0))
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(if enabled {
                             theme::accent()
                         } else {
@@ -193,8 +193,9 @@ pub(crate) fn section(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) ->
                             div()
                                 .debug_selector(|| "album-panel-key-photo-name".to_string())
                                 .truncate()
-                                .font_family(theme::FONT_MONO)
-                                .text_size(px(11.0))
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
+                                .text_size(theme::TEXT_CAPTION)
                                 .text_color(if enabled { theme::t1() } else { theme::t3() })
                                 .children(text_marker("album-panel-key-photo-name", &name))
                                 .child(name),
@@ -204,7 +205,7 @@ pub(crate) fn section(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) ->
                                 .when(picking, |hint| {
                                     hint.debug_selector(|| "album-panel-key-photo-hint".to_string())
                                 })
-                                .text_size(px(10.5))
+                                .text_size(theme::TEXT_CAPTION)
                                 .text_color(if picking {
                                     theme::accent()
                                 } else {
@@ -233,8 +234,9 @@ pub(crate) fn badge(item_id: u64) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap(px(4.0))
-        .font_family(theme::FONT_MONO)
-        .text_size(px(8.5))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_MICRO)
         .text_color(theme::accent())
         .child(render_icon(Icon::StarFilled, px(9.0), theme::accent()))
         .child(label)

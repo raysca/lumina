@@ -170,7 +170,7 @@ fn text_button(
         .border_1()
         .border_color(theme::line())
         .bg(theme::bg_2())
-        .text_size(px(12.5))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .when(enabled, |b| {
             b.hover(|s| s.bg(theme::bg_3())).cursor_pointer()
@@ -256,7 +256,7 @@ pub(crate) fn render_list(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> State
                 div()
                     .debug_selector(|| "downloads-filter-empty".to_string())
                     .pt(px(18.0))
-                    .text_size(px(12.5))
+                    .text_size(theme::TEXT_SMALL)
                     .text_color(theme::t2())
                     .child(t("downloads.filter_empty")),
             )
@@ -303,7 +303,7 @@ fn section_header(
         .debug_selector(move || action_selector.clone())
         .role(Role::Button)
         .aria_label(label.clone())
-        .text_size(px(12.0))
+        .text_size(theme::TEXT_SMALL)
         .text_color(theme::t2())
         .cursor_pointer()
         .hover(|s| s.text_color(theme::t1()))
@@ -324,8 +324,9 @@ fn section_header(
         .justify_between()
         .child(
             div()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(11.0))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(format!(
                     "{} · {count}",

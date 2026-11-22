@@ -41,15 +41,16 @@ pub(crate) fn title_row(title: impl Into<SharedString>, count: Option<SharedStri
         .child(
             div()
                 .font_family(theme::FONT_DISPLAY)
-                .text_size(px(15.0))
+                .text_size(theme::TEXT_LARGE)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(title),
         )
         .children(count.map(|label| {
             div()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.0))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(label)
         }))

@@ -98,7 +98,7 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
             .h(px(24.0))
             .px(px(8.0))
             .rounded(theme::RADIUS_SM)
-            .text_xs()
+            .text_size(theme::TEXT_SMALL)
             .font_weight(FontWeight::NORMAL)
             .text_color(if active { theme::t1() } else { theme::t2() })
             .role(Role::Button)
@@ -141,8 +141,9 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
                 .px(px(4.0))
                 .rounded(theme::RADIUS_SM)
                 .bg(theme::scrim())
-                .font_family(theme::FONT_MONO)
-                .text_size(px(11.0))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t1())
                 .child(this.viewer_state.zoom_label()),
         );
@@ -275,7 +276,12 @@ pub fn render_pip_handoff(
                 .items_center()
                 .gap_3()
                 .child(render_icon(Icon::Pip, px(14.0), theme::t2()))
-                .child(div().text_xs().text_color(theme::t2()).child(action))
+                .child(
+                    div()
+                        .text_size(theme::TEXT_SMALL)
+                        .text_color(theme::t2())
+                        .child(action),
+                )
                 .child(
                     theme::control_primary("viewer-pip-handoff-btn")
                         .debug_selector(|| "viewer-pip-handoff-btn".to_string())

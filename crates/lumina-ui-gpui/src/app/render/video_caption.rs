@@ -29,7 +29,7 @@ pub(crate) fn video_caption(item: &MediaItem, selected: bool) -> Div {
                 .min_w_0()
                 .truncate()
                 .font_family(theme::FONT_SANS)
-                .text_size(px(12.5))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(if selected {
                     theme::accent()
                 } else {
@@ -52,8 +52,9 @@ pub(crate) fn video_caption(item: &MediaItem, selected: bool) -> Div {
                 .h(px(13.0))
                 .min_w_0()
                 .truncate()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.0))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(caption_meta(item)),
         )

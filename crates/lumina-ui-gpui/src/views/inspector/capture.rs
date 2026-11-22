@@ -96,7 +96,7 @@ pub(crate) fn render_capture_row(row: CaptureRow) -> Stateful<Div> {
         .child(
             div()
                 .flex_none()
-                .text_size(px(11.5))
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t3())
                 .child(row.key),
         )
@@ -106,8 +106,9 @@ pub(crate) fn render_capture_row(row: CaptureRow) -> Stateful<Div> {
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .text_ellipsis()
-                .text_size(px(11.0))
-                .font_family(theme::FONT_MONO)
+                .text_size(theme::TEXT_CAPTION)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(theme::t1())
                 .text_right()
                 .child(row.value),

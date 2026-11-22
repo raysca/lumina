@@ -87,7 +87,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .child(
                             div()
                                 .flex_1()
-                                .text_base()
+                                .text_size(theme::TEXT_LARGE)
                                 .text_color(if query.is_empty() {
                                     theme::t2()
                                 } else {
@@ -112,7 +112,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                             div()
                                 .px_3()
                                 .py_4()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::t2())
                                 .child("No matches")
                         }))
@@ -132,7 +132,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .border_t_1()
                         .border_color(theme::line())
                         .bg(theme::bg_1())
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::t2())
                         .child(theme::kbd("↑"))
                         .child(theme::kbd("↓"))
@@ -199,11 +199,18 @@ fn render_row(
                 theme::t2()
             },
         ))
-        .child(div().flex_1().text_sm().text_color(fg).child(row.title))
         .child(
             div()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
+                .flex_1()
+                .text_size(theme::TEXT_BODY)
+                .text_color(fg)
+                .child(row.title),
+        )
+        .child(
+            div()
+                .text_size(theme::TEXT_SMALL)
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
                 .text_color(if is_selected {
                     theme::on_accent()
                 } else {

@@ -52,7 +52,7 @@ pub(super) fn render(
                 // 0.3.11 has no letter-spacing style.
                 .child(
                     div()
-                        .text_size(px(10.0))
+                        .text_size(theme::TEXT_CAPTION)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t3())
                         .child(t("duplicates.groups_head")),
@@ -60,8 +60,9 @@ pub(super) fn render(
                 .child(
                     div()
                         .debug_selector(|| "duplicates-group-position".to_string())
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(10.5))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .children(text_marker("duplicates-position", &position))
                         .child(position),
@@ -184,7 +185,7 @@ fn row(
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(12.5))
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if selected { theme::t1() } else { theme::t2() })
                         .child(title),
@@ -192,8 +193,9 @@ fn row(
                 .child(
                     div()
                         .truncate()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(10.5))
+                        .font_family(theme::FONT_SANS)
+                        .font_features(theme::tabular_figures())
+                        .text_size(theme::TEXT_CAPTION)
                         .text_color(theme::t3())
                         .child(group_summary(group)),
                 ),
@@ -212,8 +214,9 @@ fn kind_badge() -> Div {
         .items_center()
         .rounded(px(5.0))
         .bg(theme::accent_soft())
-        .font_family(theme::FONT_MONO)
-        .text_size(px(10.0))
+        .font_family(theme::FONT_SANS)
+        .font_features(theme::tabular_figures())
+        .text_size(theme::TEXT_CAPTION)
         .text_color(theme::accent())
         .child(t("duplicates.kind_exact"))
 }

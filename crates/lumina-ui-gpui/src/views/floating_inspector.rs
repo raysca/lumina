@@ -55,7 +55,7 @@ impl Render for FloatingInspectorView {
                     .flex()
                     .justify_center()
                     .items_center()
-                    .text_sm()
+                    .text_size(theme::TEXT_BODY)
                     .text_color(theme::t2())
                     .child("Main library window closed")
                     .into_any_element();

@@ -33,7 +33,12 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             },
         ))
     };
-    let line = |text: String| div().text_xs().text_color(theme::t2()).child(text);
+    let line = |text: String| {
+        div()
+            .text_size(theme::TEXT_SMALL)
+            .text_color(theme::t2())
+            .child(text)
+    };
 
     let mut bar = None;
     let (title, lines, buttons): (String, Vec<String>, Vec<AnyElement>) = match dialog {
@@ -141,7 +146,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .gap_1()
                         .child(
                             div()
-                                .text_base()
+                                .text_size(theme::TEXT_LARGE)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::t1())
                                 .child(title),
@@ -204,7 +209,7 @@ pub fn dialog_footer_button_with(
         .flex_row()
         .items_center()
         .gap(px(9.0))
-        .text_size(px(13.0));
+        .text_size(theme::TEXT_BODY);
     let (hover_bg, button) = if primary {
         (
             theme::accent_hover(),
@@ -241,8 +246,9 @@ pub fn dialog_footer_button_with(
             .flex()
             .items_center()
             .justify_center()
-            .font_family(theme::FONT_MONO)
-            .text_size(px(11.0))
+            .font_family(theme::FONT_SANS)
+            .font_features(theme::tabular_figures())
+            .text_size(theme::TEXT_CAPTION)
             .font_weight(FontWeight::NORMAL)
             .text_color(hint_fg)
             .child(kbd),
@@ -294,7 +300,7 @@ pub fn render_drop_target(cx: &mut Context<LuminaApp>) -> impl IntoElement {
                 .py_2()
                 .rounded(theme::RADIUS_LG)
                 .bg(theme::bg_1())
-                .text_base()
+                .text_size(theme::TEXT_LARGE)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child("Drop to import"),

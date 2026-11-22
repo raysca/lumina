@@ -40,8 +40,9 @@ fn hint(bytes: Option<u64>) -> Div {
             div()
                 .debug_selector(|| "net-import-hint".to_string())
                 .children(text_marker("net-import-hint", &label.clone().into()))
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::t3())
                 .child(label),
         )
@@ -75,7 +76,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     };
     let text = |text: String| {
         div()
-            .text_size(px(13.0))
+            .text_size(theme::TEXT_BODY)
             .line_height(px(20.0))
             .text_color(theme::t2())
             .child(text)
@@ -117,8 +118,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .min_w_0()
                                 .overflow_hidden()
                                 .whitespace_nowrap()
-                                .font_family(theme::FONT_MONO)
-                                .text_size(px(12.5))
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(if url.is_empty() {
                                     theme::t3()
                                 } else {
@@ -150,7 +152,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 )
                 .children(error.as_ref().map(|err| {
                     div()
-                        .text_size(px(12.0))
+                        .text_size(theme::TEXT_SMALL)
                         .text_color(theme::danger())
                         .child(err.clone())
                 }));
@@ -270,7 +272,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .min_w_0()
                 .truncate()
                 .font_family(theme::FONT_DISPLAY)
-                .text_size(px(19.0))
+                .text_size(theme::TEXT_TITLE)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(stage.title),

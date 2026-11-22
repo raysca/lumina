@@ -80,8 +80,9 @@ pub(super) fn transport_height(this: &LuminaApp) -> f32 {
 /// The accent time pill hanging under the playhead at `pct` of the track.
 fn playhead_pill(pct: f32, time: f64) -> Div {
     let text: SharedString = format_clock(time, false).into();
-    // ponytail: width from the mono advance (9.5px * 0.6) plus padding.
-    let width = text.chars().count() as f32 * 5.7 + 14.0;
+    // ponytail: width from Inter's tabular digit advance (11px * 0.62) plus
+    // padding; colons are narrower, so it errs wide.
+    let width = text.chars().count() as f32 * 6.8 + 14.0;
     div()
         .absolute()
         .top(px(STRIP_HEIGHT + PLAYHEAD_OVERHANG))
@@ -99,8 +100,9 @@ fn playhead_pill(pct: f32, time: f64) -> Div {
                 .flex()
                 .items_center()
                 .justify_center()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(9.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(theme::on_accent())
                 .children(crate::views::page_header::text_marker(
                     "video-playhead-time",

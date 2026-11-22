@@ -60,8 +60,9 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
         .child(label)
         .child(
             div()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.5))
+                .font_family(theme::FONT_SANS)
+                .font_features(theme::tabular_figures())
+                .text_size(theme::TEXT_CAPTION)
                 .text_color(if on { theme::accent() } else { theme::t3() })
                 .child(crate::i18n::count(count)),
         )
@@ -108,8 +109,9 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
                 div()
                     .debug_selector(|| "downloads-limits".to_string())
                     .flex_shrink_0()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(10.5))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t3())
                     .children(text_marker("downloads-limits", &limits))
                     .child(limits.clone()),

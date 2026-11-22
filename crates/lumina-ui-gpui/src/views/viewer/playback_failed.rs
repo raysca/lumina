@@ -92,12 +92,12 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
             // Design: Inter Tight 17/600 (the shared headline is 18).
             empty_headline("playback-failed-title", title.into())
                 .mt(px(12.0))
-                .text_size(px(17.0)),
+                .text_size(theme::TEXT_TITLE),
         )
         .child(
             empty_body("playback-failed-body", body.into())
                 .mt(px(6.0))
-                .text_size(px(12.0))
+                .text_size(theme::TEXT_SMALL)
                 .line_height(px(18.0)),
         )
         .child(
@@ -130,8 +130,9 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
                     .whitespace_nowrap()
                     .text_ellipsis_middle()
                     .text_center()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(10.0))
+                    .font_family(theme::FONT_SANS)
+                    .font_features(theme::tabular_figures())
+                    .text_size(theme::TEXT_CAPTION)
                     .text_color(theme::t3())
                     .child(error)
             }))
@@ -183,7 +184,7 @@ pub(crate) fn pip_message(app: WeakEntity<LuminaApp>, narrow: bool, gone: bool) 
                 .when(!narrow, |row| {
                     row.child(
                         div()
-                            .text_size(px(12.0))
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(theme::on_media())
                             .whitespace_nowrap()
                             .children(text_marker("pip-playback-failed-title", &title))

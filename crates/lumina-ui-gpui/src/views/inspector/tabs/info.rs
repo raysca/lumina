@@ -181,7 +181,7 @@ pub fn render_info_tab(
                             .gap_3()
                             .child(
                                 div()
-                                    .text_xs()
+                                    .text_size(theme::TEXT_SMALL)
                                     .text_color(theme::t1())
                                     .child(date_taken_str),
                             )
@@ -200,7 +200,7 @@ pub fn render_info_tab(
                                     .bg(theme::bg_2())
                                     .hover(|s| s.bg(theme::bg_3()))
                                     .cursor_pointer()
-                                    .text_xs()
+                                    .text_size(theme::TEXT_SMALL)
                                     .text_color(theme::t1())
                                     .child("Adjust…")
                                     .on_click(move |_e, _w, cx| {
@@ -282,7 +282,7 @@ pub fn render_info_tab(
                             div()
                                 .w(px(LABEL_WIDTH))
                                 .flex_shrink_0()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::t2())
                                 .child("Path"),
                         )
@@ -293,8 +293,9 @@ pub fn render_info_tab(
                                 // token; without min_w(0) they widen the row
                                 // instead of wrapping (BUG 12).
                                 .min_w(px(0.0))
-                                .text_xs()
-                                .font_family(theme::FONT_MONO)
+                                .text_size(theme::TEXT_SMALL)
+                                .font_family(theme::FONT_SANS)
+                                .font_features(theme::tabular_figures())
                                 .text_color(theme::t2())
                                 .child(path_str),
                         ),
@@ -354,7 +355,7 @@ fn render_info_field_row(label: &str, content: impl IntoElement) -> impl IntoEle
             div()
                 .w(px(LABEL_WIDTH))
                 .flex_shrink_0()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(label.to_string()),
         )
@@ -382,7 +383,7 @@ fn render_value_row(selector: String, label: &str, value: &str) -> impl IntoElem
             div()
                 .w(px(LABEL_WIDTH))
                 .flex_shrink_0()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(label.to_string()),
         )
@@ -390,7 +391,7 @@ fn render_value_row(selector: String, label: &str, value: &str) -> impl IntoElem
             div()
                 .flex_1()
                 .min_w(px(0.0))
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t1())
                 .child(value.to_string()),
         )

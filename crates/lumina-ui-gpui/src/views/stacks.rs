@@ -107,12 +107,17 @@ fn notice(selector: &'static str, title: String, body: Option<String>) -> Statef
         .gap_2()
         .child(
             div()
-                .text_sm()
+                .text_size(theme::TEXT_BODY)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
                 .child(title),
         )
-        .children(body.map(|b| div().text_xs().text_color(theme::t2()).child(b)))
+        .children(body.map(|b| {
+            div()
+                .text_size(theme::TEXT_SMALL)
+                .text_color(theme::t2())
+                .child(b)
+        }))
 }
 
 fn render_similar(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
@@ -163,7 +168,7 @@ fn render_similar(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             div()
                 .px_4()
                 .pt_2()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
                 .child(t("stacks.hint")),
         )
@@ -297,7 +302,7 @@ fn render_stack(
                 .child(
                     div()
                         .debug_selector(move || format!("stack-{index}-kind"))
-                        .text_xs()
+                        .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
                         .child(title),
@@ -348,7 +353,7 @@ fn render_stack(
                             .h(px(THUMB_HEIGHT))
                             .flex()
                             .items_center()
-                            .text_xs()
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(theme::t2())
                             .child(t_with("stacks.more", &[&more])),
                     )
@@ -406,7 +411,7 @@ fn render_member(this: &LuminaApp, index: usize, item: &lumina_core::MediaItem) 
         )
         .child(
             div()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t1())
                 .truncate()
                 .child(item.file_name.clone()),

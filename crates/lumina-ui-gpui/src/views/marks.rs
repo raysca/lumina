@@ -26,7 +26,7 @@ fn mark_row(caption: impl Into<SharedString>, controls: impl IntoElement) -> Div
         .items_center()
         .child(
             div()
-                .text_xs()
+                .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t1())
                 .child(caption.into()),
         )

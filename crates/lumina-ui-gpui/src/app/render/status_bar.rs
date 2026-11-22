@@ -62,21 +62,26 @@ impl LuminaApp {
             .flex_row()
             .justify_between()
             .items_center()
-            .child(div().text_xs().text_color(theme::t2()).child({
-                let sel_count = if !self.selected_indices.is_empty() {
-                    self.selected_indices.len()
-                } else if self.selected_item.is_some() {
-                    1
-                } else {
-                    0
-                };
-                let year_str = if let Some(y) = self.active_year {
-                    format!(" · {}", y)
-                } else {
-                    String::new()
-                };
-                format!("{} of {} selected{}", sel_count, total_count, year_str)
-            }))
+            .child(
+                div()
+                    .text_size(theme::TEXT_SMALL)
+                    .text_color(theme::t2())
+                    .child({
+                        let sel_count = if !self.selected_indices.is_empty() {
+                            self.selected_indices.len()
+                        } else if self.selected_item.is_some() {
+                            1
+                        } else {
+                            0
+                        };
+                        let year_str = if let Some(y) = self.active_year {
+                            format!(" · {}", y)
+                        } else {
+                            String::new()
+                        };
+                        format!("{} of {} selected{}", sel_count, total_count, year_str)
+                    }),
+            )
             .child(
                 div()
                     .flex()
@@ -85,7 +90,7 @@ impl LuminaApp {
                     .gap_2()
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(theme::TEXT_SMALL)
                             .text_color(if is_scanning || importing.is_some() {
                                 theme::t1()
                             } else {
@@ -108,7 +113,7 @@ impl LuminaApp {
                                 .px_2()
                                 .rounded(theme::RADIUS_SM)
                                 .cursor_pointer()
-                                .text_xs()
+                                .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::t1())
                                 .hover(|s| s.bg(theme::bg_3()))
                                 .tooltip(theme::tooltip_label("Stop after the current file"))
