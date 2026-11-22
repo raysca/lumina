@@ -1,0 +1,974 @@
+{
+ "source": "Wikimedia Commons",
+ "license": "CC0 1.0",
+ "photos": [
+  {
+   "file": "Northern coast Crete.jpg",
+   "sha1": "e87b19a0820cc1d393425f664958e83b3baf2ac1",
+   "bytes": 7605271,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Northern coast",
+   "tags": [
+    "places/europe/greece/crete",
+    "coast",
+    "sea"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Northern coast Crete detail.jpg",
+   "sha1": "7a5a7097dcde16016440ac3790b0b3b50f27b2d8",
+   "bytes": 11697717,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Coast detail",
+   "tags": [
+    "places/europe/greece/crete",
+    "coast",
+    "sea"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Northern coast Crete rocks waves detail.jpg",
+   "sha1": "e391ed5dc9220d305b78645ab9bb6873b4fbb592",
+   "bytes": 9434645,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Rocks and waves",
+   "tags": [
+    "places/europe/greece/crete",
+    "coast",
+    "sea"
+   ],
+   "rating": 0,
+   "label": ""
+  },
+  {
+   "file": "Peristeri Northern coast Crete.jpg",
+   "sha1": "4f76caec257053331a5bceaace79ac2e9a7b813d",
+   "bytes": 8970703,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Peristeri",
+   "tags": [
+    "places/europe/greece/crete",
+    "coast"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Harbour snowy mountains Rethymno Crete Greece.jpg",
+   "sha1": "5910850ee21307a2f7494526dfd167672c4edd61",
+   "bytes": 10896562,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Rethymno harbour",
+   "tags": [
+    "places/europe/greece/crete",
+    "harbour",
+    "mountains"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Rethymno cape fortress 1.jpg",
+   "sha1": "107412aec5d0595cb2ff6a0a724d8e24a4400643",
+   "bytes": 10865849,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Fortezza",
+   "tags": [
+    "places/europe/greece/crete",
+    "architecture"
+   ],
+   "rating": 2,
+   "label": ""
+  },
+  {
+   "file": "Mosque harbour Chania.jpg",
+   "sha1": "244c486e97e54a8d22c007a71e46e86451d219eb",
+   "bytes": 11912586,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Chania harbour",
+   "tags": [
+    "places/europe/greece/crete",
+    "harbour",
+    "architecture"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Building dam harbour Chania evening sun.jpg",
+   "sha1": "086bc4903be5675397460ec49b92f8a8d4e16698",
+   "bytes": 8845624,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Evening in Chania",
+   "tags": [
+    "places/europe/greece/crete",
+    "harbour",
+    "golden hour"
+   ],
+   "rating": 5,
+   "label": "Orange"
+  },
+  {
+   "file": "Chaîne du Mont Ida vue de Phaïstos Crete.jpg",
+   "sha1": "fe6fb72aa5168d056920b3a24eff5e7728a0fea8",
+   "bytes": 11791134,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Mount Ida from Phaistos",
+   "tags": [
+    "places/europe/greece/crete",
+    "mountains",
+    "landscape"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Aegina harbour 1.jpg",
+   "sha1": "f684223edf7b38e3862dfec34cb244da8a63caa3",
+   "bytes": 12122185,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Aegina harbour",
+   "tags": [
+    "places/europe/greece/aegina",
+    "harbour"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Aegina sunset.jpg",
+   "sha1": "b03632063b574ff01d45d5d4f0ec4e8997084f70",
+   "bytes": 9527194,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Aegina sunset",
+   "tags": [
+    "places/europe/greece/aegina",
+    "sunset",
+    "sea"
+   ],
+   "rating": 5,
+   "label": "Orange"
+  },
+  {
+   "file": "Night view chapel harbour Aegina Greece.jpg",
+   "sha1": "04c3fd20489c587bb139c0c6b6fedab57b1e9a31",
+   "bytes": 4787544,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Harbour chapel at night",
+   "tags": [
+    "places/europe/greece/aegina",
+    "night",
+    "harbour"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Evening columns Zeus temple Athens.jpg",
+   "sha1": "f2598fc70f1d3f1c379eeebf5179137815f653e9",
+   "bytes": 7141593,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Temple of Olympian Zeus",
+   "tags": [
+    "places/europe/greece/athens",
+    "architecture",
+    "golden hour"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Erechtheum Acropolis Athens evening moon.jpg",
+   "sha1": "5c1ca20aa149f866dcd205d02e4bf04a717e927d",
+   "bytes": 8083885,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Erechtheion and the moon",
+   "tags": [
+    "places/europe/greece/athens",
+    "architecture",
+    "night"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Saint Nicolas Fort Rhodes Harbour night.jpg",
+   "sha1": "84df7cf03578a19f4f167591d43ea18d91159251",
+   "bytes": 3656891,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Fort of Saint Nicholas",
+   "tags": [
+    "places/europe/greece/rhodes",
+    "night",
+    "harbour"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Windmill harbour Rhodes.jpg",
+   "sha1": "cdec03e6d032bd5c8816cb0541fa11bea3601de2",
+   "bytes": 8155603,
+   "author": "Jebulon",
+   "folder": "Greece 2015",
+   "title": "Windmills, Rhodes",
+   "tags": [
+    "places/europe/greece/rhodes",
+    "harbour"
+   ],
+   "rating": 2,
+   "label": ""
+  },
+  {
+   "file": "Temple of Poseidon 2 Cape Sounion Greece.jpg",
+   "sha1": "82ddbb2e429677d7b88976f7c90c5aa89908a0f7",
+   "bytes": 16146221,
+   "author": "Jebulon",
+   "folder": "Greece 2018",
+   "title": "Temple of Poseidon",
+   "tags": [
+    "places/europe/greece/sounion",
+    "architecture"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Landscape at Cape Sounion, Greece.jpg",
+   "sha1": "74803dd5913f96f0df4eb74bada270fa7b696674",
+   "bytes": 22381246,
+   "author": "Jebulon",
+   "folder": "Greece 2018",
+   "title": "Cape Sounion",
+   "tags": [
+    "places/europe/greece/sounion",
+    "landscape",
+    "sea"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Waterfall Drymona Evia Greece.jpg",
+   "sha1": "3ddb1adbc742c327fdf0f61621d85ec60490c7b6",
+   "bytes": 19617548,
+   "author": "Jebulon",
+   "folder": "Greece 2018",
+   "title": "Drymona waterfall",
+   "tags": [
+    "places/europe/greece/evia",
+    "waterfall",
+    "forest"
+   ],
+   "rating": 4,
+   "label": "Blue"
+  },
+  {
+   "file": "Harbour chapel, red boat, Nea Artaki, Evia Greece.jpg",
+   "sha1": "39b49d838cb6777bc5c45ed74f9d8188e7f5930c",
+   "bytes": 11082523,
+   "author": "Jebulon",
+   "folder": "Greece 2018",
+   "title": "Red boat, Nea Artaki",
+   "tags": [
+    "places/europe/greece/evia",
+    "harbour"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Chateau Frontenac at dusk in Quebec City.jpg",
+   "sha1": "8476b8869df424a2e65f4d3eb532e0ff1262bfd5",
+   "bytes": 16294419,
+   "author": "Wilfredor",
+   "folder": "Québec",
+   "title": "Château Frontenac at dusk",
+   "tags": [
+    "places/north america/canada/quebec city",
+    "architecture",
+    "blue hour"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Spire of Chalmers-Wesley United Church above Quebec City at sunset.jpg",
+   "sha1": "1c7e2d831620a67ca600522239717b2c81cf664c",
+   "bytes": 11359921,
+   "author": "Wilfredor",
+   "folder": "Québec",
+   "title": "Spire at sunset",
+   "tags": [
+    "places/north america/canada/quebec city",
+    "sunset",
+    "architecture"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Snow-covered 25e Rue in winter, Quebec City.jpg",
+   "sha1": "f6fe8e302a15d21c69715827b7f4f907f1d83092",
+   "bytes": 8144695,
+   "author": "Wilfredor",
+   "folder": "Québec",
+   "title": "25e Rue in winter",
+   "tags": [
+    "places/north america/canada/quebec city",
+    "snow",
+    "street"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Snow-covered Quebec City skyline in fog.jpg",
+   "sha1": "93779c5653cb4271d6e85e3f09c6a3e6716b0e89",
+   "bytes": 27271239,
+   "author": "Wilfredor",
+   "folder": "Québec",
+   "title": "Skyline in fog",
+   "tags": [
+    "places/north america/canada/quebec city",
+    "snow",
+    "fog"
+   ],
+   "rating": 4,
+   "label": "Blue"
+  },
+  {
+   "file": "Autumn forest near Avenue du Bourg-Royal, Quebec City.jpg",
+   "sha1": "63384ddb23f797047287fd9b173f3701f8c3f7ca",
+   "bytes": 21238445,
+   "author": "Wilfredor",
+   "folder": "Québec",
+   "title": "Autumn forest",
+   "tags": [
+    "places/north america/canada/quebec city",
+    "autumn",
+    "forest"
+   ],
+   "rating": 4,
+   "label": "Orange"
+  },
+  {
+   "file": "Autumnal Retreat in Old Quebec- A Canvas of Fading Reds and Vibrant Oranges.jpg",
+   "sha1": "b6737c356f3871ea55331dd057c1e3f6d1ba48bd",
+   "bytes": 25126413,
+   "author": "Wilfredor",
+   "folder": "Québec",
+   "title": "Autumn reds",
+   "tags": [
+    "places/north america/canada/quebec city",
+    "autumn",
+    "forest"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Lake Khövsgöl, Mongolia.jpg",
+   "sha1": "da3dc1ee883dee1b737c81b19e122025ec6334ea",
+   "bytes": 6624822,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Lake Khövsgöl",
+   "tags": [
+    "places/asia/mongolia/khövsgöl",
+    "lake",
+    "landscape"
+   ],
+   "rating": 5,
+   "label": "Blue"
+  },
+  {
+   "file": "Terkhiin Tsagaan Lake 01.jpg",
+   "sha1": "475bbb19d7b2f9dc809a3a2eb5d0786fd54fe9c8",
+   "bytes": 6265285,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "White Lake",
+   "tags": [
+    "places/asia/mongolia/terkhiin tsagaan",
+    "lake"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Terkhiin Tsagaan Lake 03.jpg",
+   "sha1": "4c917946125c10b8b2e010367f1f8e2080dacff2",
+   "bytes": 5700457,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "White Lake shore",
+   "tags": [
+    "places/asia/mongolia/terkhiin tsagaan",
+    "lake"
+   ],
+   "rating": 2,
+   "label": ""
+  },
+  {
+   "file": "Terkhiin Tsagaan Lake 04.jpg",
+   "sha1": "2eb5042b9d6db7ee68b1d3dc45f0e5d0f0774a99",
+   "bytes": 4218879,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "White Lake hills",
+   "tags": [
+    "places/asia/mongolia/terkhiin tsagaan",
+    "lake"
+   ],
+   "rating": 0,
+   "label": ""
+  },
+  {
+   "file": "Ulaan Tsutgalan Waterfall.jpg",
+   "sha1": "06a45637837e63e873f1e7af9b9dd2bfdf9d432e",
+   "bytes": 7248833,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Ulaan Tsutgalan waterfall",
+   "tags": [
+    "places/asia/mongolia/orkhon valley",
+    "waterfall"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Camels in Gobi Desert 01.jpg",
+   "sha1": "ee2a78e2c7ccd2b848a20244d1f4a1469554b341",
+   "bytes": 8254004,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Camels",
+   "tags": [
+    "places/asia/mongolia/gobi",
+    "desert",
+    "animals"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Camels in Gobi Desert 02.jpg",
+   "sha1": "8ab0287ec3ba95ec0c79e7eeff3e3a9bce07e7c8",
+   "bytes": 4727755,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Camels",
+   "tags": [
+    "places/asia/mongolia/gobi",
+    "desert",
+    "animals"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Camels in Gobi Desert 03.jpg",
+   "sha1": "5e438e6ed67e1eb99a560c4b020131285d4613ff",
+   "bytes": 6256713,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Camels resting",
+   "tags": [
+    "places/asia/mongolia/gobi",
+    "desert",
+    "animals"
+   ],
+   "rating": 0,
+   "label": ""
+  },
+  {
+   "file": "Ovoo in Gobi Desert.jpg",
+   "sha1": "3f22762a4eb638a758de11a3d6029cc436fcdc05",
+   "bytes": 9376551,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Ovoo",
+   "tags": [
+    "places/asia/mongolia/gobi",
+    "desert"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Yurt in Gobi Desert.jpg",
+   "sha1": "9bd3a51ef7ab8b64b553cb40e7ae797295d76bc0",
+   "bytes": 7218504,
+   "author": "Bernard Gagnon",
+   "folder": "Mongolia 2023",
+   "title": "Yurt",
+   "tags": [
+    "places/asia/mongolia/gobi",
+    "desert"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Ongryongam Temple 01.jpg",
+   "sha1": "d839d9b173849278d104b33f6216d4f8e8aee128",
+   "bytes": 3831226,
+   "author": "Bernard Gagnon",
+   "folder": "Korea 2022",
+   "title": "Ongryongam",
+   "tags": [
+    "places/asia/south korea/gyeongju",
+    "temple"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Ongryongam Temple 02.jpg",
+   "sha1": "4b7ef876e6585e36c05650fb0dfd8a5186b39a0a",
+   "bytes": 6026514,
+   "author": "Bernard Gagnon",
+   "folder": "Korea 2022",
+   "title": "Ongryongam",
+   "tags": [
+    "places/asia/south korea/gyeongju",
+    "temple"
+   ],
+   "rating": 2,
+   "label": ""
+  },
+  {
+   "file": "Ongryongam Temple 03.jpg",
+   "sha1": "4fdbc3c36d8b12960b30834d593151986bbd4715",
+   "bytes": 5592176,
+   "author": "Bernard Gagnon",
+   "folder": "Korea 2022",
+   "title": "Ongryongam",
+   "tags": [
+    "places/asia/south korea/gyeongju",
+    "temple"
+   ],
+   "rating": 0,
+   "label": ""
+  },
+  {
+   "file": "Woljeonggyo Bridge 01.jpg",
+   "sha1": "b1b2b9471ca3e94a2e6b56f520c3a45d13cee188",
+   "bytes": 7633160,
+   "author": "Bernard Gagnon",
+   "folder": "Korea 2022",
+   "title": "Woljeonggyo Bridge",
+   "tags": [
+    "places/asia/south korea/gyeongju",
+    "architecture",
+    "bridge"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Tongdosa Temple 01.jpg",
+   "sha1": "427448a807fd062c78753f58801f021ce14bc88e",
+   "bytes": 8578220,
+   "author": "Bernard Gagnon",
+   "folder": "Korea 2022",
+   "title": "Tongdosa",
+   "tags": [
+    "places/asia/south korea/yangsan",
+    "temple"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Jagalchi Market 01.jpg",
+   "sha1": "e606467e3debb5548a4a46b11084252a9d6e36aa",
+   "bytes": 5098587,
+   "author": "Bernard Gagnon",
+   "folder": "Korea 2022",
+   "title": "Jagalchi fish market",
+   "tags": [
+    "places/asia/south korea/busan",
+    "market",
+    "food"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Gwangjang Market, Seoul 02.jpg",
+   "sha1": "895a59bcd85de70fc5a86c14e05be022f67886e2",
+   "bytes": 4453879,
+   "author": "Bgag",
+   "folder": "Korea 2022",
+   "title": "Gwangjang Market",
+   "tags": [
+    "places/asia/south korea/seoul",
+    "market",
+    "food"
+   ],
+   "rating": 4,
+   "label": "Yellow"
+  },
+  {
+   "file": "Mt Hiei Winter.JPG",
+   "sha1": "eab7f31fd612ea7e1fe4704f1d2d19fc1b26b88f",
+   "bytes": 4882115,
+   "author": "Hahifuheho",
+   "folder": "Japan",
+   "title": "Mount Hiei in winter",
+   "tags": [
+    "places/asia/japan/kyoto",
+    "mountains",
+    "snow"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Mt Hiei with Cherry Blossom.JPG",
+   "sha1": "0e8b587b6072bfe10cd5c3f618fee62c55cef65a",
+   "bytes": 2526029,
+   "author": "Hahifuheho",
+   "folder": "Japan",
+   "title": "Mount Hiei in spring",
+   "tags": [
+    "places/asia/japan/kyoto",
+    "mountains",
+    "cherry blossom"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Path along the Kamo River, seen from Shijō Ōhashi, Kyoto, 2016.jpg",
+   "sha1": "6de423a59429baa444f00a01c569397f0ff78c06",
+   "bytes": 10119567,
+   "author": "DimiTalen",
+   "folder": "Japan",
+   "title": "Kamo River",
+   "tags": [
+    "places/asia/japan/kyoto",
+    "cherry blossom",
+    "river"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Sakura tourists in Shirakawa-suji, Kyoto, 2016.jpg",
+   "sha1": "e02aaafbbe63dc9c3f00475a88769cfe46087654",
+   "bytes": 14066150,
+   "author": "DimiTalen",
+   "folder": "Japan",
+   "title": "Shirakawa in bloom",
+   "tags": [
+    "places/asia/japan/kyoto",
+    "cherry blossom",
+    "street"
+   ],
+   "rating": 5,
+   "label": "Purple"
+  },
+  {
+   "file": "Fishing boats, morning, Beach, Rincon de la Victoria, Andalusia, Spain.jpg",
+   "sha1": "892cf30276923a4a148c2133ec829284aa0cc3c4",
+   "bytes": 9871927,
+   "author": "Jebulon",
+   "folder": "Andalusia 2014",
+   "title": "Fishing boats at dawn",
+   "tags": [
+    "places/europe/spain/andalusia",
+    "beach",
+    "boats"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Parasols, Evening, Beach, Rincon de la Victoria, Andalusia, Spain.jpg",
+   "sha1": "bcb88cc9dcb25278bb0077b00ac50867f1f8c94a",
+   "bytes": 15427286,
+   "author": "Jebulon",
+   "folder": "Andalusia 2014",
+   "title": "Parasols in the evening",
+   "tags": [
+    "places/europe/spain/andalusia",
+    "beach",
+    "golden hour"
+   ],
+   "rating": 5,
+   "label": "Orange"
+  },
+  {
+   "file": "Nymphaea alba, Alhambra, Granada, Spain.jpg",
+   "sha1": "70e4b690f3cd1a2800fb6a2dc57edf654fe1efe9",
+   "bytes": 9710157,
+   "author": "Jebulon",
+   "folder": "Andalusia 2014",
+   "title": "Water lily, Alhambra",
+   "tags": [
+    "places/europe/spain/granada",
+    "flowers"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Cooking a paella.jpg",
+   "sha1": "090df8d716ced43b109ac946a431e40624c4e81c",
+   "bytes": 3540314,
+   "author": "Jebulon",
+   "folder": "Andalusia 2014",
+   "title": "Paella",
+   "tags": [
+    "places/europe/spain/granada",
+    "food"
+   ],
+   "rating": 4,
+   "label": "Yellow"
+  },
+  {
+   "file": "Stormy sunset clouds over Rome, Italy.jpg",
+   "sha1": "2d7443b95fa06e709353d928d5d354e4788f6265",
+   "bytes": 5542682,
+   "author": "Jebulon",
+   "folder": "Italy",
+   "title": "Storm over Rome",
+   "tags": [
+    "places/europe/italy/rome",
+    "sunset",
+    "clouds"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Photogenic mountain along the Ponteilles slope, La Thuile, 2024.jpg",
+   "sha1": "932a93f5551e6630c921b5f126f6767cd3630054",
+   "bytes": 9016756,
+   "author": "DimiTalen",
+   "folder": "Alps",
+   "title": "La Thuile",
+   "tags": [
+    "places/europe/italy/la thuile",
+    "mountains",
+    "snow"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Last sunlight on Rochetaillée, from Villard-Reculas, 2026.jpg",
+   "sha1": "1b5754199390924f466d56934362d8215996ff48",
+   "bytes": 8348574,
+   "author": "DimiTalen",
+   "folder": "Alps",
+   "title": "Last light on Rochetaillée",
+   "tags": [
+    "places/europe/france/villard-reculas",
+    "mountains",
+    "golden hour"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Wood sorrel after rain.jpg",
+   "sha1": "48ddff7b9a2be1af8f4eef1f37e724110f2f3590",
+   "bytes": 10955037,
+   "author": "W.carter",
+   "folder": "Sweden",
+   "title": "Wood sorrel after rain",
+   "tags": [
+    "places/europe/sweden/holma",
+    "flowers",
+    "macro"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Spruce forest at Holma.jpg",
+   "sha1": "b1fabcd9ee1485df7ac86b5e19463222072307a2",
+   "bytes": 15511423,
+   "author": "W.carter",
+   "folder": "Sweden",
+   "title": "Spruce forest",
+   "tags": [
+    "places/europe/sweden/holma",
+    "forest"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Beach huts at Stångehuvud 1.jpg",
+   "sha1": "5f5605a4425b7edc7285164850dfc75b1b1b5e94",
+   "bytes": 6419866,
+   "author": "W.carter",
+   "folder": "Sweden",
+   "title": "Beach huts, Stångehuvud",
+   "tags": [
+    "places/europe/sweden/lysekil",
+    "coast"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Colorful townhouses, Engelbrektsgatan, Västerås, 2026.jpg",
+   "sha1": "360d890e1356a2087f12f33cb90a3524806ce9dc",
+   "bytes": 7904163,
+   "author": "DimiTalen",
+   "folder": "Sweden",
+   "title": "Townhouses, Västerås",
+   "tags": [
+    "places/europe/sweden/västerås",
+    "street",
+    "architecture"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Brent-Goose, Iceland.jpg",
+   "sha1": "c9421b356ecf9c4f9b8688a3c17206653d149dbf",
+   "bytes": 18015690,
+   "author": "Hobbyfotowiki",
+   "folder": "Iceland 2025",
+   "title": "Brent goose",
+   "tags": [
+    "places/europe/iceland/seltjarnarnes",
+    "birds",
+    "animals"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Dunlin (Calidris alpina), sleeping, Seltjarnarnes, Iceland.jpg",
+   "sha1": "84a139e9fc46bbf4a78e5c6f7521c7f4bc479232",
+   "bytes": 2698299,
+   "author": "Hobbyfotowiki",
+   "folder": "Iceland 2025",
+   "title": "Sleeping dunlin",
+   "tags": [
+    "places/europe/iceland/seltjarnarnes",
+    "birds",
+    "animals"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Juan Griego Sunset.jpg",
+   "sha1": "31e75119e15518b56ee9658bb629a4e4d0c3e174",
+   "bytes": 12530254,
+   "author": "Wilfredor",
+   "folder": "Venezuela",
+   "title": "Juan Griego sunset",
+   "tags": [
+    "places/south america/venezuela/margarita",
+    "sunset",
+    "sea"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Sunset in Juan Griego bay.jpg",
+   "sha1": "aa163da2ac8d05ef478ed486efe6924933d65002",
+   "bytes": 12949262,
+   "author": "Wilfredor",
+   "folder": "Venezuela",
+   "title": "Juan Griego bay",
+   "tags": [
+    "places/south america/venezuela/margarita",
+    "sunset",
+    "sea"
+   ],
+   "rating": 3,
+   "label": ""
+  },
+  {
+   "file": "Sugarloaf Cable Car viewed from Rio de Janeiro, Brazil.jpg",
+   "sha1": "effd9e5c6a5ecc476b669c06794fd5ba080a09cb",
+   "bytes": 16474835,
+   "author": "Wilfredor",
+   "folder": "Brazil",
+   "title": "Sugarloaf cable car",
+   "tags": [
+    "places/south america/brazil/rio de janeiro",
+    "mountains"
+   ],
+   "rating": 4,
+   "label": ""
+  },
+  {
+   "file": "Horseshoe-Falls-Zoom.jpg",
+   "sha1": "74cea31ca4ca3f68a16a567be212b8c40160fe3e",
+   "bytes": 12472108,
+   "author": "Jchmrt",
+   "folder": "Niagara",
+   "title": "Horseshoe Falls",
+   "tags": [
+    "places/north america/canada/niagara falls",
+    "waterfall"
+   ],
+   "rating": 4,
+   "label": "Blue"
+  },
+  {
+   "file": "Red fox in yard, Charlton MA 2025-12-26.jpg",
+   "sha1": "7d9fbac19b422ea1d2b4919e87e5020bd172d786",
+   "bytes": 14111067,
+   "author": "Peter Cooper Jr.",
+   "folder": "New England",
+   "title": "Red fox",
+   "tags": [
+    "places/north america/usa/charlton",
+    "animals",
+    "snow"
+   ],
+   "rating": 5,
+   "label": "Green"
+  },
+  {
+   "file": "Hong Kong Harbour view from International Commerce Center Building.jpg",
+   "sha1": "90181b859039280b91989637cda6a06092ef2c28",
+   "bytes": 9397129,
+   "author": "Wilfredor",
+   "folder": "Hong Kong",
+   "title": "Victoria Harbour",
+   "tags": [
+    "places/asia/hong kong",
+    "city",
+    "harbour"
+   ],
+   "rating": 4,
+   "label": ""
+  }
+ ]
+}
