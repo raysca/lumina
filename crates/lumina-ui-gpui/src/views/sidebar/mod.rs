@@ -136,11 +136,7 @@ pub(crate) fn render_brand(selector: &'static str) -> impl IntoElement {
             div()
                 .debug_selector(move || format!("{selector}-icon"))
                 .flex_none()
-                .child(crate::icons::render_icon(
-                    crate::icons::Icon::Aperture,
-                    px(19.0),
-                    theme::accent(),
-                )),
+                .child(img(crate::assets::BRAND_MARK).size(px(19.0))),
         )
         .child(
             div()

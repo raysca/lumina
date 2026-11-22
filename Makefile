@@ -94,9 +94,10 @@ fmt:
 fmt-fix:
 	cargo fmt --all
 
-## Generate macOS Retina App Icon (.icns)
+## Rebuild the macOS app icon (.icns) from the committed iconset (macOS only).
+## The source artwork is resources/brand/lumina-icon.svg.
 icon:
-	cargo run -p lumina-ui-gpui --bin generate-icon --features generate-icon
+	iconutil -c icns resources/brand/Lumina.iconset -o resources/Lumina.icns
 
 ## Fetch the pinned, checksum-verified yt-dlp and ffmpeg and place them next to the dev binaries
 bundle-deps:

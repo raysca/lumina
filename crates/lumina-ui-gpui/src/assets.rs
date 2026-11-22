@@ -109,6 +109,11 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "zoom-out",
 );
 
+/// The two-tone brand mark (`resources/brand/`). Drawn with `img()`, not
+/// `render_icon`, which would tint it to one colour.
+pub const BRAND_MARK: &str = "brand/lumina-mark.svg";
+static BRAND_MARK_SVG: &str = include_str!("../../../resources/brand/lumina-mark.svg");
+
 /// Lucide is outline-only; these render solid (transport controls).
 const SOLID: &[&str] = &["pause", "play", "skip-back", "skip-forward"];
 /// Outline icons that also get a solid `<name>-filled` variant.
@@ -118,8 +123,9 @@ fn solid(svg: &str) -> String {
     svg.replacen("fill=\"none\"", "fill=\"black\"", 1)
 }
 
-/// Asset path → SVG. `currentColor` becomes black: GPUI paints SVGs as an
-/// alpha mask tinted by `text_color`, so only coverage matters.
+/// Asset path → SVG. In Lucide icons `currentColor` becomes black: GPUI
+/// paints them as an alpha mask tinted by `text_color`, so only coverage
+/// matters. The brand mark keeps its colours.
 static ICONS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     let mut m = HashMap::new();
     for &(name, svg) in LUCIDE {
@@ -134,6 +140,7 @@ static ICONS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
         };
         m.insert(format!("icons/{name}.svg"), svg);
     }
+    m.insert(BRAND_MARK.to_string(), BRAND_MARK_SVG.to_string());
     m
 });
 
