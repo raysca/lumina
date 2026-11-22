@@ -26,22 +26,14 @@ extern "C" {
     fn lumina_player_set_volume(player: *mut c_void, volume: f32);
     fn lumina_player_set_muted(player: *mut c_void, muted: c_int);
     fn lumina_player_set_looping(player: *mut c_void, looping: c_int);
+    fn lumina_player_has_new_frame(player: *mut c_void) -> c_int;
     fn lumina_player_copy_frame(
         player: *mut c_void,
-        out_width: *mut c_int,
-        out_height: *mut c_int,
-        out_data: *mut *mut u8,
-        out_len: *mut c_int,
-    ) -> c_int;
-    fn lumina_player_copy_frame_direct(
-        player: *mut c_void,
         dst: *mut u8,
-        max_len: c_int,
+        capacity: usize,
         out_width: *mut c_int,
         out_height: *mut c_int,
-        out_len: *mut c_int,
     ) -> c_int;
-    fn lumina_player_free_frame(data: *mut u8);
     fn lumina_player_audio_track_count(player: *mut c_void) -> c_int;
     fn lumina_player_audio_track_name(player: *mut c_void, index: c_int) -> *mut c_char;
     fn lumina_player_selected_audio_track(player: *mut c_void) -> c_int;
@@ -83,6 +75,14 @@ fn take_bridge_string(raw: *mut c_char) -> String {
         .into_owned();
     unsafe { lumina_player_free_string(raw) };
     text
+}
+
+/// Bytes in a tightly packed BGRA frame; None for an empty or absurd size.
+fn frame_len(width: u32, height: u32) -> Option<usize> {
+    (width as usize)
+        .checked_mul(height as usize)?
+        .checked_mul(4)
+        .filter(|len| *len > 0)
 }
 
 pub struct AvFoundationPlayer {
@@ -227,71 +227,52 @@ impl VideoPlayerBackend for AvFoundationPlayer {
         unsafe { lumina_player_is_looping(self.handle) == 1 }
     }
 
+    /// Copies the newest frame, allocating only when one is ready. The
+    /// frame's `Vec` becomes the GPUI image, so each frame needs its own;
+    /// it is sized from the last frame and not zeroed (the bridge writes
+    /// every byte before it is read).
     fn next_frame(&mut self) -> Option<VideoFrame> {
-        let expected_len = (self.cached_width as usize)
-            .checked_mul(self.cached_height as usize)
-            .and_then(|wh| wh.checked_mul(4))
-            .unwrap_or(0);
-        if expected_len > 0 {
-            let mut vec = vec![0u8; expected_len];
-            let mut width = 0i32;
-            let mut height = 0i32;
-            let mut len = 0i32;
-            let ok = unsafe {
-                lumina_player_copy_frame_direct(
-                    self.handle,
-                    vec.as_mut_ptr(),
-                    vec.len() as c_int,
-                    &mut width,
-                    &mut height,
-                    &mut len,
-                )
-            };
-            if ok == 1 && len > 0 {
-                self.cached_width = width as u32;
-                self.cached_height = height as u32;
-                vec.truncate(len as usize);
-                return Some(VideoFrame {
-                    width: width as u32,
-                    height: height as u32,
-                    data: vec,
-                });
-            }
-        }
-
-        let mut width = 0i32;
-        let mut height = 0i32;
-        let mut data_ptr: *mut u8 = std::ptr::null_mut();
-        let mut len = 0i32;
-
-        let ok = unsafe {
-            lumina_player_copy_frame(
-                self.handle,
-                &mut width,
-                &mut height,
-                &mut data_ptr,
-                &mut len,
-            )
-        };
-
-        if ok != 1 || data_ptr.is_null() || len <= 0 {
+        if unsafe { lumina_player_has_new_frame(self.handle) } != 1 {
             return None;
         }
-
-        let slice = unsafe { std::slice::from_raw_parts(data_ptr, len as usize) };
-        let vec = slice.to_vec();
-        unsafe {
-            lumina_player_free_frame(data_ptr);
+        // The second pass covers a frame whose size differs from the last
+        // one (the bridge keeps it until a big enough buffer comes).
+        for _ in 0..2 {
+            let capacity = frame_len(self.cached_width, self.cached_height)?;
+            let mut data = Vec::<u8>::with_capacity(capacity);
+            let mut width = 0i32;
+            let mut height = 0i32;
+            let status = unsafe {
+                lumina_player_copy_frame(
+                    self.handle,
+                    data.as_mut_ptr(),
+                    capacity,
+                    &mut width,
+                    &mut height,
+                )
+            };
+            let (width, height) = (width.max(0) as u32, height.max(0) as u32);
+            match status {
+                1 => {
+                    let len = frame_len(width, height)?;
+                    // SAFETY: the bridge wrote `len` <= `capacity` bytes.
+                    unsafe { data.set_len(len) };
+                    self.cached_width = width;
+                    self.cached_height = height;
+                    return Some(VideoFrame {
+                        width,
+                        height,
+                        data,
+                    });
+                }
+                -1 => {
+                    self.cached_width = width;
+                    self.cached_height = height;
+                }
+                _ => return None,
+            }
         }
-
-        self.cached_width = width as u32;
-        self.cached_height = height as u32;
-
-        Some(VideoFrame {
-            width: width as u32,
-            height: height as u32,
-            data: vec,
-        })
+        None
     }
 
     fn take_playback_error(&mut self) -> Option<String> {
@@ -360,6 +341,21 @@ pub fn set_up_pip_window(window: &gpui::Window) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frame_len_is_tight_bgra_and_rejects_empty_or_overflowing_sizes() {
+        assert_eq!(frame_len(1000, 562), Some(1000 * 562 * 4));
+        assert_eq!(
+            frame_len(0, 1080),
+            None,
+            "an unknown size asks for no buffer"
+        );
+        assert_eq!(
+            frame_len(u32::MAX, u32::MAX),
+            None,
+            "an absurd size must not overflow"
+        );
+    }
 
     #[test]
     fn test_avfoundation_player_lifecycle() {
