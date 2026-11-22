@@ -463,7 +463,7 @@ fn header_button(
         .flex_row()
         .items_center()
         .gap_1p5()
-        .children(icon.map(|icon| crate::motion::pop(render_icon(icon, px(12.0), fg), pop)))
+        .children(icon.map(|icon| crate::motion::pop(render_icon(icon, theme::ICON_XS, fg), pop)))
         .child(label.to_string())
 }
 

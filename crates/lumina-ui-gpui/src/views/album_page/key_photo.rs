@@ -238,6 +238,10 @@ pub(crate) fn badge(item_id: u64) -> Stateful<Div> {
         .font_features(theme::tabular_figures())
         .text_size(theme::TEXT_MICRO)
         .text_color(theme::accent())
-        .child(render_icon(Icon::StarFilled, px(9.0), theme::accent()))
+        .child(render_icon(
+            Icon::StarFilled,
+            theme::ICON_XS,
+            theme::accent(),
+        ))
         .child(label)
 }

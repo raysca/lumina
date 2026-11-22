@@ -58,7 +58,7 @@ pub(crate) fn nav_row(
             }
         })
         .child(
-            render_icon(icon, px(16.0), if active { accent() } else { t2() })
+            render_icon(icon, ICON_MD, if active { accent() } else { t2() })
                 .flex_none()
                 .debug_selector(move || icon_selector),
         )

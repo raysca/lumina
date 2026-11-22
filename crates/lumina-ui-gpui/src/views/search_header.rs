@@ -256,7 +256,7 @@ impl LuminaApp {
                 this.enter_search_field();
                 cx.notify();
             }))
-            .child(render_icon(Icon::Search, px(16.0), theme::t3()).flex_none())
+            .child(render_icon(Icon::Search, theme::ICON_MD, theme::t3()).flex_none())
             .child(tokens)
             .children(self.search_result_label().map(|label| {
                 div()
@@ -288,7 +288,7 @@ impl LuminaApp {
                         .rounded_full()
                         .cursor_pointer()
                         .hover(|s| s.bg(theme::bg_3()))
-                        .child(render_icon(Icon::X, px(12.0), theme::t3()))
+                        .child(render_icon(Icon::X, theme::ICON_XS, theme::t3()))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             cx.stop_propagation();
                             this.clear_search(cx);
@@ -349,7 +349,7 @@ fn token_chip(
         .text_size(theme::TEXT_SMALL)
         .font_weight(FontWeight::MEDIUM)
         .text_color(ink)
-        .child(render_icon(chip.icon, px(12.0), ink).flex_none())
+        .child(render_icon(chip.icon, theme::ICON_XS, ink).flex_none())
         .child(
             div()
                 .when(selected, |d| {
@@ -374,7 +374,7 @@ fn token_chip(
                 .rounded_full()
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::bg_3()))
-                .child(render_icon(Icon::X, px(11.0), ink))
+                .child(render_icon(Icon::X, theme::ICON_XS, ink))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
                     this.remove_search_chip(i, cx);

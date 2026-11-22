@@ -203,7 +203,7 @@ impl LuminaApp {
             .text_color(theme::t3())
             .cursor_pointer()
             .hover(|s| s.bg(theme::bg_2()))
-            .child(render_icon(Icon::Plus, px(13.0), theme::t3()))
+            .child(render_icon(Icon::Plus, theme::ICON_SM, theme::t3()))
             .child(t("filter.add"))
             .when(menu_here, |chip| {
                 chip.child(popover_under(Anchor::TopLeft, filter_menu_card(self, cx)))
@@ -248,7 +248,7 @@ impl LuminaApp {
                                 .role(Role::Group)
                                 .aria_label(SharedString::from(chip.label.clone()))
                                 .flex_shrink_0()
-                                .child(render_icon(chip.icon, px(13.0), theme::t2()))
+                                .child(render_icon(chip.icon, theme::ICON_SM, theme::t2()))
                                 .child(chip.label)
                                 .child(
                                     div()
@@ -264,7 +264,7 @@ impl LuminaApp {
                                         .rounded_full()
                                         .cursor_pointer()
                                         .hover(|s| s.bg(theme::bg_3()))
-                                        .child(render_icon(Icon::X, px(11.0), theme::t3()))
+                                        .child(render_icon(Icon::X, theme::ICON_XS, theme::t3()))
                                         .on_click(cx.listener(
                                             move |this, _e: &ClickEvent, _w, cx| {
                                                 this.remove_filter_chip(&tokens, cx);
@@ -388,10 +388,10 @@ pub fn filter_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Statefu
                         .text_color(theme::t1())
                         .when(highlight == Some(i), |row| row.bg(theme::bg_3()))
                         .hover(|s| s.bg(theme::bg_3()))
-                        .child(render_icon(icon, px(13.0), theme::t2()))
+                        .child(render_icon(icon, theme::ICON_SM, theme::t2()))
                         .child(div().flex_1().child(label))
                         .when(on, |row| {
-                            row.child(render_icon(Icon::Check, px(13.0), theme::accent()))
+                            row.child(render_icon(Icon::Check, theme::ICON_SM, theme::accent()))
                         })
                         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.choose_filter_menu_row(i, cx);

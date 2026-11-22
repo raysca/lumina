@@ -186,7 +186,11 @@ impl LuminaApp {
                                             .font_features(theme::tabular_figures())
                                             .text_size(theme::TEXT_CAPTION)
                                             .text_color(theme::t2())
-                                            .child(render_icon(icon, px(10.0), theme::accent()))
+                                            .child(render_icon(
+                                                icon,
+                                                theme::ICON_XS,
+                                                theme::accent(),
+                                            ))
                                             .children(cfg!(test).then(|| {
                                                 let text = label.clone();
                                                 div().absolute().size_0().debug_selector(
@@ -238,7 +242,11 @@ impl LuminaApp {
                                         .tooltip(theme::tooltip_label(tooltip))
                                         .role(Role::Button)
                                         .aria_label(label.clone())
-                                        .child(render_icon(Icon::X, px(12.0), theme::accent()))
+                                        .child(render_icon(
+                                            Icon::X,
+                                            theme::ICON_XS,
+                                            theme::accent(),
+                                        ))
                                         .children(cfg!(test).then(|| {
                                             let text = label.clone();
                                             div().absolute().size_0().debug_selector(move || {

@@ -43,7 +43,7 @@ pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Op
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Minimize, px(16.0), theme::t1()))
+                .child(render_icon(Icon::Minimize, theme::ICON_MD, theme::t1()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.reset_viewer_zoom(cx);
                 })),
@@ -234,7 +234,7 @@ fn nav_button(
         .flex()
         .items_center()
         .justify_center()
-        .child(render_icon(icon, px(16.0), theme::t1()))
+        .child(render_icon(icon, theme::ICON_MD, theme::t1()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.navigate_selection(delta, cx);
         }))
@@ -275,7 +275,7 @@ pub fn render_pip_handoff(
                 .flex_row()
                 .items_center()
                 .gap_3()
-                .child(render_icon(Icon::Pip, px(14.0), theme::t2()))
+                .child(render_icon(Icon::Pip, theme::ICON_SM, theme::t2()))
                 .child(
                     div()
                         .text_size(theme::TEXT_SMALL)

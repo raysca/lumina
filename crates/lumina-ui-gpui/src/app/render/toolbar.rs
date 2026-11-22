@@ -26,7 +26,7 @@ fn icon_button(id: &'static str, on: bool) -> Stateful<Div> {
 /// Toolbar icons: 16px, t2, or t1 while on.
 fn toolbar_icon(icon: crate::icons::Icon, on: bool) -> AnyElement {
     let color = if on { theme::t1() } else { theme::t2() };
-    crate::icons::render_icon(icon, px(16.0), color).into_any_element()
+    crate::icons::render_icon(icon, theme::ICON_MD, color).into_any_element()
 }
 
 #[cfg(test)]
@@ -402,7 +402,7 @@ impl LuminaApp {
                 .child(
                     crate::icons::render_icon(
                         icon,
-                        px(13.0),
+                        theme::ICON_SM,
                         if on { theme::t1() } else { theme::t3() },
                     )
                     // The icon lifts with the label on hover.

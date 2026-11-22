@@ -45,7 +45,7 @@ pub(crate) fn named_popover_button(
         .bg(bg)
         .cursor_pointer()
         .hover(|s| s.bg(theme::bg_3()))
-        .child(render_icon(icon, px(13.0), fg))
+        .child(render_icon(icon, theme::ICON_SM, fg))
 }
 
 /// "Downloads", the "N active" pill, then Pause all (or Resume all when
@@ -217,7 +217,7 @@ pub(crate) fn footer(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .text_color(theme::t2())
         .hover(|s| s.bg(theme::bg_2()).text_color(theme::t1()))
         .child(t("downloads.show_all"))
-        .child(render_icon(Icon::ArrowRight, px(12.0), theme::t2()))
+        .child(render_icon(Icon::ArrowRight, theme::ICON_XS, theme::t2()))
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
             this.show_downloads_screen(cx);
         }))

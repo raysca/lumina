@@ -66,8 +66,11 @@ pub(super) fn render_options(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> im
         .justify_center()
         .map(|b| {
             if on {
-                b.bg(theme::accent())
-                    .child(render_icon(Icon::Check, px(11.0), theme::on_accent()))
+                b.bg(theme::accent()).child(render_icon(
+                    Icon::Check,
+                    theme::ICON_XS,
+                    theme::on_accent(),
+                ))
             } else {
                 b.bg(theme::bg_0()).border_1().border_color(theme::line_2())
             }
@@ -308,7 +311,7 @@ pub(super) fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> imp
                 .items_center()
                 .gap(px(8.0))
                 .when(valid, |el| {
-                    el.child(render_icon(Icon::Sparkles, px(14.0), theme::accent()))
+                    el.child(render_icon(Icon::Sparkles, theme::ICON_SM, theme::accent()))
                 })
                 .child(
                     div()

@@ -46,6 +46,18 @@ pub const TEXT_CAPTION: Pixels = px(11.0);
 /// Badge digits inside 14px pills and the narrow timeline rail.
 pub const TEXT_MICRO: Pixels = px(9.0);
 
+// Icon sizes: Lucide at stroke 1.5 (see `assets.rs`), in five steps.
+/// Inline glyphs in chips and pills: a chip's ×, a checkmark, a badge.
+pub const ICON_XS: Pixels = px(12.0);
+/// Buttons, menu rows and toolbars.
+pub const ICON_SM: Pixels = px(14.0);
+/// Sidebar rows and the viewer's bar buttons.
+pub const ICON_MD: Pixels = px(16.0);
+/// Placeholders and larger controls.
+pub const ICON_LG: Pixels = px(20.0);
+/// Overlays on the stage, empty tiles and hero marks.
+pub const ICON_XL: Pixels = px(28.0);
+
 /// Counts, dates and sizes set in [`FONT_SANS`] with tabular figures, so
 /// columns of digits line up without a monospaced face.
 pub fn tabular_figures() -> gpui::FontFeatures {
@@ -278,6 +290,32 @@ mod tests {
             &mut out,
         );
         out
+    }
+
+    #[test]
+    fn icon_sizes_come_from_the_icon_scale() {
+        let raw: Vec<String> = ui_sources()
+            .into_iter()
+            .flat_map(|(path, text)| {
+                // A call's size follows its first comma; calls span lines.
+                let mut hits = Vec::new();
+                for (at, _) in text.match_indices(concat!("render_", "icon(")) {
+                    let call = &text[at..text.len().min(at + 160)];
+                    let size = call.split(',').nth(1).unwrap_or("").trim_start();
+                    if size.starts_with("px(")
+                        && size[3..].starts_with(|c: char| c.is_ascii_digit())
+                    {
+                        let line = text[..at].lines().count();
+                        hits.push(format!("{}:{line}", path.display()));
+                    }
+                }
+                hits
+            })
+            .collect();
+        assert!(
+            raw.is_empty(),
+            "icon sizes use the ICON_* tokens, not raw sizes: {raw:#?}"
+        );
     }
 
     #[test]

@@ -146,7 +146,7 @@ fn header_button(selector: &'static str, icon: Icon, label: String, hint: String
         .cursor_pointer()
         .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
-        .child(render_icon(icon, px(14.0), theme::t2()))
+        .child(render_icon(icon, theme::ICON_SM, theme::t2()))
         .child(label)
 }
 

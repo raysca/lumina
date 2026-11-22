@@ -308,7 +308,7 @@ pub(super) fn render_stars(
                 .child(crate::motion::pop(
                     render_icon(
                         if filled { Icon::StarFilled } else { Icon::Star },
-                        px(14.0),
+                        theme::ICON_SM,
                         color,
                     ),
                     pop.clone().filter(|(s, _)| *s == star).map(|(_, id)| id),
@@ -419,7 +419,7 @@ fn render_tags(
                     .text_color(theme::t1())
                     .child(div().flex_1().min_w_0().child(input)),
                 None => add
-                    .child(render_icon(Icon::Plus, px(11.0), theme::t3()))
+                    .child(render_icon(Icon::Plus, theme::ICON_XS, theme::t3()))
                     .child(t("inspector.tag_add")),
             }
         })
@@ -478,7 +478,7 @@ fn render_tag_remove(weak_app: WeakEntity<LuminaApp>, tag: String) -> Stateful<D
         .rounded_full()
         .cursor_pointer()
         .hover(|s| s.bg(theme::line_2()))
-        .child(render_icon(Icon::X, px(9.0), theme::t2()))
+        .child(render_icon(Icon::X, theme::ICON_XS, theme::t2()))
         .on_click(move |_e, _w, cx| {
             cx.stop_propagation();
             if let Some(app) = weak_app.upgrade() {

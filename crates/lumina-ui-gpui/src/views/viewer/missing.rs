@@ -96,7 +96,7 @@ fn bar(drive: Option<&str>, preview: bool) -> AnyElement {
         .text_size(theme::TEXT_SMALL)
         .text_color(theme::on_warn())
         .children(text_marker("viewer-missing-bar", &sentence))
-        .child(render_icon(Icon::TriangleAlert, px(14.0), theme::warn()).flex_none())
+        .child(render_icon(Icon::TriangleAlert, theme::ICON_SM, theme::warn()).flex_none())
         .child(div().min_w_0().flex().children(words))
         .into_any_element()
 }

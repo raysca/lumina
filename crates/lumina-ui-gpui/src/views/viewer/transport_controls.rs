@@ -41,7 +41,7 @@ fn round_button(id: &'static str, icon: Icon, label: String, on: bool) -> Statef
         .hover(|s| s.bg(theme::bg_3()))
         .child(render_icon(
             icon,
-            px(16.0),
+            theme::ICON_MD,
             if on { theme::accent() } else { theme::t1() },
         ))
 }
@@ -92,7 +92,7 @@ pub(super) fn render(
                     } else {
                         Icon::Play
                     },
-                    px(16.0),
+                    theme::ICON_MD,
                     theme::on_accent(),
                 ))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -348,7 +348,7 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 .child(if is_cur {
                     div().flex().items_center().child(render_icon(
                         Icon::Check,
-                        px(12.0),
+                        theme::ICON_XS,
                         theme::accent(),
                     ))
                 } else {
@@ -453,7 +453,7 @@ fn render_audio_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                         .debug_selector(|| "video-audio-check".to_string())
                         .flex()
                         .items_center()
-                        .child(render_icon(Icon::Check, px(12.0), theme::accent()))
+                        .child(render_icon(Icon::Check, theme::ICON_XS, theme::accent()))
                 } else {
                     div().w(px(12.0))
                 })

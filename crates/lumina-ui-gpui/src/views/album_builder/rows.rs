@@ -48,9 +48,9 @@ pub(super) fn picker(
         .justify_between()
         .gap_2()
         .border_color(ring(focused))
-        .children(icon.map(|icon| render_icon(icon, px(14.0), theme::t2())))
+        .children(icon.map(|icon| render_icon(icon, theme::ICON_SM, theme::t2())))
         .child(fill_and_truncate(div()).child(label.into()))
-        .child(render_icon(Icon::ChevronDown, px(13.0), theme::t2()))
+        .child(render_icon(Icon::ChevronDown, theme::ICON_SM, theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.toggle_draft_popup(target, cx);
         }))
@@ -155,7 +155,7 @@ pub(super) fn square_button(
         .justify_center()
         .border_color(ring(focused))
         .tooltip(theme::tooltip_label(tooltip))
-        .child(render_icon(icon, px(14.0), theme::t2()))
+        .child(render_icon(icon, theme::ICON_SM, theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| on_click(this, cx)))
 }
 
@@ -180,7 +180,7 @@ fn rating_stars(
             .role(Role::Button)
             .aria_label(plural("smart_album.stars", n as usize))
             .cursor_pointer()
-            .child(render_icon(icon, px(15.0), color))
+            .child(render_icon(icon, theme::ICON_SM, color))
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                 // The value control's own click would only refocus it.
                 cx.stop_propagation();
@@ -251,7 +251,7 @@ fn keyword_tokens(
                     .role(Role::Button)
                     .aria_label(t_with("smart_album.remove_keyword", &[tag]))
                     .cursor_pointer()
-                    .child(render_icon(Icon::X, px(10.0), theme::accent()))
+                    .child(render_icon(Icon::X, theme::ICON_XS, theme::accent()))
                     .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                         // The box behind it would open the popup.
                         cx.stop_propagation();

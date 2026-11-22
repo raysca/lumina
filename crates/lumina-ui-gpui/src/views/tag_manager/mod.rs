@@ -133,7 +133,7 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
             this.search_focused = false;
             cx.notify();
         }))
-        .child(render_icon(Icon::Search, px(13.0), theme::t3()))
+        .child(render_icon(Icon::Search, theme::ICON_SM, theme::t3()))
         .when(search.is_empty(), |field| {
             field.children(text_marker("placeholder", &placeholder))
         })

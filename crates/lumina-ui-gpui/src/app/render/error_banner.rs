@@ -121,7 +121,11 @@ impl LuminaApp {
             .bg(theme::danger_surface())
             .border_b_1()
             .border_color(theme::danger_border())
-            .child(render_icon(Icon::CircleAlert, px(16.0), theme::danger()))
+            .child(render_icon(
+                Icon::CircleAlert,
+                theme::ICON_MD,
+                theme::danger(),
+            ))
             .child(
                 div()
                     .flex_1()

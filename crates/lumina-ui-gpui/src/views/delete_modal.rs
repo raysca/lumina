@@ -149,7 +149,9 @@ impl DeleteConfirmModal {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .children(on.then(|| render_icon(Icon::Check, px(10.0), theme::bg_0()))),
+                        .children(
+                            on.then(|| render_icon(Icon::Check, theme::ICON_XS, theme::bg_0())),
+                        ),
                 )
                 .child(
                     div()

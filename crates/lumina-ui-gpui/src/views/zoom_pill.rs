@@ -104,7 +104,7 @@ impl LuminaApp {
             // Disabled reads as the dimmer t3 icon with no hover.
             .child(render_icon(
                 icon,
-                px(15.0),
+                theme::ICON_SM,
                 if enabled { theme::t2() } else { theme::t3() },
             ))
             .when(enabled, |d| {

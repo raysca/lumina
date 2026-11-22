@@ -63,7 +63,7 @@ pub fn rating_row(app: &LuminaApp, item: &MediaItem, cx: &mut Context<LuminaApp>
                             } else {
                                 Icon::Star
                             },
-                            px(12.0),
+                            theme::ICON_XS,
                             if is_filled {
                                 theme::rating()
                             } else {
@@ -167,6 +167,6 @@ pub fn flag_badge(item_id_num: usize, flag: Flag) -> AnyElement {
         .items_center()
         .justify_center()
         .tooltip(theme::tooltip_label(label))
-        .child(render_icon(icon, px(12.0), color))
+        .child(render_icon(icon, theme::ICON_XS, color))
         .into_any_element()
 }

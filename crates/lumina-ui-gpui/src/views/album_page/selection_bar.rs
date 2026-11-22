@@ -84,7 +84,7 @@ fn bar_button(
         .cursor_pointer()
         .text_size(theme::TEXT_SMALL)
         .text_color(color)
-        .child(render_icon(icon, px(13.0), color))
+        .child(render_icon(icon, theme::ICON_SM, color))
         .when(!compact, |b| b.child(label))
 }
 
@@ -139,7 +139,7 @@ pub(crate) fn render(this: &LuminaApp, window: &Window, cx: &mut Context<LuminaA
         .flex_row()
         .items_center()
         .gap(px(12.0))
-        .child(render_icon(Icon::CircleCheckBig, px(16.0), theme::accent()).flex_shrink_0())
+        .child(render_icon(Icon::CircleCheckBig, theme::ICON_MD, theme::accent()).flex_shrink_0())
         .child(
             div()
                 .debug_selector(|| "album-bar-count".to_string())

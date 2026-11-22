@@ -260,7 +260,7 @@ pub(crate) fn header_icon_button(
         .cursor_pointer()
         .child(render_icon(
             icon,
-            px(15.0),
+            theme::ICON_SM,
             if on { theme::t1() } else { theme::t2() },
         ))
 }
@@ -294,7 +294,7 @@ pub(crate) fn header_primary_button(
         .text_size(theme::TEXT_SMALL)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::on_accent())
-        .child(render_icon(icon, px(14.0), theme::on_accent()))
+        .child(render_icon(icon, theme::ICON_SM, theme::on_accent()))
         .child(label)
 }
 

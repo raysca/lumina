@@ -384,7 +384,7 @@ fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize
             .cursor_pointer()
             .rounded_full()
             .hover(|s| s.bg(theme::line_2()))
-            .child(render_icon(Icon::X, px(10.0), theme::t2()))
+            .child(render_icon(Icon::X, theme::ICON_XS, theme::t2()))
             .on_click(move |_e, _w, cx| {
                 // A dashed chip would otherwise add the tag.
                 cx.stop_propagation();

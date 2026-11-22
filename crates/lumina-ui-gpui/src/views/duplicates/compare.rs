@@ -369,7 +369,7 @@ fn step_button(
         .border_color(theme::line())
         .child(render_icon(
             icon,
-            px(14.0),
+            theme::ICON_SM,
             if target.is_some() {
                 theme::t2()
             } else {

@@ -392,7 +392,7 @@ impl Render for FloatingPipPlayerView {
                             .flex_row()
                             .items_center()
                             .gap(px(4.0))
-                            .child(render_icon(Icon::Pip, px(10.0), theme::accent()))
+                            .child(render_icon(Icon::Pip, theme::ICON_XS, theme::accent()))
                             .child(
                                 div()
                                     .text_size(theme::TEXT_MICRO)

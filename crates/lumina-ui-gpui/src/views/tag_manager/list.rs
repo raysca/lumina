@@ -411,7 +411,7 @@ fn render_row(
                 .justify_center()
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::bg_3()))
-                .child(render_icon(Icon::Ellipsis, px(14.0), theme::t3()))
+                .child(render_icon(Icon::Ellipsis, theme::ICON_SM, theme::t3()))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
                     this.open_tag_row_menu(menu_tag.clone(), cx);
@@ -484,7 +484,7 @@ fn checkbox(id: impl Into<ElementId>, state: Check) -> Stateful<Div> {
             Check::On => b
                 .bg(theme::accent())
                 .border_color(theme::accent())
-                .child(render_icon(Icon::Check, px(11.0), theme::on_accent())),
+                .child(render_icon(Icon::Check, theme::ICON_XS, theme::on_accent())),
             Check::Mixed => b
                 .bg(theme::accent())
                 .border_color(theme::accent())

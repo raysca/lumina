@@ -45,7 +45,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     };
     let draft = session.draft;
     let crop_aspect = session.crop.map(|crop| crop.aspect);
-    let icon = |icon: Icon| render_icon(icon, px(16.0), theme::t1());
+    let icon = |icon: Icon| render_icon(icon, theme::ICON_MD, theme::t1());
     let exposure = exposure_label(draft.exposure_ev);
 
     let tools = div()
@@ -131,7 +131,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 cx,
             )
             .gap_1()
-            .child(render_icon(Icon::Sparkles, px(14.0), theme::t1()))
+            .child(render_icon(Icon::Sparkles, theme::ICON_SM, theme::t1()))
             .child("Auto"),
         )
         .child(

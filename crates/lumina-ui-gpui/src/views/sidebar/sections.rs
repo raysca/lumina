@@ -40,7 +40,7 @@ pub(super) fn render_library_section(
                         .tooltip(theme::tooltip_label("Open Library… (⌘O)"))
                         .child(crate::icons::render_icon(
                             crate::icons::Icon::Folder,
-                            px(12.0),
+                            theme::ICON_XS,
                             theme::t2(),
                         ))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -108,7 +108,7 @@ pub(super) fn render_user_smart_album_row(
             .tooltip(theme::tooltip_label("Edit rules"))
             .child(crate::icons::render_icon(
                 crate::icons::Icon::Pencil,
-                px(11.0),
+                theme::ICON_XS,
                 theme::t2(),
             ))
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -129,7 +129,7 @@ pub(super) fn render_user_smart_album_row(
             .tooltip(theme::tooltip_label("Delete smart album"))
             .child(crate::icons::render_icon(
                 crate::icons::Icon::X,
-                px(11.0),
+                theme::ICON_XS,
                 theme::t2(),
             ))
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -177,7 +177,7 @@ pub(super) fn render_smart_albums_section(
                         .tooltip(theme::tooltip_label("New smart album (⌥⌘N)"))
                         .child(crate::icons::render_icon(
                             crate::icons::Icon::Plus,
-                            px(12.0),
+                            theme::ICON_XS,
                             theme::t2(),
                         ))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {

@@ -334,7 +334,7 @@ fn album_card(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) -> AnyElem
                                 .into_any_element(),
                             (None, None) => div()
                                 .debug_selector(move || format!("album-card-placeholder-{id}"))
-                                .child(render_icon(Icon::Folder, px(28.0), theme::t3()))
+                                .child(render_icon(Icon::Folder, theme::ICON_XL, theme::t3()))
                                 .into_any_element(),
                             // Still decoding: the bg-2 well alone.
                             (Some(_), None) => Empty.into_any_element(),

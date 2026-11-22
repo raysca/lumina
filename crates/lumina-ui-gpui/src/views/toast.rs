@@ -318,7 +318,7 @@ impl LuminaApp {
                 div()
                     .debug_selector(move || format!("toast-icon-{}", kind.name()))
                     .flex_none()
-                    .child(render_icon(kind.icon(), px(16.0), colour)),
+                    .child(render_icon(kind.icon(), theme::ICON_MD, colour)),
             )
             .child(
                 div()
@@ -362,7 +362,7 @@ impl LuminaApp {
                     .tooltip(theme::tooltip_label("Dismiss"))
                     .role(Role::Button)
                     .aria_label("Dismiss")
-                    .child(render_icon(Icon::X, px(12.0), theme::t3()))
+                    .child(render_icon(Icon::X, theme::ICON_XS, theme::t3()))
                     .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.dismiss_toast(cx);
                     })),

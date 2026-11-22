@@ -56,7 +56,7 @@ pub(super) fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> i
                 .justify_center()
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::danger_soft()))
-                .child(render_icon(Icon::Trash, px(14.0), theme::danger()))
+                .child(render_icon(Icon::Trash, theme::ICON_SM, theme::danger()))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.bulk_delete_tags(selected.clone(), cx);
                 })),
@@ -73,7 +73,7 @@ pub(super) fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> i
                 .justify_center()
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::bg_3()))
-                .child(render_icon(Icon::X, px(14.0), theme::t2()))
+                .child(render_icon(Icon::X, theme::ICON_SM, theme::t2()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.clear_tag_manager_selection(cx);
                 })),

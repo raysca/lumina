@@ -330,6 +330,11 @@ mod tests {
             };
             let svg = std::str::from_utf8(&bytes).expect("icons are UTF-8 SVG");
             assert!(
+                svg.contains("stroke-width=\"1.5\"") && !svg.contains("stroke-width=\"2\""),
+                "{:?} draws at stroke 1.5",
+                icon
+            );
+            assert!(
                 svg.contains("<svg") && !svg.contains("currentColor"),
                 "{:?} must be an SVG with black paint for GPUI alpha masking",
                 icon

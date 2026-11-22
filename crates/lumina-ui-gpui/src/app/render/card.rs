@@ -283,7 +283,11 @@ impl LuminaApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(render_icon(Icon::TriangleAlert, px(17.0), theme::t2())),
+                                    .child(render_icon(
+                                        Icon::TriangleAlert,
+                                        theme::ICON_MD,
+                                        theme::t2(),
+                                    )),
                             )
                             .child(
                                 div()
@@ -317,7 +321,7 @@ impl LuminaApp {
                                     .justify_center()
                                     .child(render_icon(
                                         if is_video { Icon::Film } else { Icon::Image },
-                                        px(17.0),
+                                        theme::ICON_MD,
                                         theme::t2(),
                                     )),
                             )
@@ -346,7 +350,11 @@ impl LuminaApp {
                             .when(item_rating > 0, |d| {
                                 d.child(div().flex().flex_row().gap(px(1.0)).children(
                                     (0..item_rating).map(|_| {
-                                        render_icon(Icon::StarFilled, px(9.0), theme::on_media())
+                                        render_icon(
+                                            Icon::StarFilled,
+                                            theme::ICON_XS,
+                                            theme::on_media(),
+                                        )
                                     }),
                                 ))
                             })
@@ -466,7 +474,7 @@ fn square_badge(id: ElementId, label: &'static str, icon: Icon, color: Rgba) -> 
         .items_center()
         .justify_center()
         .tooltip(theme::tooltip_label(label))
-        .child(render_icon(icon, px(12.0), color))
+        .child(render_icon(icon, theme::ICON_XS, color))
 }
 
 /// Badge for an item with Lumina edits or a rotation; reads the cached
@@ -499,7 +507,7 @@ fn fav_badge(item_id_num: usize) -> impl IntoElement {
         .debug_selector(move || format!("media-card-fav-{item_id_num}"))
         .role(Role::Image)
         .aria_label("Favorite")
-        .child(render_icon(Icon::Heart, px(14.0), theme::on_media()))
+        .child(render_icon(Icon::Heart, theme::ICON_SM, theme::on_media()))
 }
 
 /// Selection-mode check circle: accent with a check when selected, a
@@ -524,7 +532,7 @@ fn check_circle(item_id_num: usize, selected: bool) -> Stateful<Div> {
             d.bg(theme::accent()).child(
                 div()
                     .debug_selector(move || format!("media-card-check-mark-{item_id_num}"))
-                    .child(render_icon(Icon::Check, px(13.0), theme::on_accent())),
+                    .child(render_icon(Icon::Check, theme::ICON_SM, theme::on_accent())),
             )
         })
         .when(!selected, |d| d.bg(theme::check_idle()))
@@ -570,7 +578,7 @@ fn duration_badge(item_id_num: usize, text: String, in_pip: bool) -> impl IntoEl
                 .when(in_pip, |icon| {
                     icon.debug_selector(move || format!("media-card-playing-{item_id_num}"))
                 })
-                .child(render_icon(icon, px(9.0), color)),
+                .child(render_icon(icon, theme::ICON_XS, color)),
         )
         .child(text)
 }

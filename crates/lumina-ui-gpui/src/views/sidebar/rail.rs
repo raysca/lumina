@@ -66,7 +66,7 @@ fn render_rail_button(
         .flex()
         .justify_center()
         .items_center()
-        .child(render_icon(entry.icon, px(16.0), icon_color));
+        .child(render_icon(entry.icon, theme::ICON_MD, icon_color));
     // The pill carries its own selector so tests can see which entry is active.
     let pill = if is_active {
         pill.debug_selector(|| "sidebar-rail-active".to_string())

@@ -127,7 +127,7 @@ fn render_header(
                         .rounded(theme::RADIUS_SM)
                         .cursor_pointer()
                         .hover(|s| s.bg(theme::bg_2()))
-                        .child(render_icon(Icon::Pencil, px(14.0), theme::t2()))
+                        .child(render_icon(Icon::Pencil, theme::ICON_SM, theme::t2()))
                         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.start_modal_tag_rename(rename_tag.clone(), cx);
                         })),
@@ -278,7 +278,7 @@ fn render_delete(
                 .text_size(theme::TEXT_SMALL)
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme::danger())
-                .child(render_icon(Icon::Trash, px(13.0), theme::danger()))
+                .child(render_icon(Icon::Trash, theme::ICON_SM, theme::danger()))
                 .child(t("tags.delete"))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.delete_tag_globally(delete_tag.clone(), cx);

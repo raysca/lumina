@@ -399,7 +399,9 @@ fn render_member(this: &LuminaApp, index: usize, item: &lumina_core::MediaItem) 
                 .justify_center()
                 .child(match texture {
                     Some(tex) => img(tex).size_full().into_any_element(),
-                    None => render_icon(Icon::Image, px(24.0), theme::t2()).into_any_element(),
+                    None => {
+                        render_icon(Icon::Image, theme::ICON_LG, theme::t2()).into_any_element()
+                    }
                 })
                 .child(
                     div()
