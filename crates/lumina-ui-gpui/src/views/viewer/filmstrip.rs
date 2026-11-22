@@ -88,6 +88,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
         let failed = this.missing_items.contains(&item.id) || state.is_failed(item.id);
         thumb(item, index, selected == Some(item.id), texture, failed, cx)
     });
+    // While a video plays the strip keeps its space (the frame never jumps)
+    // but fades out until the pointer is over it.
+    let playing = this.video.is_playing && this.video.item.is_some();
     Some(
         div()
             .id("viewer-filmstrip")
@@ -104,6 +107,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
             .justify_center()
             .gap(px(GAP))
             .overflow_hidden()
+            .when(playing, |strip| {
+                strip.opacity(0.0).hover(|s| s.opacity(1.0))
+            })
             .children(thumbs)
             .into_any_element(),
     )
