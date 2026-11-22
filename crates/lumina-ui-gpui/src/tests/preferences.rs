@@ -1980,9 +1980,10 @@ fn settings_brand_shows_the_logo_where_the_library_does() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
     render_ui(vcx);
-    let library_icon = vcx
-        .debug_bounds("sidebar-brand-icon")
-        .expect("the library sidebar shows the logo");
+    let library_row = vcx
+        .debug_bounds("sidebar-brand")
+        .expect("the library sidebar has its top row");
+    let library_icon = vcx.debug_bounds("sidebar-brand-icon");
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-,");
     render_ui(vcx);
@@ -1990,17 +1991,33 @@ fn settings_brand_shows_the_logo_where_the_library_does() {
     let sidebar = vcx
         .debug_bounds("settings-sidebar")
         .expect("the settings sidebar renders");
-    let icon = vcx
-        .debug_bounds("settings-brand-icon")
-        .expect("the settings sidebar's brand row shows the logo");
-    assert!(
-        sidebar.contains(&icon.center()),
-        "the logo sits in the settings sidebar: {icon:?} not in {sidebar:?}"
-    );
+    let row = vcx
+        .debug_bounds("settings-brand")
+        .expect("the settings sidebar has its top row");
     assert_eq!(
-        icon.origin, library_icon.origin,
-        "switching to settings must not move the brand row"
+        row.origin, library_row.origin,
+        "switching to settings must not move the top row"
     );
+    let icon = vcx.debug_bounds("settings-brand-icon");
+    if crate::views::sidebar::SHOWS_WORDMARK {
+        let (icon, library_icon) = (
+            icon.expect("the settings sidebar's top row shows the logo"),
+            library_icon.expect("the library sidebar shows the logo"),
+        );
+        assert!(
+            sidebar.contains(&icon.center()),
+            "the logo sits in the settings sidebar: {icon:?} not in {sidebar:?}"
+        );
+        assert_eq!(
+            icon.origin, library_icon.origin,
+            "switching to settings must not move the logo"
+        );
+    } else {
+        assert!(
+            icon.is_none() && library_icon.is_none(),
+            "macOS leaves the wordmark out: the window controls own that corner"
+        );
+    }
 
     drop(view);
 }

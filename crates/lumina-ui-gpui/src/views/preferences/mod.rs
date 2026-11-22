@@ -130,7 +130,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 // The library's banner is hidden under this page.
                 .child(app.render_error_banner(cx))
                 .child(page_header_with_meta_font(
-                    Empty,
+                    None,
                     label,
                     Some(meta.into()),
                     theme::FONT_SANS,
@@ -218,12 +218,12 @@ fn render_sidebar(selected: PreferencesTab, cx: &mut Context<LuminaApp>) -> impl
         .bg(theme::bg_1())
         .border_r_1()
         .border_color(theme::line())
-        .py(px(16.0))
-        .px(px(12.0))
+        .pb(px(16.0))
+        .px(px(crate::views::sidebar::SIDEBAR_PADDING_X))
         .flex()
         .flex_col()
-        .gap(px(18.0))
-        .child(crate::views::sidebar::render_brand("settings-brand"))
+        .gap(px(crate::views::sidebar::SIDEBAR_GAP))
+        .child(crate::views::sidebar::render_brand("settings-brand", None))
         .child(categories)
 }
 

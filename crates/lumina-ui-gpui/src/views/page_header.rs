@@ -1,5 +1,5 @@
-//! The main column's page header: title over a meta
-//! line on the left, an empty drag area, then the page's actions.
+//! The main column's page header: one title bar row with the title and its
+//! meta on the left, an empty drag area, then the page's actions.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -7,14 +7,26 @@ use gpui::*;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 
-/// Height of the page header. Sheets and popovers hang from its bottom edge.
-pub(crate) const PAGE_HEADER_HEIGHT: f32 = 67.5;
+/// Height of the page header: the title bar band plus its 1px bottom border,
+/// so its contents centre on the window controls' line. Sheets and popovers
+/// hang from its bottom edge.
+pub(crate) const PAGE_HEADER_HEIGHT: f32 = theme::TITLEBAR_HEIGHT + 1.0;
 
-/// The header row: `leading` (the sidebar toggle), the title and meta line,
+const TITLE_SIZE: f32 = 20.0;
+const META_SIZE: f32 = 10.5;
+/// GPUI lays text out with no baseline, so `items_baseline` lines up the
+/// boxes' bottom edges, and the smaller meta lands below the title's
+/// baseline. Its baseline sits 0.365 of the font size above its box's
+/// bottom (Inter and the mono alike, at the default line height), so the
+/// meta is lifted by the difference to share the title's baseline.
+pub(crate) const META_BASELINE_LIFT: f32 = 0.365 * (TITLE_SIZE - META_SIZE);
+
+/// The header row: `leading` (the sidebar toggle while the sidebar is
+/// collapsed), the title with its meta after it on the same baseline,
 /// a drag area (it moves a frameless window when `draggable`), and `actions`.
 /// A long title truncates before the actions move.
 pub(crate) fn page_header(
-    leading: impl IntoElement,
+    leading: Option<AnyElement>,
     title: impl Into<SharedString>,
     meta: Option<SharedString>,
     actions: impl IntoElement,
@@ -26,7 +38,7 @@ pub(crate) fn page_header(
 /// [`page_header`] with the meta line in `meta_font`: Settings' subtitle is
 /// sans, the other pages' mono.
 pub(crate) fn page_header_with_meta_font(
-    leading: impl IntoElement,
+    leading: Option<AnyElement>,
     title: impl Into<SharedString>,
     meta: Option<SharedString>,
     meta_font: &'static str,
@@ -47,14 +59,15 @@ pub(crate) fn page_header_with_meta_font(
         .flex_row()
         .items_center()
         .gap(px(10.0))
-        .child(leading)
+        .children(leading)
         .child(
             div()
                 .min_w_0()
                 .overflow_hidden()
                 .flex()
-                .flex_col()
-                .gap(px(3.0))
+                .flex_row()
+                .items_end()
+                .gap(px(10.0))
                 .child(
                     // ponytail: the design's -0.3 tracking is skipped; GPUI
                     // 0.3.11 has no letter-spacing style.
@@ -63,7 +76,7 @@ pub(crate) fn page_header_with_meta_font(
                         .min_w_0()
                         .truncate()
                         .font_family(theme::FONT_DISPLAY)
-                        .text_size(px(20.0))
+                        .text_size(px(TITLE_SIZE))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
                         .children(text_marker("page-title", &title))
@@ -76,7 +89,8 @@ pub(crate) fn page_header_with_meta_font(
                         .min_w_0()
                         .truncate()
                         .font_family(meta_font)
-                        .text_size(px(10.5))
+                        .text_size(px(META_SIZE))
+                        .mb(px(META_BASELINE_LIFT))
                         .text_color(theme::t3())
                         .children(marker)
                         .children(text_marker("page-meta-font", &meta_font.into()))
@@ -89,6 +103,8 @@ pub(crate) fn page_header_with_meta_font(
                 .id("toolbar-drag-area")
                 .debug_selector(|| "toolbar-drag-area".to_string())
                 .flex_1()
+                // Some empty header always remains: the meta truncates first.
+                .min_w(px(24.0))
                 .h_full()
                 .when(draggable, |area| {
                     area.on_mouse_down(MouseButton::Left, |event, window, _| {

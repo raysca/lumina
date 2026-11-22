@@ -76,7 +76,8 @@ fn main() {
             let titlebar = Some(TitlebarOptions {
                 title: Some("Lumina".into()),
                 appears_transparent: true,
-                // Left of the sidebar brand row, which starts at x=84 after them.
+                // Centred on the title bar band's line (theme::TITLEBAR_HEIGHT / 2:
+                // the buttons are 14pt tall), ending before theme::TRAFFIC_LIGHTS_INSET.
                 traffic_light_position: Some(point(px(18.0), px(19.0))),
             });
             #[cfg(not(target_os = "macos"))]

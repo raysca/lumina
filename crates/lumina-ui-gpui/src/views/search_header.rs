@@ -162,7 +162,7 @@ impl LuminaApp {
             // sidebar, as in the page header.
             .when(
                 cfg!(target_os = "macos") && self.sidebar_collapsed,
-                |header| header.pl(px(84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)),
+                |header| header.pl(theme::collapsed_header_inset()),
             )
             .child(
                 div()

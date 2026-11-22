@@ -425,7 +425,7 @@ fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
         let media = bounds(vcx, "viewer-media");
         let transport = bounds(vcx, "video-transport");
         assert!(
-            (f32::from(media.top()) - (60.0 + 12.0)).abs() < 0.5
+            (f32::from(media.top()) - (crate::theme::TITLEBAR_HEIGHT + 12.0)).abs() < 0.5
                 && (f32::from(transport.top() - media.bottom()) - 12.0).abs() < 0.5
                 && f32::from(transport.bottom()) <= window.1,
             "{frame:?} in {window:?}: the frame keeps a 12px gap under the top bar and \
@@ -1195,38 +1195,21 @@ fn video_and_transport_fit_above_the_filmstrip_at_the_minimum_window() {
 }
 
 #[core::prelude::v1::test]
-fn video_top_bar_shows_title_meta_and_pip() {
+fn video_top_bar_shows_title_and_pip() {
     let mut cx = crate::tests::TestApp::single();
     let (_dir, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, _| app.selected_index = Some(0));
     render_ui(vcx);
 
-    let item = view.update(vcx, |app, _| app.selected_item.clone().expect("video open"));
-    let (title, meta) = crate::views::viewer::top_bar::video_title_meta(&item);
-    assert_eq!(
-        title,
-        crate::views::inspector::body::display_title(&item),
-        "the video top bar shows the display title"
-    );
-    assert!(
-        meta.contains(&item.format_timestamp("%-d %b %Y")),
-        "the meta line carries the capture date: {meta}"
-    );
-    if item.width > 0 && item.height > 0 {
-        assert!(
-            meta.contains(&crate::views::inspector::summary::resolution_label(
-                item.width,
-                item.height
-            )),
-            "the meta line carries the resolution label: {meta}"
-        );
-    }
     let back = bounds(vcx, "viewer-back");
     let title_b = bounds(vcx, "viewer-title");
-    let meta_b = bounds(vcx, "viewer-meta");
     assert!(
-        title_b.left() >= back.right() && meta_b.left() >= back.right(),
-        "title and meta sit after Back on the left"
+        title_b.left() >= back.right(),
+        "the title sits after Back on the left"
+    );
+    assert!(
+        vcx.debug_bounds("viewer-meta").is_none(),
+        "no date or resolution line under the title"
     );
     assert!(
         vcx.debug_bounds("viewer-position").is_none(),
