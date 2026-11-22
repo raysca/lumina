@@ -155,3 +155,44 @@ fn viewer_fades_in_under_reduce_motion_too() {
     }
     crate::motion::REDUCE_MOTION.with(|on| on.set(true));
 }
+
+#[core::prelude::v1::test]
+fn the_grid_resizes_with_the_sliding_sidebar() {
+    crate::motion::REDUCE_MOTION.with(|on| on.set(false));
+    let (_dir, engine) = seed_library("motion_panels", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let open = view.update(vcx, |app, cx| {
+        let open = app.grid_metrics().photo_side;
+        app.toggle_sidebar(cx);
+        let mid = app.grid_metrics().photo_side;
+        assert!(
+            (mid - open).abs() < 2.0,
+            "the grid starts at the old width and slides: {open} -> {mid}"
+        );
+        assert!(app.panel_slide.active(), "the sidebar slides shut");
+        open
+    });
+    // A frame mid-slide lays out the clipped panels.
+    render_ui(vcx);
+    std::thread::sleep(crate::motion::MOTION_SLOW + std::time::Duration::from_millis(20));
+    view.update(vcx, |app, _| {
+        let settled = app.grid_metrics().photo_side;
+        assert!(
+            settled > open + 10.0,
+            "the grid lands wider once the sidebar has collapsed: {open} -> {settled}"
+        );
+        assert!(!app.panel_slide.active());
+    });
+
+    crate::motion::REDUCE_MOTION.with(|on| on.set(true));
+    view.update(vcx, |app, cx| {
+        let before = app.grid_metrics().photo_side;
+        app.toggle_sidebar(cx);
+        assert!(
+            app.grid_metrics().photo_side < before - 10.0,
+            "under Reduce Motion the panel snaps"
+        );
+    });
+}

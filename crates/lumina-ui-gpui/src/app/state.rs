@@ -518,6 +518,8 @@ pub struct LuminaApp {
     pub shortcuts_overlay_open: bool,
     /// Overlays fading out after they closed.
     pub exits: crate::motion::Exits,
+    /// The sidebar and inspector sliding to new widths.
+    pub panel_slide: crate::motion::PanelSlide,
     /// Last persisted window bounds: (x, y, width, height).
     pub window_bounds: Option<(f32, f32, f32, f32)>,
     /// The window's backing scale (2.0 on Retina). Refreshed every frame by
@@ -794,6 +796,7 @@ impl LuminaApp {
             updates: Default::default(),
             shortcuts_overlay_open: false,
             exits: Default::default(),
+            panel_slide: Default::default(),
             window_bounds: config.restored_window_bounds(),
             window_scale: 1.0,
             window_bounds_subscription: None,
@@ -1009,9 +1012,14 @@ impl LuminaApp {
     /// 1280px fallback matches the app's default window before the bounds
     /// observer reports a real size.
     pub(crate) fn grid_metrics(&self) -> GridMetrics {
+        // While the panels slide, the grid lays out against their slid
+        // widths, so it resizes with them.
+        let (sidebar_slack, right_slack) = self.panel_slide.slack();
         let window_width = self
             .window_bounds
-            .map_or(DEFAULT_WINDOW_WIDTH, |(_, _, width, _)| width);
+            .map_or(DEFAULT_WINDOW_WIDTH, |(_, _, width, _)| width)
+            - sidebar_slack
+            - right_slack;
         let inspector_width = self.right_column_width();
         let shape = if self.captioned_tiles() {
             TileShape::Captioned
