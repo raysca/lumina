@@ -500,6 +500,10 @@ pub struct LuminaApp {
     /// library scan. Cleared by user-initiated open_library.
     pub(crate) pending_restore: Option<RestoredSession>,
     pub is_fullscreen_viewer: bool,
+    /// When the open viewer first painted, by the executor clock. Once its
+    /// fade-in is over it hides the library completely, so the library is
+    /// no longer built (see `render`).
+    pub(crate) viewer_shown_since: Option<std::time::Instant>,
     pub is_immersive_fullscreen: bool,
     pub immersive_hud_visible: bool,
     pub(crate) hud_idle: crate::app::viewer_actions::HudIdle,
@@ -790,6 +794,7 @@ impl LuminaApp {
             navigation_history: NavigationHistory::new(NavigationSnapshot::default()),
             pending_restore: Some(config.restored_session()),
             is_fullscreen_viewer: false,
+            viewer_shown_since: None,
             is_immersive_fullscreen: false,
             immersive_hud_visible: true,
             hud_idle: Default::default(),
