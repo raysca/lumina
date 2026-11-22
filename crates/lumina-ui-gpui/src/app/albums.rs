@@ -37,6 +37,7 @@ pub struct AlbumsState {
 
 /// The Add to Album picker: the items it adds, the typed filter, and the
 /// highlighted row (the shown albums, then New Album…).
+#[derive(Clone)]
 pub struct AlbumPicker {
     /// The selection when the picker opened.
     pub ids: Vec<MediaId>,

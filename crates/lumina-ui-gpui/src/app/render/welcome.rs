@@ -5,7 +5,6 @@ use gpui::*;
 
 use crate::actions::*;
 use crate::app::LuminaApp;
-use crate::motion;
 use crate::theme;
 use crate::views::onboarding::OnboardingView;
 
@@ -15,6 +14,8 @@ impl LuminaApp {
     /// The welcome root, before any library is open: the dormant shell
     /// around the welcome, with settings and the toast above it.
     pub(super) fn render_welcome(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let preferences = self.preferences_layer(cx);
+        let library_delete = self.library_delete_layer(cx);
         app_actions(div(), cx)
             // Like ⌘,: Settings… while settings is open closes it.
             .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
@@ -85,17 +86,9 @@ impl LuminaApp {
                             ),
                     ),
             )
-            .child(motion::overlay_in(
-                self.preferences_open,
-                crate::views::preferences::render_preferences_modal(self, cx),
-                "preferences-in",
-            ))
+            .child(preferences)
             // A recent library can be removed before any library is opened.
-            .child(motion::overlay_in(
-                self.library_delete.is_some(),
-                self.render_library_delete_modal(cx),
-                "library-delete-in",
-            ))
+            .child(library_delete)
             // Above settings, which is opaque.
             .child(self.render_toast_overlay(cx))
             .into_any_element()

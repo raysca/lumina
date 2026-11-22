@@ -22,7 +22,7 @@ use crate::theme;
 use lumina_core::MediaItem;
 
 /// How long a slide fades in (skipped under Reduce Motion).
-const SLIDE_IN: Duration = Duration::from_millis(220);
+const SLIDE_IN: Duration = crate::motion::MOTION_SLOW;
 
 /// Selections spanning up to this many rows are held by id across the
 /// show (re-finding them reads the span); wider ones by position, so ⌥⌘S

@@ -344,6 +344,29 @@ mod tests {
     }
 
     #[test]
+    fn animations_go_through_motion() {
+        let raw: Vec<String> = ui_sources()
+            .into_iter()
+            .filter(|(path, _)| !path.ends_with("motion.rs"))
+            .flat_map(|(path, text)| {
+                text.lines()
+                    .enumerate()
+                    // Spelled in pieces so this test does not match itself.
+                    .filter(|(_, line)| {
+                        line.contains(concat!(".with_", "animation("))
+                            || line.contains(concat!("Animation::", "new("))
+                    })
+                    .map(|(i, _)| format!("{}:{}", path.display(), i + 1))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(
+            raw.is_empty(),
+            "animations use the motion.rs helpers and durations: {raw:#?}"
+        );
+    }
+
+    #[test]
     fn text_sizes_come_from_the_type_scale() {
         let raw: Vec<String> = ui_sources()
             .into_iter()
