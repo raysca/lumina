@@ -176,6 +176,12 @@ impl Render for FloatingPipPlayerView {
         let app_read = app.read(cx);
         let video = &app_read.video;
         let preview_image = video.pip_frame.clone();
+        let surface_layer = crate::views::video_surface::video_surface_layer(
+            video
+                .surface
+                .as_ref()
+                .filter(|_| video.in_pip && video.player.is_some()),
+        );
         let has_player = video.player.is_some();
         // A failed load says so instead of showing a stale or empty frame.
         let failed = video.load_error.is_some();
@@ -335,7 +341,9 @@ impl Render for FloatingPipPlayerView {
                     } else if let Some(img_render) = preview_image {
                         div()
                             .size_full()
+                            .relative()
                             .child(img(img_render).size_full().object_fit(ObjectFit::Contain))
+                            .children(surface_layer)
                             .into_any_element()
                     } else {
                         div()

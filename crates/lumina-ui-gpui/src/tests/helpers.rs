@@ -398,3 +398,23 @@ pub(crate) fn tiny_decoded_frame(id: lumina_core::MediaId) -> lumina_core::Decod
         data: vec![0; 16],
     }
 }
+
+/// A blank 64x48 GPU surface, as the macOS player hands the viewer.
+#[cfg(target_os = "macos")]
+pub(crate) fn test_surface() -> crate::player::VideoSurface {
+    let mut raw: *mut objc2_core_video::CVPixelBuffer = std::ptr::null_mut();
+    let status = unsafe {
+        objc2_core_video::CVPixelBufferCreate(
+            None,
+            64,
+            48,
+            u32::from_be_bytes(*b"420f"),
+            None,
+            std::ptr::NonNull::from(&mut raw),
+        )
+    };
+    assert_eq!(status, 0, "CoreVideo must create the test surface");
+    let raw = std::ptr::NonNull::new(raw).expect("a created surface is not null");
+    // SAFETY: CVPixelBufferCreate returns the buffer +1 retained.
+    unsafe { crate::player::VideoSurface::from_raw(raw) }
+}

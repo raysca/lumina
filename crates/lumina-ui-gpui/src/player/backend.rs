@@ -15,6 +15,18 @@ pub struct VideoFrame {
     pub data: Vec<u8>,
 }
 
+/// A decoded frame the GPU paints as is: on macOS an IOSurface-backed
+/// CVPixelBuffer shown with GPUI's `surface` element, at the video's native
+/// size, with no copy. Other platforms have none and use `VideoFrame`.
+/// ponytail: SDR only; HDR is tone-mapped (GPUI paints 8-bit 4:2:0 with a
+/// fixed BT.601 shader, and the BGRA path before it was 8-bit too). Showing
+/// HDR needs a GPUI surface that takes 10-bit, extended-range buffers.
+#[cfg(target_os = "macos")]
+pub type VideoSurface = objc2_core_foundation::CFRetained<objc2_core_video::CVPixelBuffer>;
+#[cfg(not(target_os = "macos"))]
+#[derive(Clone)]
+pub enum VideoSurface {}
+
 pub trait VideoPlayerBackend: Send {
     fn load(&mut self, path: &Path) -> Result<VideoMetadata>;
     fn play(&mut self);
@@ -43,8 +55,15 @@ pub trait VideoPlayerBackend: Send {
     fn is_muted(&self) -> bool;
     #[cfg_attr(not(test), allow(dead_code))]
     fn is_looping(&self) -> bool;
-    /// Fetches the latest decoded video frame if available.
+    /// Fetches the latest decoded video frame if available. Where the
+    /// player also has `take_surface`, this is a low-rate snapshot for views
+    /// that need an image; the viewer paints the surface.
     fn next_frame(&mut self) -> Option<VideoFrame>;
+    /// The newest GPU surface not yet taken. Take it after `next_frame`: it
+    /// is then never older than the snapshot that call returned.
+    fn take_surface(&mut self) -> Option<VideoSurface> {
+        None
+    }
     /// Display names of the loaded file's alternative audio tracks, in order.
     /// Empty when the file offers no choice. A name can be empty.
     fn audio_tracks(&self) -> Vec<String> {

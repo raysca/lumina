@@ -12,6 +12,11 @@ The complete feature reference. For the overview, see the [README](../README.md)
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
   geocoding against a built-in table of about 150 major cities (the nearest
   one within about 250 km; `crates/lumina-core/src/geocoder.rs`).
+  The date taken is EXIF DateTimeOriginal, else DateTimeDigitized, else
+  DateTime; a video's is its QuickTime creation time. With none, it is the
+  file's creation time (its modification time when that is older), never the
+  day it was added. Libraries catalogued before this are re-dated once, after
+  a scan: only items whose date is the day they were added.
 - **Smart albums** — 12 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
   match all/any of conditions on kind, favorite, date (including "in the
   last N days/weeks/months"), tag, stars, pick/reject flag, color label,

@@ -107,6 +107,11 @@ pub struct VideoPlaybackState {
     /// Latest decoded frame for the PiP window; kept apart from
     /// `viewer_image` so browsing photos cannot overwrite the video.
     pub pip_frame: Option<Arc<RenderImage>>,
+    /// Newest GPU surface of the playing video, painted over `viewer_image`
+    /// (or `pip_frame`) at native size; those then hold a low-rate snapshot
+    /// for the views that need an image. None where the player has no
+    /// surfaces (Linux).
+    pub(crate) surface: Option<player::VideoSurface>,
     /// When a PiP frame last repainted the main window (executor clock);
     /// see `LuminaApp::repaint_for_video_frame`.
     pub(crate) pip_main_repainted: Option<std::time::Instant>,

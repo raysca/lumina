@@ -3,13 +3,13 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
+#import "macos_frames.h"
 #include <stdlib.h>
 #include <string.h>
 
 @interface LuminaPlayerBridge : NSObject
 @property (nonatomic, strong) AVPlayer *player;
 @property (nonatomic, strong) AVPlayerItem *playerItem;
-@property (nonatomic, strong) AVPlayerItemVideoOutput *videoOutput;
 @property (nonatomic, assign) BOOL isLooping;
 @property (nonatomic, assign) double duration;
 @property (nonatomic, assign) int naturalWidth;
@@ -34,9 +34,8 @@
     /// removed in teardown.
     id _endObserver;
     id _failedObserver;
-    /// A frame too big for the caller's buffer, kept for the retry with a
-    /// bigger one so it is not lost.
-    CVPixelBufferRef _heldFrame;
+    /// Pulls the item's frames off the UI thread (macos_frames.m).
+    LuminaFramePump *_pump;
     /// The mid-clip playback error not yet taken by the app. Written by the
     /// notification on AVFoundation's thread, read on the UI thread.
     NSString *_playbackError;
@@ -70,10 +69,8 @@
         [[NSNotificationCenter defaultCenter] removeObserver:_endObserver];
         _endObserver = nil;
     }
-    if (_heldFrame) {
-        CVPixelBufferRelease(_heldFrame);
-        _heldFrame = NULL;
-    }
+    [_pump stop];
+    _pump = nil;
     if (_failedObserver) {
         [[NSNotificationCenter defaultCenter] removeObserver:_failedObserver];
         _failedObserver = nil;
@@ -87,7 +84,6 @@
         _player = nil;
     }
     _playerItem = nil;
-    _videoOutput = nil;
     _isPlayingState = NO;
     _audioGroup = nil;
     _chapterStarts = nil;
@@ -140,8 +136,12 @@
         return NO;
     }
 
-    // Retrieve video dimensions and handle track rotation (e.g. portrait iPhone videos)
-    AVVideoComposition *composition = [AVVideoComposition videoCompositionWithPropertiesOfAsset:asset];
+    // Retrieve video dimensions and handle track rotation (e.g. portrait
+    // iPhone videos). A composition renders every frame again, so it is only
+    // applied to a rotated track.
+    BOOL rotated = !CGAffineTransformIsIdentity([tracks[0] preferredTransform]);
+    AVVideoComposition *composition =
+        rotated ? [AVVideoComposition videoCompositionWithPropertiesOfAsset:asset] : nil;
     if (composition) {
         _naturalWidth = (int)composition.renderSize.width;
         _naturalHeight = (int)composition.renderSize.height;
@@ -158,7 +158,8 @@
         }
     }
 
-    // Cap output frame dimensions to 1080p to prevent memory exhaustion and texture atlas blowup
+    // The BGRA snapshot is capped at 1080p (it becomes a GPUI image); the
+    // surface the viewer paints stays at native size.
     int targetW = _naturalWidth;
     int targetH = _naturalHeight;
     const int MAX_W = 1920;
@@ -173,18 +174,13 @@
     _scaledWidth = targetW;
     _scaledHeight = targetH;
 
-    NSDictionary *pixAttrs = @{
-        (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
-        (id)kCVPixelBufferWidthKey: @(_scaledWidth),
-        (id)kCVPixelBufferHeightKey: @(_scaledHeight)
-    };
-    _videoOutput = [[AVPlayerItemVideoOutput alloc] initWithPixelBufferAttributes:pixAttrs];
-
     _playerItem = [AVPlayerItem playerItemWithAsset:asset];
     if (composition) {
         _playerItem.videoComposition = composition;
     }
-    [_playerItem addOutput:_videoOutput];
+    _pump = [[LuminaFramePump alloc] initWithItem:_playerItem
+                                    snapshotWidth:_scaledWidth
+                                           height:_scaledHeight];
 
     // The UI thread (the main thread) drives the player; the loop seek and
     // the playing state must not race it, so the end is handled there.
@@ -305,6 +301,7 @@
         }
     } else {
         _isPlayingState = NO;
+        [_pump setPlaying:NO];
         if (_player) {
             [_player pause];
         }
@@ -314,6 +311,7 @@
 - (void)play {
     if (_player) {
         _isPlayingState = YES;
+        [_pump setPlaying:YES];
         [_player play];
         _player.rate = _targetRate;
     }
@@ -322,6 +320,7 @@
 - (void)pause {
     if (_player) {
         _isPlayingState = NO;
+        [_pump setPlaying:NO];
         [_player pause];
     }
 }
@@ -334,12 +333,15 @@
 - (void)seekTo:(double)seconds {
     if (!_player) return;
     CMTime t = CMTimeMakeWithSeconds(seconds, 60000);
+    [_pump discardPending];
     [_player seekToTime:t toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
 }
 
 - (void)stepFrames:(NSInteger)frames {
     if (!_player || !_player.currentItem) return;
     [_player pause];
+    [_pump setPlaying:NO];
+    [_pump discardPending];
     [_player.currentItem stepByCount:frames];
 }
 
@@ -385,66 +387,23 @@
     return _player ? _player.isMuted : _isMuted;
 }
 
-/// Whether a frame newer than the last one copied is ready (cheap: no copy).
+/// Whether a snapshot newer than the last one copied is waiting.
 - (BOOL)hasNewFrame {
-    if (_heldFrame) return YES;
-    if (!_videoOutput || !_playerItem) return NO;
-    return [_videoOutput hasNewPixelBufferForItemTime:[_playerItem currentTime]];
+    return [_pump hasSnapshot];
 }
 
-/// Copies the newest frame, tightly packed BGRA, into `dst` and reports its
-/// size. 1: copied. 0: no new frame. -1: `capacity` is too small for
-/// `*outWidth` x `*outHeight`; the frame is kept for a retry with a bigger
-/// buffer.
+/// See -[LuminaFramePump copySnapshotInto:capacity:width:height:].
 - (int)copyFrameInto:(uint8_t *)dst
             capacity:(size_t)capacity
                width:(int *)outWidth
               height:(int *)outHeight {
-    CVPixelBufferRef buf = _heldFrame;
-    _heldFrame = NULL;
-    if (!buf) {
-        if (!_videoOutput || !_playerItem) return 0;
-        CMTime itemTime = [_playerItem currentTime];
-        // Only hand back a frame AVFoundation has not vended yet. Without
-        // this the caller re-uploads the same picture on every poll, and
-        // after a seek it could take the pre-seek frame as the destination.
-        if (![_videoOutput hasNewPixelBufferForItemTime:itemTime]) return 0;
-        buf = [_videoOutput copyPixelBufferForItemTime:itemTime itemTimeForDisplay:NULL];
-        if (!buf) return 0;
-    }
-    size_t w = CVPixelBufferGetWidth(buf);
-    size_t h = CVPixelBufferGetHeight(buf);
-    *outWidth = (int)w;
-    *outHeight = (int)h;
-    size_t tightStride = w * 4;
-    if (w == 0 || h == 0) {
-        CVPixelBufferRelease(buf);
-        return 0;
-    }
-    if (!dst || capacity < tightStride * h) {
-        _heldFrame = buf;
-        return -1;
-    }
-    if (CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) {
-        CVPixelBufferRelease(buf);
-        return 0;
-    }
-    size_t stride = CVPixelBufferGetBytesPerRow(buf);
-    uint8_t *src = (uint8_t *)CVPixelBufferGetBaseAddress(buf);
-    int copied = 0;
-    if (src) {
-        if (stride == tightStride) {
-            memcpy(dst, src, tightStride * h);
-        } else {
-            for (size_t row = 0; row < h; row++) {
-                memcpy(dst + row * tightStride, src + row * stride, tightStride);
-            }
-        }
-        copied = 1;
-    }
-    CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-    CVPixelBufferRelease(buf);
-    return copied;
+    if (!_pump) return 0;
+    return [_pump copySnapshotInto:dst capacity:capacity width:outWidth height:outHeight];
+}
+
+/// The newest native-size surface not yet taken (+1 retained), or NULL.
+- (CVPixelBufferRef)takeSurface CF_RETURNS_RETAINED {
+    return [_pump takeSurface];
 }
 
 @end
@@ -624,6 +583,16 @@ int lumina_player_copy_frame(void* player, uint8_t* dst, size_t capacity, int* o
     @autoreleasepool {
         LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
         return [bridge copyFrameInto:dst capacity:capacity width:out_width height:out_height];
+    }
+}
+
+/// The newest IOSurface-backed frame not yet taken, +1 retained (Rust owns
+/// it), or NULL.
+void* lumina_player_take_surface(void* player) {
+    if (!player) return NULL;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        return (void *)[bridge takeSurface];
     }
 }
 

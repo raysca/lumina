@@ -613,20 +613,27 @@ pub(crate) fn orientation_six_jpeg(path: &Path, width: u32, height: u32) {
             image::Rgb([20, 20, 230])
         }
     });
+    // Big-endian TIFF, IFD0 with one entry: Orientation (0x0112) = 6.
+    let mut tiff = b"MM\0\x2a\0\0\0\x08\0\x01".to_vec();
+    tiff.extend_from_slice(&[0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0]);
+    fs::write(path, jpeg_with_exif(&image, &tiff)).expect("fixture writes");
+}
+
+/// A JPEG of `image` carrying `tiff` (a TIFF header and IFDs) as its EXIF.
+pub(crate) fn jpeg_with_exif(image: &image::RgbImage, tiff: &[u8]) -> Vec<u8> {
     let mut jpeg = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
-        .encode_image(&image)
+        .encode_image(image)
         .expect("fixture encodes");
-    // Big-endian TIFF, IFD0 with one entry: Orientation (0x0112) = 6.
-    let mut app1 = b"Exif\0\0MM\0\x2a\0\0\0\x08\0\x01".to_vec();
-    app1.extend_from_slice(&[0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0]);
+    let mut app1 = b"Exif\0\0".to_vec();
+    app1.extend_from_slice(tiff);
     let mut segment = vec![0xff, 0xe1];
     segment.extend_from_slice(&((app1.len() + 2) as u16).to_be_bytes());
     segment.extend_from_slice(&app1);
     // After SOI and the encoder's APP0 (JFIF) segment.
     let app0_end = 4 + u16::from_be_bytes([jpeg[4], jpeg[5]]) as usize;
     jpeg.splice(app0_end..app0_end, segment);
-    fs::write(path, jpeg).expect("fixture writes");
+    jpeg
 }
 
 #[test]
