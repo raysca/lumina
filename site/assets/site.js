@@ -6,7 +6,7 @@
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Reveal anything marked .reveal (and the animated widgets) when it enters.
-  var watched = document.querySelectorAll(".reveal, .map, .searchbox, .rules, .cluster");
+  var watched = document.querySelectorAll(".reveal, .map, .cluster");
   if ("IntersectionObserver" in window && !reduce) {
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {

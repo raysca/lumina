@@ -50,40 +50,8 @@
     </div>
     <p class="fine reveal" style="--d:.7s">MIT licensed. Nothing to sign up for.</p>
 
-    <!-- SCREENSHOT SLOT: hero. Replace .win with the Mosaic grid + inspector screenshot from the demo library. -->
-    <figure class="hero-shot" aria-label="The Lumina library window: a mosaic of photos and videos with the inspector open">
-      <div class="win">
-        <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><div class="q">camera:Sony city:Kyoto rating:&gt;=4</div></div>
-        <div class="win-body" aria-hidden="true">
-          <div class="side">
-            <b>LIBRARY</b>
-            <span class="on">All Media <em>2,418</em></span>
-            <span>Photos <em>2,206</em></span>
-            <span>Videos <em>212</em></span>
-            <span>Favourites <em>96</em></span>
-            <span>Places</span>
-            <b>CULLING</b>
-            <span>Picks <em>341</em></span>
-            <span>Similar Shots</span>
-            <b>ALBUMS</b>
-            <span>Japan 2026</span>
-            <span>Gobi road trip</span>
-          </div>
-          <div class="mosaic"><div class="w2 h2" style="background:linear-gradient(160deg,#1a1f2b,#4f6fa8)"></div><div style="background:linear-gradient(135deg,#2e1f1a,#b8644a)"></div><div style="background:linear-gradient(30deg,#1d2b33,#5d8aa3)"></div><div class="h2" style="background:linear-gradient(200deg,#1d2b33,#5d8aa3)"></div><div style="background:linear-gradient(135deg,#2b2416,#d9b46e)"></div><div style="background:linear-gradient(160deg,#1c2626,#4f9a94)"></div><div style="background:linear-gradient(135deg,#3b2a1a,#c7843a)"></div><div class="w2" style="background:linear-gradient(225deg,#2e1f1a,#b8644a)"></div><div style="background:linear-gradient(160deg,#1d2b33,#5d8aa3)"></div><div style="background:linear-gradient(30deg,#1d2b33,#5d8aa3)"></div><div class="sel" style="background:linear-gradient(135deg,#2e1f1a,#b8644a)"></div><div style="background:linear-gradient(135deg,#2b2416,#d9b46e)"></div><div class="h2" style="background:linear-gradient(30deg,#1f2a1f,#6f9a5d)"></div><div style="background:linear-gradient(30deg,#3b2a1a,#c7843a)"></div><div style="background:linear-gradient(225deg,#2b2416,#d9b46e)"></div><div style="background:linear-gradient(160deg,#3b2a1a,#c7843a)"></div><div class="w2" style="background:linear-gradient(30deg,#3b2a1a,#c7843a)"></div><div style="background:linear-gradient(200deg,#2a1f2e,#9a6a8f)"></div><div style="background:linear-gradient(160deg,#2e1f1a,#b8644a)"></div><div style="background:linear-gradient(135deg,#1c2626,#4f9a94)"></div><div style="background:linear-gradient(200deg,#2b2416,#d9b46e)"></div><div class="h2" style="background:linear-gradient(160deg,#1c2626,#4f9a94)"></div><div style="background:linear-gradient(30deg,#1d2b33,#5d8aa3)"></div><div style="background:linear-gradient(160deg,#2b2416,#d9b46e)"></div></div>
-          <div class="insp">
-            <div class="thumb"></div>
-            <strong style="color:#F4F4F2;font-size:14px">Evening in Chania</strong>
-            <span class="stars">★★★★★</span>
-            <dl>
-              <dt>Camera</dt><dd>Nikon D800</dd>
-              <dt>Lens</dt><dd>24–70 mm</dd>
-              <dt>Exposure</dt><dd>f/8 · 1/250 · ISO 100</dd>
-              <dt>Place</dt><dd>Chania, Greece</dd>
-              <dt>Keywords</dt><dd>harbour, golden hour</dd>
-            </dl>
-          </div>
-        </div>
-      </div>
+    <figure class="hero-shot">
+      <img class="shot" src="assets/screenshots/hero.webp" width="2880" height="1800" alt="The Lumina library window: a mosaic of photos sorted by rating, with the inspector open on a five-star photo of the Château Frontenac at dusk" decoding="async">
     </figure>
   </div>
 </header>
@@ -103,7 +71,7 @@
     <div class="kicker reveal">Private by design</div>
     <h2 class="reveal">Turn off your Wi-Fi.<br>Lumina won't notice.</h2>
     <p class="sub reveal">Search, maps and places all work offline. The world map ships inside the app and the geocoder is built in, so no server ever learns where your photos were taken.</p>
-    <!-- SCREENSHOT SLOT: Places map. This illustration uses the same Natural Earth outline the app bundles. -->
+    <!-- Places map: drawn from the same Natural Earth outline the app bundles. -->
     <figure class="map card" aria-label="Offline map with clusters of photos in Greece, Mongolia, Korea, Japan, Québec and more">
       <img src="assets/world.svg" alt="" style="position:absolute;inset:0;width:100%;height:100%">
       <span class="offline">Offline</span>
@@ -148,19 +116,7 @@
         <p class="sub reveal">Type what you recall: a place, a camera, a lens, a tag, a caption. Stack filters to narrow it down. It's instant, and it all happens on your machine.</p>
         <p class="count reveal"><a href="https://github.com/raysca/lumina/blob/main/docs/search.md">See every search filter</a></p>
       </div>
-      <!-- SCREENSHOT SLOT: search results -->
-      <div class="card searchbox" aria-label="Example search: camera Sony, ISO over 800, city Kyoto, rating 4 or more">
-        <div class="query">
-          <span class="glass" aria-hidden="true">⌕</span>
-          <span class="chip" style="--d:.1s"><b>camera:</b>Sony</span>
-          <span class="chip" style="--d:.45s"><b>iso:</b>&gt;800</span>
-          <span class="chip" style="--d:.8s"><b>city:</b>Kyoto</span>
-          <span class="chip" style="--d:1.15s"><b>rating:</b>&gt;=4</span>
-          <span class="caret" aria-hidden="true"></span>
-        </div>
-        <div class="results" aria-hidden="true"><div style="background:linear-gradient(30deg,#2a1f2e,#9a6a8f);--d:0.60s"></div><div style="background:linear-gradient(225deg,#1d2b33,#5d8aa3);--d:0.67s"></div><div style="background:linear-gradient(160deg,#3b2a1a,#c7843a);--d:0.74s"></div><div style="background:linear-gradient(160deg,#33261a,#e9a23b);--d:0.81s"></div><div style="background:linear-gradient(225deg,#1f2a1f,#6f9a5d);--d:0.88s"></div><div style="background:linear-gradient(225deg,#2e1f1a,#b8644a);--d:0.95s"></div><div style="background:linear-gradient(160deg,#1d2b33,#5d8aa3);--d:1.02s"></div><div style="background:linear-gradient(225deg,#262420,#a39a86);--d:1.09s"></div></div>
-        <p class="count">8 matches across photos and videos</p>
-      </div>
+      <figure class="frame reveal"><img class="shot" src="assets/screenshots/search.webp" width="2400" height="1800" alt="Searching for tag places/europe with a rating of 4 or more: two filter chips and 21 matching photos" loading="lazy" decoding="async"></figure>
     </div>
   </section>
 
@@ -172,14 +128,7 @@
         <h2 class="reveal">Albums that fill themselves.</h2>
         <p class="sub reveal">Match on camera, lens, date, rating, flag, place or keyword, with a live count and preview as you build. Twelve come built in, and you can add as many of your own as you like.</p>
       </div>
-      <!-- SCREENSHOT SLOT: smart album builder -->
-      <div class="card rules" aria-label="Smart album rules: place is Mongolia, rating at least 4 stars, date in the last 3 years">
-        <header><strong>Best of the Gobi</strong><span class="live">36 items</span></header>
-        <div class="rule" style="--d:.1s"><span>Place</span><span>is</span><span>Mongolia</span></div>
-        <div class="rule" style="--d:.3s"><span>Rating</span><span>at least</span><span>★★★★</span></div>
-        <div class="rule" style="--d:.5s"><span>Date</span><span>in the last</span><span>3 years</span></div>
-        <div class="strip" aria-hidden="true"><div style="background:linear-gradient(200deg,#1c2626,#4f9a94)"></div><div style="background:linear-gradient(225deg,#2a1f2e,#9a6a8f)"></div><div style="background:linear-gradient(200deg,#1c2626,#4f9a94)"></div><div style="background:linear-gradient(200deg,#2e1f1a,#b8644a)"></div><div style="background:linear-gradient(160deg,#2e1f1a,#b8644a)"></div><div style="background:linear-gradient(135deg,#2a1f2e,#9a6a8f)"></div></div>
-      </div>
+      <figure class="frame reveal"><img class="shot" src="assets/screenshots/smart-album.webp" width="1810" height="1100" alt="The smart album editor: rating at least 4 stars and keywords contain europe, with a live preview and 21 items matching" loading="lazy" decoding="async"></figure>
     </div>
   </section>
 
@@ -192,11 +141,7 @@
       <div class="card big reveal">
         <h3>A real player, built in</h3>
         <p>Scrub with real-frame previews, jump between chapters, set a loop range, switch audio tracks, and keep watching in Picture in Picture while you browse.</p>
-        <!-- SCREENSHOT SLOT: video player with speed menu and chapters -->
-        <div class="player" aria-hidden="true">
-          <div class="frame"></div>
-          <div class="controls"><span>▶</span><span>01:24</span><div class="scrub"><i style="left:18%"></i><i style="left:47%"></i><i style="left:76%"></i></div><span>03:41</span><span style="color:#F6C46E">1.5×</span><span>PiP</span></div>
-        </div>
+        <figure class="frame"><img class="shot" src="assets/screenshots/video.webp" width="2880" height="1800" alt="The built-in video player with a scrub bar, playback speed, volume, loop and full-screen controls" loading="lazy" decoding="async"></figure>
       </div>
       <div class="card reveal" style="--d:.1s">
         <h3>Playback speed</h3>
@@ -226,13 +171,7 @@
       <kbd>P</kbd><kbd>X</kbd><kbd>0–5</kbd><kbd>C</kbd><kbd>⌘K</kbd><kbd>⌘Z</kbd>
       <figcaption>Pick · Reject · Rate · Compare · Command palette · Undo</figcaption>
     </figure>
-    <!-- SCREENSHOT SLOT: compare 2×2 with picks -->
-    <div class="compare card reveal" aria-label="Comparing four similar shots: two picked, one rejected">
-      <div class="pick" style="background:radial-gradient(circle at 62% 53%,#FBE3A6 0,#F6C46E 4%,transparent 18%),linear-gradient(180deg,#2a3550 0%,#B8643A 38%,#E9A23B 55%,#3a2314 57%,#160e07 100%)"><span class="badge">Pick</span></div>
-      <div style="background:radial-gradient(circle at 62% 56%,#FBE3A6 0,#F6C46E 4%,transparent 18%),linear-gradient(180deg,#2f3a52 0%,#B8643A 38%,#E9A23B 58%,#3a2314 60%,#160e07 100%)"><span class="badge">★★★</span></div>
-      <div class="rej" style="background:radial-gradient(circle at 62% 50%,#FBE3A6 0,#F6C46E 4%,transparent 18%),linear-gradient(180deg,#27304a 0%,#B8643A 38%,#E9A23B 52%,#3a2314 54%,#160e07 100%)"><span class="badge">Rejected</span></div>
-      <div class="pick" style="background:radial-gradient(circle at 62% 54%,#FBE3A6 0,#F6C46E 4%,transparent 18%),linear-gradient(180deg,#2c3854 0%,#B8643A 38%,#E9A23B 56%,#3a2314 58%,#160e07 100%)"><span class="badge">Pick</span></div>
-    </div>
+    <figure class="frame wide reveal"><img class="shot" src="assets/screenshots/compare.webp" width="2880" height="1380" alt="Comparing two shots of camels in the Gobi Desert side by side: one marked Pick with five stars, the other Reject" loading="lazy" decoding="async"></figure>
   </section>
 
   <!-- 09 WORD CLOUD -->
