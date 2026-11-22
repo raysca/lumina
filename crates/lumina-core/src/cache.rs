@@ -5,7 +5,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{DecodedFrame, MediaId, PixelFormat};
+use crate::{DecodedFrame, MediaId};
+
+mod codec;
+
+/// Cache entries end in this; `.bin` files are raw entries from format v5
+/// and earlier, removed by the next cleanup.
+const ENTRY_EXTENSION: &str = "thumb";
+const LEGACY_EXTENSION: &str = "bin";
 
 #[derive(Clone)]
 pub struct DiskCache {
@@ -27,7 +34,8 @@ pub struct DiskCache {
 /// are color matched to sRGB, so v3 files of wide-gamut photos are stale.
 /// v5: the key is `{item_hash}_{size}` so every decoded size of one item can
 /// be evicted together (v4 hashed the size in and could not be enumerated).
-const CACHE_FORMAT_VERSION: u32 = 5;
+/// v6: entries are compressed (`codec`) and named `.thumb`.
+const CACHE_FORMAT_VERSION: u32 = 6;
 
 /// Default disk budget for thumbnails (1.5 GB).
 pub const DEFAULT_MAX_CACHE_BYTES: u64 = 1_500_000_000;
@@ -134,7 +142,7 @@ impl DiskCache {
     }
 
     pub fn cache_file_path(&self, key: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.bin", key))
+        self.cache_dir.join(format!("{key}.{ENTRY_EXTENSION}"))
     }
 
     pub fn get_cached(
@@ -148,35 +156,19 @@ impl DiskCache {
         let key = Self::compute_key(path, file_size, mtime_epoch_ms, target_size);
         let file_path = self.cache_file_path(&key);
 
-        let mut bytes = fs::read(&file_path).ok()?;
-        if bytes.len() < 12 {
-            return None;
+        let bytes = fs::read(&file_path).ok()?;
+        let frame = codec::decode(id, &bytes)?;
+        // Eviction removes the least recently modified entries first, so a
+        // read marks the entry as used. Best-effort: a failed touch only
+        // makes the entry look older.
+        if let Err(err) = fs::File::options()
+            .write(true)
+            .open(&file_path)
+            .and_then(|file| file.set_modified(std::time::SystemTime::now()))
+        {
+            log::debug!("could not mark {} as used: {err}", file_path.display());
         }
-
-        // Binary header: [u32 width, u32 height, u32 format_tag, raw_rgba_bytes...]
-        let width = u32::from_le_bytes(bytes[0..4].try_into().ok()?);
-        let height = u32::from_le_bytes(bytes[4..8].try_into().ok()?);
-        let format_tag = u32::from_le_bytes(bytes[8..12].try_into().ok()?);
-        let format = if format_tag == 1 {
-            PixelFormat::Bgra8
-        } else {
-            PixelFormat::Rgba8
-        };
-
-        let expected_len = width as usize * height as usize * 4;
-        if bytes.len() - 12 != expected_len {
-            return None;
-        }
-
-        let data = bytes.split_off(12);
-
-        Some(DecodedFrame {
-            id,
-            width,
-            height,
-            format,
-            data,
-        })
+        Some(frame)
     }
 
     pub fn put_cached(
@@ -198,15 +190,7 @@ impl DiskCache {
             )
         })?;
 
-        let mut out = Vec::with_capacity(12 + frame.data.len());
-        out.extend_from_slice(&frame.width.to_le_bytes());
-        out.extend_from_slice(&frame.height.to_le_bytes());
-        let format_tag: u32 = match frame.format {
-            PixelFormat::Rgba8 => 0,
-            PixelFormat::Bgra8 => 1,
-        };
-        out.extend_from_slice(&format_tag.to_le_bytes());
-        out.extend_from_slice(&frame.data);
+        let out = codec::encode(frame)?;
 
         // Atomic write via temp file
         let nanos = std::time::SystemTime::now()
@@ -293,8 +277,10 @@ impl DiskCache {
             let Some((prefix, rest)) = name.split_once('_') else {
                 continue;
             };
-            if rest.ends_with(".bin") && prefixes.contains(prefix) && fs::remove_file(&path).is_ok()
-            {
+            let is_entry = Path::new(rest)
+                .extension()
+                .is_some_and(|ext| ext == ENTRY_EXTENSION || ext == LEGACY_EXTENSION);
+            if is_entry && prefixes.contains(prefix) && fs::remove_file(&path).is_ok() {
                 removed += 1;
             }
         }
@@ -331,9 +317,11 @@ impl DiskCache {
                 continue;
             };
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            let is_thumbnail = name.ends_with(".bin");
             let is_temp = name.contains(".tmp.");
-            if !is_thumbnail && !is_temp {
+            let extension = path.extension().and_then(|ext| ext.to_str());
+            let is_thumbnail = !is_temp && extension == Some(ENTRY_EXTENSION);
+            let is_legacy = !is_temp && extension == Some(LEGACY_EXTENSION);
+            if !is_thumbnail && !is_temp && !is_legacy {
                 continue;
             }
 
@@ -344,7 +332,10 @@ impl DiskCache {
                 .unwrap_or_default();
 
             // Temp files older than an hour are leftovers from a crash.
-            let stale = age > max_age || (is_temp && age > std::time::Duration::from_secs(3600));
+            // A raw entry from an older format is never read again.
+            let stale = is_legacy
+                || age > max_age
+                || (is_temp && age > std::time::Duration::from_secs(3600));
             if stale {
                 if fs::remove_file(&path).is_ok() {
                     stats.removed_files += 1;
@@ -415,6 +406,7 @@ fn files_under(root: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PixelFormat;
 
     fn temp_cache(name: &str) -> DiskCache {
         let dir = std::env::temp_dir().join(format!(
@@ -453,10 +445,13 @@ mod tests {
             }
         }
         let _cleanup = Cleanup(dir.clone());
+        // Noise, so compression cannot shrink the entries below the budget.
         let big = DecodedFrame {
             width: 16,
             height: 16,
-            data: vec![0u8; 16 * 16 * 4],
+            data: (0..16 * 16 * 4u64)
+                .map(|i| (xxh3_64(&i.to_le_bytes()) % 255) as u8)
+                .collect(),
             ..frame()
         };
         for i in 0..64 {
@@ -474,9 +469,18 @@ mod tests {
             .unwrap()
             .map(|e| e.unwrap().metadata().unwrap().len())
             .sum();
-        let written = 64 * (12 + big.data.len() as u64);
+        let entry = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().metadata().unwrap().len())
+            .max()
+            .unwrap();
+        let written = 64 * entry;
         assert!(
-            on_disk <= budget + budget / 8 + 12 + big.data.len() as u64,
+            written > 2 * budget,
+            "control: the entries overflow the budget ({written} of {budget})"
+        );
+        assert!(
+            on_disk <= budget + budget / 8 + entry,
             "cache must be trimmed while written: {on_disk} bytes on disk of {written} written, budget {budget}"
         );
     }
@@ -509,8 +513,8 @@ mod tests {
     #[test]
     fn cleanup_removes_stale_entries_but_keeps_fresh_ones() {
         let cache = temp_cache("age");
-        let cold = cache.cache_dir().join("cold.bin");
-        let warm = cache.cache_dir().join("warm.bin");
+        let cold = cache.cache_dir().join("cold.thumb");
+        let warm = cache.cache_dir().join("warm.thumb");
         std::fs::write(&cold, vec![0u8; 8]).unwrap();
         std::fs::write(&warm, vec![0u8; 8]).unwrap();
 
@@ -586,9 +590,7 @@ mod tests {
         cache.put_cached(item, 10, 1000, 256, &frame()).unwrap();
         assert!(
             cache
-                .cache_dir()
-                .join(DiskCache::compute_key(item, 10, 1000, 256))
-                .with_extension("bin")
+                .cache_file_path(&DiskCache::compute_key(item, 10, 1000, 256))
                 .exists(),
             "a decode after Clear Cache recreates the folder and caches again"
         );
@@ -638,5 +640,134 @@ mod tests {
             "clear removes every library folder under the root"
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A photo-like opaque frame: smooth gradients with fine detail.
+    fn photo_frame(width: u32, height: u32) -> DecodedFrame {
+        let data = (0..height)
+            .flat_map(|y| {
+                (0..width).flat_map(move |x| {
+                    let grain = (xxh3_64(&[x as u8, y as u8]) % 24) as u8;
+                    [
+                        (x * 255 / width) as u8 / 2 + grain,
+                        (y * 255 / height) as u8 / 2 + grain,
+                        ((x + y) % 200) as u8,
+                        255,
+                    ]
+                })
+            })
+            .collect();
+        DecodedFrame {
+            id: MediaId(1),
+            width,
+            height,
+            format: PixelFormat::Bgra8,
+            data,
+        }
+    }
+
+    /// Entries are stored compressed: a grid thumbnail costs a fraction of
+    /// its raw 4 bytes per pixel, and reads back at the same size and format.
+    #[test]
+    fn entries_are_compressed_and_read_back() {
+        let cache = temp_cache("compressed");
+        let frame = photo_frame(512, 384);
+        let path = std::path::Path::new("/photos/compressed.jpg");
+        cache.put_cached(path, 10, 1000, 512, &frame).unwrap();
+        let file = cache.cache_file_path(&DiskCache::compute_key(path, 10, 1000, 512));
+        let on_disk = std::fs::metadata(&file).unwrap().len();
+        let raw = frame.data.len() as u64;
+        assert!(
+            on_disk * 4 < raw,
+            "a cached thumbnail must be compressed: {on_disk} bytes on disk for {raw} raw"
+        );
+        let read = cache
+            .get_cached(MediaId(7), path, 10, 1000, 512)
+            .expect("the entry reads back");
+        assert_eq!((read.id, read.width, read.height), (MediaId(7), 512, 384));
+        assert_eq!(read.format, PixelFormat::Bgra8);
+    }
+
+    /// Eviction follows use: reading an entry marks it, so the budget trim
+    /// removes the entry nobody looked at, not the one written first.
+    #[test]
+    fn eviction_removes_the_least_recently_read_entry() {
+        let cache = temp_cache("by_use");
+        let (first, second) = (
+            std::path::Path::new("/photos/first.jpg"),
+            std::path::Path::new("/photos/second.jpg"),
+        );
+        let frame = photo_frame(64, 64);
+        for (path, hours) in [(first, 3), (second, 2)] {
+            cache.put_cached(path, 10, 1000, 256, &frame).unwrap();
+            let file = cache.cache_file_path(&DiskCache::compute_key(path, 10, 1000, 256));
+            std::fs::File::options()
+                .write(true)
+                .open(&file)
+                .unwrap()
+                .set_modified(
+                    std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600),
+                )
+                .unwrap();
+        }
+        assert!(cache.get_cached(MediaId(1), first, 10, 1000, 256).is_some());
+        let one =
+            std::fs::metadata(cache.cache_file_path(&DiskCache::compute_key(first, 10, 1000, 256)))
+                .unwrap()
+                .len();
+        cache.cleanup(one, DEFAULT_MAX_CACHE_AGE).unwrap();
+        assert!(
+            cache.get_cached(MediaId(1), first, 10, 1000, 256).is_some(),
+            "the entry just read survives the trim although it was written first"
+        );
+        assert!(
+            cache
+                .get_cached(MediaId(1), second, 10, 1000, 256)
+                .is_none(),
+            "the entry not read since it was written is evicted"
+        );
+    }
+
+    /// Raw `.bin` entries from format v5 and earlier are never read again
+    /// (the key carries the format version) and the next cleanup removes
+    /// them, however fresh, instead of leaving them to fill the budget.
+    #[test]
+    fn the_format_bump_drops_raw_entries_from_older_versions() {
+        let cache = temp_cache("legacy");
+        let path = std::path::Path::new("/photos/legacy.jpg");
+        let key = DiskCache::compute_key(path, 10, 1000, 256);
+        let legacy = cache.cache_dir().join(format!("{key}.bin"));
+        let mut raw = Vec::new();
+        for field in [2u32, 2, 1] {
+            raw.extend_from_slice(&field.to_le_bytes());
+        }
+        raw.extend_from_slice(&[0u8; 16]);
+        std::fs::write(&legacy, raw).unwrap();
+        assert!(
+            cache.get_cached(MediaId(1), path, 10, 1000, 256).is_none(),
+            "a raw entry is not read as a v6 entry"
+        );
+        cache.put_cached(path, 10, 1000, 256, &frame()).unwrap();
+        let stats = cache.cleanup(u64::MAX, DEFAULT_MAX_CACHE_AGE).unwrap();
+        assert_eq!(stats.removed_files, 1, "only the legacy entry goes");
+        assert!(!legacy.exists());
+        assert!(cache.get_cached(MediaId(1), path, 10, 1000, 256).is_some());
+    }
+
+    /// A damaged entry reads as a miss, so the item is decoded again.
+    #[test]
+    fn a_corrupt_entry_is_a_miss() {
+        let cache = temp_cache("corrupt");
+        let path = std::path::Path::new("/photos/corrupt.jpg");
+        cache
+            .put_cached(path, 10, 1000, 256, &photo_frame(32, 32))
+            .unwrap();
+        let file = cache.cache_file_path(&DiskCache::compute_key(path, 10, 1000, 256));
+        let mut bytes = std::fs::read(&file).unwrap();
+        bytes.truncate(bytes.len() / 2);
+        std::fs::write(&file, &bytes).unwrap();
+        assert!(cache.get_cached(MediaId(1), path, 10, 1000, 256).is_none());
+        std::fs::write(&file, &bytes[..10]).unwrap();
+        assert!(cache.get_cached(MediaId(1), path, 10, 1000, 256).is_none());
     }
 }

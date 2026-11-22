@@ -209,9 +209,22 @@ fn unedited_frame_ignores_rotation_and_exposure() {
         .expect("callback arrives")
         .expect("frame decodes");
     assert_eq!(
-        ((unedited.width, unedited.height), unedited.data),
-        ((plain.width, plain.height), plain.data),
-        "the unedited frame matches the decode before any edit"
+        (unedited.width, unedited.height),
+        (plain.width, plain.height),
+        "the unedited frame has the size of the decode before any edit"
+    );
+    // The first decode was fresh; this one is read from the cache, which
+    // stores entries as JPEG, so pixels match within compression error.
+    let worst = unedited
+        .data
+        .iter()
+        .zip(&plain.data)
+        .map(|(a, b)| a.abs_diff(*b))
+        .max()
+        .unwrap_or(0);
+    assert!(
+        worst <= 12,
+        "the unedited frame matches the decode before any edit (worst channel off by {worst})"
     );
     drop(engine);
     let _ = fs::remove_dir_all(&dir);
