@@ -54,7 +54,11 @@ fn render_rail_button(
     let tooltip = t("sidebar.rail_tooltip")
         .replace("{label}", entry.label)
         .replace("{n}", &entry.count.to_string());
-    let icon_color = if is_active { theme::t1() } else { theme::t2() };
+    let icon_color = if is_active {
+        theme::accent()
+    } else {
+        theme::t2()
+    };
     let pill = div()
         .size_full()
         .rounded(theme::RADIUS_MD)
@@ -71,7 +75,7 @@ fn render_rail_button(
     let selection = entry.selection;
     // The active fill sits on the button itself so its hover can replace it.
     let button = if is_active {
-        div().bg(theme::bg_3())
+        div().bg(theme::bg_selected())
     } else {
         div()
     };
@@ -87,7 +91,7 @@ fn render_rail_button(
         .cursor_pointer()
         .hover(move |s| {
             if is_active {
-                s.bg(theme::bg_3())
+                s.bg(theme::bg_selected())
             } else {
                 s.bg(theme::bg_2())
             }

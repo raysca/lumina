@@ -1,4 +1,5 @@
-//! Lumina theme tokens, named after the `lumina.pen` design variables.
+//! Lumina theme tokens ("Safelight"): neutral graphite surfaces with a
+//! single amber accent, named after the `lumina.pen` design variables.
 //!
 //! Rules: solid fills + 1px `line` borders, depth from the bg-0..bg-3 steps
 //! (GPUI has no backdrop blur, so translucent design surfaces are drawn
@@ -40,27 +41,28 @@ macro_rules! tokens_alpha {
 // The `lumina.pen` variables.
 tokens! {
     /// Main canvas and inset fields.
-    bg_0 = 0x0A0A0C;
+    bg_0 = 0x0E0E0F;
     /// Sidebar, cards, panels and dialogs.
-    bg_1 = 0x121216;
+    bg_1 = 0x151516;
     /// Buttons, fields, chips, badges and hover.
-    bg_2 = 0x1A1A20;
+    bg_2 = 0x1C1C1E;
     /// Selected row or segment, control hover, tracks.
-    bg_3 = 0x24242C;
+    bg_3 = 0x262628;
     /// 1px outlines.
-    line = 0x26262E;
+    line = 0x2A2A2C;
     /// Stronger outlines.
-    line_2 = 0x35353F;
+    line_2 = 0x3A3A3C;
     /// Primary text.
-    t1 = 0xF2F2F5;
+    t1 = 0xF4F4F2;
     /// Secondary text, idle row labels and icons.
-    t2 = 0x93939E;
-    /// Section labels, placeholders and meta lines. Lifted from the design's
-    /// #5E5E6A, which is 2.4-3.1:1, so essential text stays 4.5:1 on bg-0/bg-1.
-    t3 = 0x7C7C88;
+    t2 = 0xA3A3A1;
+    /// Section labels, placeholders and meta lines: 4.5:1 or better on
+    /// bg-0/bg-1, so essential text stays AA there.
+    t3 = 0x858583;
     accent = 0xE9A23B;
     danger = 0xE8584F;
-    warn = 0xE0A33B;
+    /// Orange, not amber: a warning must not read as a selection.
+    warn = 0xEE8A3C;
     positive = 0x5BC27A;
 }
 
@@ -84,19 +86,22 @@ tokens! {
     /// Letterbox behind media.
     bg_media = 0x000000;
     /// Viewer and player stage.
-    bg_stage = 0x08080A;
+    bg_stage = 0x09090A;
     /// Menus, popovers, tooltips and HUDs.
-    bg_float = 0x16161C;
+    bg_float = 0x1A1A1C;
     /// Text and icons on an `accent` fill.
     on_accent = 0x1A1206;
     /// Text and icons over media and `media_scrim`.
     on_media = 0xFFFFFF;
     /// Hovered `accent` fill (the design has no hover state).
-    accent_hover = 0xECB058;
+    accent_hover = 0xF2B65E;
     /// Shortcut hints on an `accent` fill (a hovered menu row).
     accent_hint = 0x5A4214;
     /// Keyboard focus on fields and controls. Neutral: amber means selection.
     focus_ring = 0xAAAAA8;
+    /// Selected sidebar row and rail button: amber at 14% over bg-1, drawn
+    /// opaque. Its label is t1, its icon and count amber.
+    bg_selected = 0x33291B;
     /// The album selection bar's fill: a dark amber band.
     accent_surface = 0x17120B;
     /// The album selection bar's bottom border, and the line
@@ -113,15 +118,15 @@ tokens! {
     /// Text on a `danger_surface` fill.
     on_danger = 0xF0C4C0;
     /// Timeline rail month bar.
-    rail_bar = 0x32323A;
+    rail_bar = 0x323234;
     /// Timeline rail month bar in the year on screen.
-    rail_bar_current = 0x4A4A56;
+    rail_bar_current = 0x4A4A4D;
     /// Bar fills in charts and usage tracks (the Tags page usage column).
-    chart_grey = 0x4E4E5C;
+    chart_grey = 0x4E4E52;
     /// The back plate of an album card's stack (frame Back2).
-    plate = 0x2A2A33;
+    plate = 0x2A2A2C;
     /// The middle plate of an album card's stack (frame Back1).
-    plate_2 = 0x3A3A46;
+    plate_2 = 0x3A3A3C;
 
     // Metadata marks. Grid cards draw them white on a scrim over the photo.
     rating = 0xE9A23B;
@@ -157,7 +162,7 @@ tokens_alpha! {
     /// A key hint on an accent button: on_accent at 20%.
     on_accent_kbd = 0x1A120633;
     /// Dialog scrim.
-    scrim = 0x07070BD9;
+    scrim = 0x080808D9;
     /// Library dim behind modals and sheets: the grid stays readable.
     modal_dim = 0x00000066;
     /// Badges and buttons drawn over media.
@@ -315,6 +320,49 @@ mod tests {
         assert!(
             contrast(bg_0(), danger()) >= 4.5,
             "text on a danger fill is drawn in bg_0"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn selected_row_text_meets_aa() {
+        let bg = bg_selected();
+        assert!(contrast(t1(), bg) >= 4.5, "the selected row's label is AA");
+        assert!(
+            contrast(accent(), bg) >= 4.5,
+            "the selected row's amber count is AA"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn neutrals_carry_no_hue() {
+        // Photos are judged against these surfaces, so they stay grey: no
+        // channel may differ from another by more than 2/255.
+        for c in [
+            bg_stage(),
+            bg_0(),
+            bg_1(),
+            bg_2(),
+            bg_3(),
+            bg_float(),
+            line(),
+            line_2(),
+            t1(),
+            t2(),
+            t3(),
+        ] {
+            let max = c.r.max(c.g).max(c.b);
+            let min = c.r.min(c.g).min(c.b);
+            assert!(max - min <= 2.5 / 255.0, "{c:?} is tinted");
+        }
+    }
+
+    #[core::prelude::v1::test]
+    fn warning_is_distinct_from_the_accent() {
+        let (w, a) = (warn(), accent());
+        let distance = ((w.r - a.r).powi(2) + (w.g - a.g).powi(2) + (w.b - a.b).powi(2)).sqrt();
+        assert!(
+            distance > 0.08,
+            "a warning must not read as a selection (amber)"
         );
     }
 }
