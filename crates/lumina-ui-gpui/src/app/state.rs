@@ -107,6 +107,9 @@ pub struct VideoPlaybackState {
     /// Latest decoded frame for the PiP window; kept apart from
     /// `viewer_image` so browsing photos cannot overwrite the video.
     pub pip_frame: Option<Arc<RenderImage>>,
+    /// When a PiP frame last repainted the main window (executor clock);
+    /// see `LuminaApp::repaint_for_video_frame`.
+    pub(crate) pip_main_repainted: Option<std::time::Instant>,
     pub is_playing: bool,
     pub playback_time: f64,
     pub duration: f64,

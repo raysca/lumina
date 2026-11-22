@@ -11,6 +11,12 @@ use lumina_core::{MediaId, MediaItem, MediaType};
 
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
+use crate::views::floating_pip::FloatingPipPlayerView;
+
+/// While PiP plays, the main window repaints for its frames at most about
+/// 15 times a second: it shows no video then, only state such as the grid.
+pub(crate) const PIP_MAIN_REPAINT_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(66);
 
 impl LuminaApp {
     /// Plays `item` in PiP. When the viewer is already playing it, playback
@@ -150,6 +156,33 @@ impl LuminaApp {
             return true;
         }
         false
+    }
+
+    /// Repaints for a new video frame. Notifying the app redraws every
+    /// window that observes it, and GPUI rebuilds a window's whole root on
+    /// any notify inside it, so a PiP frame notifies only the PiP window's
+    /// view. The main window follows at `PIP_MAIN_REPAINT_INTERVAL`. The
+    /// viewer shows the frame in the main window, which repaints each frame.
+    pub(crate) fn repaint_for_video_frame(&mut self, cx: &mut Context<Self>) {
+        let pip_view = self
+            .floating_pip_window
+            .filter(|_| self.video.in_pip)
+            .and_then(|window| window.downcast::<FloatingPipPlayerView>());
+        // Fails from inside the PiP window's own handler: repaint through
+        // the app instead, which redraws both windows.
+        let Some(Ok(())) = pip_view.map(|view| view.update(cx, |_, _, cx| cx.notify())) else {
+            cx.notify();
+            return;
+        };
+        let now = cx.background_executor().now();
+        let due = self
+            .video
+            .pip_main_repainted
+            .is_none_or(|last| now.duration_since(last) >= PIP_MAIN_REPAINT_INTERVAL);
+        if due {
+            self.video.pip_main_repainted = Some(now);
+            cx.notify();
+        }
     }
 
     /// Starts or stops viewer playback for the selected item. While PiP owns
