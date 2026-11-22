@@ -410,42 +410,7 @@ impl ViewerViewport {
                         .size_full()
                     })
                     // Crop mode's rectangle and handles, over the frame.
-                    .children(super::crop_overlay::render(this, cx))
-                    // Large Circular Play Indicator (Centered on Video when paused).
-                    // Not while PiP owns the player: this is a poster then.
-                    .child(
-                        if is_video
-                            && !this.video.in_pip
-                            && !this.video.is_playing
-                            && !this.playback_failed_shown()
-                        {
-                            div()
-                                .id("viewer-center-play-indicator")
-                                .debug_selector(|| "viewer-center-play".to_string())
-                                .absolute()
-                                .size(px(68.0))
-                                .rounded_full()
-                                .bg(theme::scrim())
-                                .border_1()
-                                .border_color(theme::line_2())
-                                .hover(|s| s.bg(theme::bg_float()).border_color(theme::t2()))
-                                .flex()
-                                .justify_center()
-                                .items_center()
-                                .cursor_pointer()
-                                .shadow_xl()
-                                .child(render_icon(Icon::Play, theme::ICON_XL, theme::t1()))
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                    this.toggle_video_play(cx);
-                                    // The badge sits on the picture, whose own
-                                    // click toggles too; one click, one toggle.
-                                    cx.stop_propagation();
-                                }))
-                                .into_any_element()
-                        } else {
-                            Empty.into_any_element()
-                        },
-                    ),
+                    .children(super::crop_overlay::render(this, cx)),
             )
             // The cached thumbnail may still show; say why it goes no further.
             .children(super::missing::render(this, cx))
