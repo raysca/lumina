@@ -306,6 +306,12 @@ impl LuminaApp {
         }
     }
 
+    /// True while the thumbnail is still growing into the viewer, which
+    /// holds its own picture back until then.
+    pub(crate) fn viewer_zooming(&self) -> bool {
+        self.viewer_zoom.as_ref().is_some_and(|zoom| zoom.active())
+    }
+
     pub fn open_viewer(&mut self, item: MediaItem, cx: &mut Context<Self>) {
         // With PiP open, playing a video means playing it there.
         if self.video.in_pip && item.media_type == MediaType::Video {
@@ -314,6 +320,17 @@ impl LuminaApp {
             return;
         }
         let was_open = self.is_fullscreen_viewer;
+        // A first open grows out of the tile; a slideshow or a step does not.
+        if !was_open && self.slideshow.is_none() {
+            let thumb = self.grid_state.as_ref().and_then(|state| {
+                state
+                    .texture_cache
+                    .lock()
+                    .peek(&item.id)
+                    .map(|thumb| thumb.image.clone())
+            });
+            self.viewer_zoom = crate::motion::ZoomIn::start(item.id.0, thumb);
+        }
         self.select_item(item, cx);
         self.is_fullscreen_viewer = true;
         // Selecting with the viewer open already asked for the frame.
@@ -336,6 +353,7 @@ impl LuminaApp {
         // The Back button or a removed item ends a slideshow too.
         self.drop_slideshow(cx);
         self.is_fullscreen_viewer = false;
+        self.viewer_zoom = None;
         self.is_immersive_fullscreen = false;
         self.immersive_hud_visible = true;
         self.hud_idle = Default::default();

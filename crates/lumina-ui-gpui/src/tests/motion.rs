@@ -239,3 +239,60 @@ fn a_segmented_controls_pill_glides_to_the_new_choice() {
     assert!(!animated, "Reduce Motion snaps the pill");
     assert_eq!(to.origin.x, relative(five));
 }
+
+#[core::prelude::v1::test]
+fn the_viewer_grows_out_of_the_tile_it_opens_from() {
+    crate::motion::REDUCE_MOTION.with(|on| on.set(false));
+    let (_dir, engine) = seed_library("motion_viewer_zoom", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        for id in [lumina_core::MediaId(1), lumina_core::MediaId(2)] {
+            app.handle_ui_message(
+                crate::UiMessage::ThumbnailLoaded {
+                    id,
+                    frame: super::helpers::tiny_decoded_frame(id),
+                    requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
+                },
+                cx,
+            );
+        }
+    });
+    keystrokes(vcx, "home");
+    render_ui(vcx);
+    let item = view.update(vcx, |app, _| {
+        app.selected_item.clone().expect("home selects")
+    });
+    let selector: &'static str = format!("media-card-photo-{}", item.id.0).leak();
+    let tile = vcx.debug_bounds(selector).expect("the selected tile shows");
+
+    view.update(vcx, |app, cx| app.open_viewer(item.clone(), cx));
+    view.update(vcx, |app, _| {
+        let zoom = app.viewer_zoom.as_ref().expect("opening from a tile zooms");
+        assert_eq!(zoom.from(), tile, "out of that tile");
+        assert!(
+            app.viewer_zooming(),
+            "and the viewer holds its picture back"
+        );
+    });
+    // The viewer lays out and paints under the flying thumbnail.
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("viewer-viewport").is_some());
+
+    // Stepping inside the viewer does not zoom again; closing drops it.
+    view.update(vcx, |app, cx| {
+        app.viewer_zoom = None;
+        app.open_viewer(item.clone(), cx);
+        assert!(app.viewer_zoom.is_none(), "a step does not zoom");
+        app.close_viewer(cx);
+    });
+
+    // Under Reduce Motion the viewer only fades.
+    crate::motion::REDUCE_MOTION.with(|on| on.set(true));
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        app.open_viewer(item.clone(), cx);
+        assert!(app.viewer_zoom.is_none(), "Reduce Motion drops the zoom");
+        assert!(!app.viewer_zooming());
+    });
+}

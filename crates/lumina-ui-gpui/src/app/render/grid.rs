@@ -203,6 +203,8 @@ impl LuminaApp {
     /// press/move/release, ⌘-wheel and pinch zoom, and a column for its
     /// children.
     pub(crate) fn grid_surface(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        // The selected tiles mark themselves again as this grid paints.
+        crate::motion::forget_tiles();
         div()
             .id("media-grid-surface")
             .debug_selector(|| "media-grid-surface".to_string())

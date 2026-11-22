@@ -434,6 +434,134 @@ impl PillSlide {
     }
 }
 
+/// The viewer opening out of the grid tile it was opened from: the
+/// tile's thumbnail grows from the tile to where the viewer shows the
+/// picture over [`MOTION_SLOW`], while the viewer fades in behind it and
+/// holds its own picture back until the thumbnail lands. Only for a tile
+/// that is on screen and decoded; a fade alone otherwise, and under Reduce
+/// Motion.
+#[derive(Clone)]
+pub struct ZoomIn {
+    from: Bounds<Pixels>,
+    image: std::sync::Arc<RenderImage>,
+    at: Instant,
+}
+
+impl ZoomIn {
+    /// A zoom out of `item`'s tile, if it painted last frame.
+    pub fn start(item: u64, image: Option<std::sync::Arc<RenderImage>>) -> Option<Self> {
+        if reduce_motion() {
+            return None;
+        }
+        let from = TILES.with(|tiles| tiles.borrow().get(&item).copied())?;
+        Some(Self {
+            from,
+            image: image?,
+            at: Instant::now(),
+        })
+    }
+
+    /// The tile it grows from, for tests.
+    #[cfg(test)]
+    pub(crate) fn from(&self) -> Bounds<Pixels> {
+        self.from
+    }
+
+    /// True while the thumbnail is still flying.
+    pub fn active(&self) -> bool {
+        self.at.elapsed() < MOTION_SLOW
+    }
+
+    /// The thumbnail's frame at `t` (0..=1 of the flight), from the tile to
+    /// `to`, where the viewer fits the picture.
+    pub fn frame(&self, to: Bounds<Pixels>, t: f32) -> Bounds<Pixels> {
+        let k = ease_out_quint()(t.clamp(0.0, 1.0));
+        let mix = |a: Pixels, b: Pixels| px(f32::from(a) + (f32::from(b) - f32::from(a)) * k);
+        Bounds {
+            origin: point(
+                mix(self.from.origin.x, to.origin.x),
+                mix(self.from.origin.y, to.origin.y),
+            ),
+            size: size(
+                mix(self.from.size.width, to.size.width),
+                mix(self.from.size.height, to.size.height),
+            ),
+        }
+    }
+}
+
+thread_local! {
+    /// Where each selected grid tile's photo painted, by media id.
+    static TILES: std::cell::RefCell<HashMap<u64, Bounds<Pixels>>> =
+        std::cell::RefCell::new(HashMap::new());
+    /// Where the viewer's picture area painted this frame.
+    static ZOOM_TARGET: std::cell::Cell<Option<Bounds<Pixels>>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Forgets last frame's tiles; the grid calls it as it renders, so a
+/// tile scrolled away is not zoomed from.
+pub fn forget_tiles() {
+    TILES.with(|tiles| tiles.borrow_mut().clear());
+}
+
+/// Records where a selected tile's photo is, for [`ZoomIn`]. Goes inside
+/// the photo well (absolute, so it takes no room).
+pub fn tile_mark(item: u64) -> impl IntoElement {
+    canvas(
+        move |bounds, _window, _cx| {
+            TILES.with(|tiles| tiles.borrow_mut().insert(item, bounds));
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// Records the viewer's picture area, where [`zoom_ghost`] lands.
+pub fn zoom_target() -> impl IntoElement {
+    canvas(
+        |bounds, _window, _cx| ZOOM_TARGET.with(|target| target.set(Some(bounds))),
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// Paints the flying thumbnail. Goes over the viewer; prepaint has run
+/// for the whole window by the time this paints, so the picture area
+/// [`zoom_target`] recorded is this frame's.
+pub fn zoom_ghost(zoom: ZoomIn, radius: Pixels) -> impl IntoElement {
+    canvas(
+        |_, _, _| {},
+        move |_, _, window, _cx| {
+            let Some(area) = ZOOM_TARGET.with(|target| target.get()) else {
+                return;
+            };
+            let t = zoom.at.elapsed().as_secs_f32() / MOTION_SLOW.as_secs_f32();
+            if t >= 1.0 {
+                return;
+            }
+            window.request_animation_frame();
+            let picture = zoom.image.size(0);
+            let to = ObjectFit::Contain.get_bounds(area, picture);
+            let frame = zoom.frame(to, t);
+            // Cropped like the tile at first, the whole picture on landing.
+            let shown = ObjectFit::Cover.get_bounds(frame, picture);
+            let _ = window.paint_image(
+                frame,
+                shown,
+                Corners::all(radius),
+                zoom.image.clone(),
+                0,
+                false,
+            );
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
 /// Fades `el` in while it rises 8px into place; only fades under Reduce
 /// Motion. `el` must not set its own `top`.
 pub fn rise_in<E: IntoElement + Styled + 'static>(
@@ -572,6 +700,34 @@ mod tests {
             pop.heart(a).is_none(),
             "coming back to the item later does not replay the pop"
         );
+    }
+
+    #[core::prelude::v1::test]
+    fn the_viewer_zoom_eases_from_the_tile_to_the_picture() {
+        let tile = Bounds {
+            origin: point(px(100.0), px(200.0)),
+            size: size(px(120.0), px(120.0)),
+        };
+        let picture = Bounds {
+            origin: point(px(88.0), px(44.0)),
+            size: size(px(1200.0), px(800.0)),
+        };
+        let zoom = ZoomIn {
+            from: tile,
+            image: std::sync::Arc::new(RenderImage::new(Vec::new())),
+            at: Instant::now(),
+        };
+        assert_eq!(zoom.frame(picture, 0.0), tile, "it starts on the tile");
+        assert_eq!(
+            zoom.frame(picture, 1.0),
+            picture,
+            "and lands on the picture"
+        );
+        let mid = zoom.frame(picture, 0.5);
+        let w = f32::from(mid.size.width);
+        assert!(w > 120.0 && w < 1200.0, "halfway it is between: {w}");
+        assert!(w > 660.0, "easing out, most of the way there: {w}");
+        assert!(MOTION_SLOW <= Duration::from_millis(220));
     }
 
     #[core::prelude::v1::test]
