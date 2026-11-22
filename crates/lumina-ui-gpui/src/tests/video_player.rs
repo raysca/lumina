@@ -23,11 +23,24 @@ fn open_video(
         .expect("the deterministic sample set must contain a video");
     let (temp_dir, engine) = seed_library("video_player", 8);
     let (view, vcx) = app_with_library(cx, engine);
+    let answers = || crate::app::state::VIEWER_ANSWERS.with(|n| n.get());
+    let before = answers();
     view.update(vcx, |app, cx| {
         app.open_viewer(video, cx);
         // The sample path doesn't exist; these tests need a playable clip.
         app.video.load_error = None;
         app.video.duration = 60.0;
+        cx.notify();
+    });
+    // The viewer's own decode answers on the decoder pool. Wait it out, so a
+    // late poster cannot replace an image a test stages next.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while answers() == before && std::time::Instant::now() < deadline {
+        vcx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    view.update(vcx, |app, cx| {
+        app.video.load_error = None;
         cx.notify();
     });
     render_ui(vcx);

@@ -1205,6 +1205,9 @@ pub(crate) fn on_viewer_frame(
 thread_local! {
     /// Thumbnail decodes actually sent to the engine from this test thread.
     pub(crate) static THUMB_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Viewer decodes answered (loaded or failed) on this test thread, so a
+    /// test can wait out the viewer's own load before staging an image.
+    pub(crate) static VIEWER_ANSWERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Id and file mtime of each decode sent with a row the UI already held;
     /// a stale row would decode (or hit the disk cache for) the old file.
     pub(crate) static THUMB_REQUEST_ITEMS: std::cell::RefCell<Vec<(MediaId, i64)>> =
