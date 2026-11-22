@@ -306,8 +306,71 @@ impl LuminaApp {
         if max > 0.0 {
             y = y.min(max);
         }
+        let from = -f32::from(base.offset().y);
+        let screen = f32::from(base.bounds().size.height);
         base.set_offset(point(base.offset().x, px(-y)));
+        drop(handle);
+        self.grid_scroll_anim += 1;
+        let distance = y - from;
+        if crate::motion::reduce_motion() || distance.abs() < 1.0 || screen <= 0.0 {
+            // Lands at once.
+        } else if distance.abs() > 3.0 * screen {
+            // A long jump fades in rather than scrolling past years of photos.
+            self.grid_dip += 1;
+        } else {
+            // A short jump scrolls there, starting from where the grid was.
+            self.scroll_grid_smoothly(from, y, cx);
+        }
         cx.notify();
+    }
+
+    /// Scrolls the grid from `from` to `to` over `MOTION_SLOW`. The target
+    /// is already written, so the rail lens and a test read the landing
+    /// spot; each frame writes the eased offset back. A wheel scroll in
+    /// between (an offset this did not write) or a newer jump stops it.
+    fn scroll_grid_smoothly(&mut self, from: f32, to: f32, cx: &mut Context<Self>) {
+        let generation = self.grid_scroll_anim;
+        let set = |this: &mut Self, y: f32| -> bool {
+            let Some(state) = this.grid_state.as_ref() else {
+                return false;
+            };
+            let handle = state.scroll_handle.0.borrow();
+            let base = &handle.base_handle;
+            base.set_offset(point(base.offset().x, px(-y)));
+            true
+        };
+        set(self, from);
+        cx.spawn(async move |this, cx| {
+            let start = std::time::Instant::now();
+            let mut last = from;
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(8))
+                    .await;
+                let t = start.elapsed().as_secs_f32() / crate::motion::MOTION_SLOW.as_secs_f32();
+                let go_on = this.update(cx, |this, cx| {
+                    if this.grid_scroll_anim != generation {
+                        return false;
+                    }
+                    let now = this.grid_state.as_ref().map(|state| {
+                        -f32::from(state.scroll_handle.0.borrow().base_handle.offset().y)
+                    });
+                    if now.is_some_and(|now| (now - last).abs() > 0.5) {
+                        // The user scrolled: leave the grid where they put it.
+                        return false;
+                    }
+                    let y = from + (to - from) * crate::motion::scroll_progress(t);
+                    last = y;
+                    let kept = set(this, y);
+                    cx.notify();
+                    kept && t < 1.0
+                });
+                if !matches!(go_on, Ok(true)) {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     /// Scrolls to the first item of `year` in the current sort direction.

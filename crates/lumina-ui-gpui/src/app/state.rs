@@ -518,6 +518,10 @@ pub struct LuminaApp {
     pub shortcuts_overlay_open: bool,
     /// Overlays fading out after they closed.
     pub exits: crate::motion::Exits,
+    /// Bumped by a grid zoom or a long jump: the grid dips in once more.
+    pub grid_dip: u64,
+    /// Bumped by each animated grid scroll; a newer one stops the older.
+    pub grid_scroll_anim: u64,
     /// Last persisted window bounds: (x, y, width, height).
     pub window_bounds: Option<(f32, f32, f32, f32)>,
     /// The window's backing scale (2.0 on Retina). Refreshed every frame by
@@ -794,6 +798,8 @@ impl LuminaApp {
             updates: Default::default(),
             shortcuts_overlay_open: false,
             exits: Default::default(),
+            grid_dip: 0,
+            grid_scroll_anim: 0,
             window_bounds: config.restored_window_bounds(),
             window_scale: 1.0,
             window_bounds_subscription: None,

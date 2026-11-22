@@ -195,7 +195,8 @@ impl LuminaApp {
             // feedback (the accent border) remains the structural cue;
             // this is an additive visual on top.
             .child(self.render_grid_drag_rect())
-            .into_any_element()
+            // A zoom or a long jump dips the new layout in.
+            .map(|surface| crate::motion::dip_in(surface, "grid-dip", self.grid_dip))
     }
 
     /// The browser body's container, shared by Grid and Mosaic: marquee

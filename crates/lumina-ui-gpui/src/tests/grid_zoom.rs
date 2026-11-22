@@ -680,3 +680,71 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
         "a Cmd+wheel that cannot zoom must leave the scroll offset alone: before={offset_before_limit:?} after={offset_at_limit:?}"
     );
 }
+
+#[core::prelude::v1::test]
+fn a_zoom_dips_the_new_grid_in() {
+    let (_dir, engine) = seed_library("gz_dip", 40);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    grid_at(&view, vcx, 6);
+    let before = view.update(vcx, |app, _| app.grid_dip);
+    let pointer = grid_pointer(vcx);
+    wheel(
+        vcx,
+        pointer,
+        gpui::ScrollDelta::Lines(gpui::point(0.0, -1.0)),
+        crate::tests::helpers::primary_modifier(),
+    );
+    assert_eq!(columns(&view, vcx), 8);
+    assert_eq!(
+        view.update(vcx, |app, _| app.grid_dip),
+        before + 1,
+        "a column change dips the grid in"
+    );
+    assert!(
+        vcx.debug_bounds("media-grid").is_some(),
+        "the dipping grid lays out"
+    );
+}
+
+#[core::prelude::v1::test]
+fn a_short_rail_jump_scrolls_there_and_a_long_one_dips_in() {
+    crate::motion::REDUCE_MOTION.with(|on| on.set(false));
+    let (_dir, engine) = seed_library("gz_smooth", 400);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    grid_at(&view, vcx, 6);
+    let row = view.update(vcx, |app, _| app.row_height());
+
+    view.update(vcx, |app, cx| app.scroll_grid_to_offset(6 * 2, cx));
+    let start = scroll_y(&view, vcx);
+    assert!(
+        start.abs() < 0.5,
+        "a short jump starts where the grid was: {start}"
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while (scroll_y(&view, vcx) + 2.0 * row).abs() > 0.5 && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        vcx.executor()
+            .advance_clock(std::time::Duration::from_millis(10));
+        vcx.run_until_parked();
+    }
+    assert!(
+        (scroll_y(&view, vcx) + 2.0 * row).abs() < 0.5,
+        "and lands two rows down: {}",
+        scroll_y(&view, vcx)
+    );
+
+    let dip = view.update(vcx, |app, _| app.grid_dip);
+    view.update(vcx, |app, cx| app.scroll_grid_to_offset(6 * 60, cx));
+    assert!(
+        scroll_y(&view, vcx) < -10.0 * row,
+        "a long jump lands at once: {}",
+        scroll_y(&view, vcx)
+    );
+    assert_eq!(
+        view.update(vcx, |app, _| app.grid_dip),
+        dip + 1,
+        "and dips in instead"
+    );
+}
