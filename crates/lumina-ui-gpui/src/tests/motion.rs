@@ -196,3 +196,46 @@ fn the_grid_resizes_with_the_sliding_sidebar() {
         );
     });
 }
+
+#[core::prelude::v1::test]
+fn a_segmented_controls_pill_glides_to_the_new_choice() {
+    crate::motion::REDUCE_MOTION.with(|on| on.set(false));
+    let (_dir, engine) = seed_library("motion_segment_pill", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(crate::app::preferences::PreferencesTab::Downloads, cx)
+    });
+    render_ui(vcx);
+    let control = vcx
+        .debug_bounds("settings-concurrency")
+        .expect("the concurrency control shows");
+    // The pill measures from inside the control's 1px border.
+    let relative = |b: gpui::Bounds<gpui::Pixels>| b.origin.x - control.origin.x - gpui::px(1.0);
+    let three = vcx.debug_bounds("settings-concurrency-3").expect("3 shows");
+    let pill = crate::motion::pill("settings-concurrency").expect("the selected 3 has a pill");
+    let (_, rest, _) = pill.ends();
+    assert_eq!(rest.origin.x, relative(three), "the pill rests under 3");
+    assert_eq!(rest.size.width, three.size.width);
+
+    click(vcx, "settings-concurrency-1");
+    render_ui(vcx);
+    let one = vcx.debug_bounds("settings-concurrency-1").expect("1 shows");
+    let pill = crate::motion::pill("settings-concurrency").expect("1 has the pill");
+    let (from, to, animated) = pill.ends();
+    assert!(animated, "the pill slides");
+    assert_eq!(from.origin.x, relative(three), "from 3");
+    assert_eq!(to.origin.x, relative(one), "to 1");
+    assert_eq!(to.size.width, one.size.width);
+
+    // Under Reduce Motion it jumps.
+    crate::motion::REDUCE_MOTION.with(|on| on.set(true));
+    click(vcx, "settings-concurrency-5");
+    render_ui(vcx);
+    let five = vcx.debug_bounds("settings-concurrency-5").expect("5 shows");
+    let pill = crate::motion::pill("settings-concurrency").expect("5 has the pill");
+    let (_, to, animated) = pill.ends();
+    assert!(!animated, "Reduce Motion snaps the pill");
+    assert_eq!(to.origin.x, relative(five));
+}

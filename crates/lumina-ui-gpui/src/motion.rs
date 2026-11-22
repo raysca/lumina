@@ -267,6 +267,173 @@ impl PanelSlide {
     }
 }
 
+/// A segmented control's selected-segment pill gliding to a newly
+/// selected segment: its left edge and width ease from where the pill
+/// was to the new segment over [`MOTION_BASE`]. Bounds are relative to the
+/// control, so moving the whole control never slides the pill. Under
+/// Reduce Motion it snaps.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PillSlide {
+    from: Bounds<Pixels>,
+    to: Bounds<Pixels>,
+    at: Option<Instant>,
+}
+
+impl PillSlide {
+    /// A pill resting on `to`.
+    pub fn new(to: Bounds<Pixels>) -> Self {
+        Self {
+            from: to,
+            to,
+            at: None,
+        }
+    }
+
+    /// Moves the target to `to` (starting a slide from wherever the pill is
+    /// if it changed) and returns where the pill is at `now`.
+    pub fn place(&mut self, to: Bounds<Pixels>, now: Instant) -> Bounds<Pixels> {
+        let moved = |a: Pixels, b: Pixels| (f32::from(a) - f32::from(b)).abs() > 0.5;
+        if moved(to.origin.x, self.to.origin.x)
+            || moved(to.origin.y, self.to.origin.y)
+            || moved(to.size.width, self.to.size.width)
+            || moved(to.size.height, self.to.size.height)
+        {
+            self.from = self.at(now);
+            self.at = (!reduce_motion()).then_some(now);
+        }
+        self.to = to;
+        self.at(now)
+    }
+
+    /// Where the pill is at `now`.
+    pub fn at(&self, now: Instant) -> Bounds<Pixels> {
+        let Some(at) = self.at else {
+            return self.to;
+        };
+        let t = now.saturating_duration_since(at).as_secs_f32() / MOTION_BASE.as_secs_f32();
+        if t >= 1.0 {
+            return self.to;
+        }
+        let k = ease_out_quint()(t);
+        let mix = |a: Pixels, b: Pixels| px(f32::from(a) + (f32::from(b) - f32::from(a)) * k);
+        Bounds {
+            origin: point(
+                mix(self.from.origin.x, self.to.origin.x),
+                mix(self.from.origin.y, self.to.origin.y),
+            ),
+            size: size(
+                mix(self.from.size.width, self.to.size.width),
+                mix(self.from.size.height, self.to.size.height),
+            ),
+        }
+    }
+
+    /// True while a slide is playing at `now`.
+    pub fn active(&self, now: Instant) -> bool {
+        self.at
+            .is_some_and(|at| now.saturating_duration_since(at) < MOTION_BASE)
+    }
+}
+
+/// Where a control's selected segment is, filled during prepaint.
+type SegmentSlot = std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>;
+
+thread_local! {
+    /// Each segmented control's pill, by the control's id.
+    static PILLS: std::cell::RefCell<HashMap<ElementId, PillSlide>> =
+        std::cell::RefCell::new(HashMap::new());
+    /// Where the control being prepainted wants its selected segment's
+    /// bounds; [`segment_mark`] fills it.
+    static PILL_SLOT: std::cell::RefCell<Option<SegmentSlot>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Paints a segmented control's selected-segment pill. Goes first among
+/// the control's children (it is absolute, so it takes no room); the
+/// selected segment carries a [`segment_mark`]. Prepaint runs over the
+/// whole window before paint, so by the time this paints, the mark has
+/// recorded where the selected segment is. `radius` picks the corner
+/// radius from the segment's height.
+pub fn segment_pill(
+    control: ElementId,
+    color: impl Into<Background> + 'static,
+    radius: fn(Pixels) -> Pixels,
+) -> impl IntoElement {
+    canvas(
+        |frame, _window, _cx| {
+            let slot = std::rc::Rc::new(std::cell::Cell::new(None));
+            PILL_SLOT.with(|s| *s.borrow_mut() = Some(slot.clone()));
+            (frame, slot)
+        },
+        move |_, (frame, slot), window, _cx| {
+            let Some(segment) = slot.get() else {
+                // Nothing selected: the next selection appears in place.
+                PILLS.with(|pills| pills.borrow_mut().remove(&control));
+                return;
+            };
+            let to = Bounds {
+                origin: point(
+                    segment.origin.x - frame.origin.x,
+                    segment.origin.y - frame.origin.y,
+                ),
+                size: segment.size,
+            };
+            let now = Instant::now();
+            let (here, sliding) = PILLS.with(|pills| {
+                let mut pills = pills.borrow_mut();
+                let pill = pills.entry(control).or_insert_with(|| PillSlide::new(to));
+                (pill.place(to, now), pill.active(now))
+            });
+            if sliding {
+                window.request_animation_frame();
+            }
+            let bounds = Bounds {
+                origin: point(
+                    here.origin.x + frame.origin.x,
+                    here.origin.y + frame.origin.y,
+                ),
+                size: here.size,
+            };
+            window.paint_quad(fill(bounds, color).corner_radii(radius(here.size.height)));
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// Marks the selected segment of a segmented control so the control's
+/// [`segment_pill`] knows where to go.
+pub fn segment_mark() -> impl IntoElement {
+    canvas(
+        |bounds, _window, _cx| {
+            PILL_SLOT.with(|s| {
+                if let Some(slot) = s.borrow().as_ref() {
+                    slot.set(Some(bounds));
+                }
+            });
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// A segmented control's pill, for tests.
+#[cfg(test)]
+pub(crate) fn pill(control: impl Into<ElementId>) -> Option<PillSlide> {
+    let control = control.into();
+    PILLS.with(|pills| pills.borrow().get(&control).copied())
+}
+
+#[cfg(test)]
+impl PillSlide {
+    /// Where the last slide started and ends, relative to the control, and
+    /// whether it is animated.
+    pub(crate) fn ends(&self) -> (Bounds<Pixels>, Bounds<Pixels>, bool) {
+        (self.from, self.to, self.at.is_some())
+    }
+}
+
 /// Fades `el` in while it rises 8px into place; only fades under Reduce
 /// Motion. `el` must not set its own `top`.
 pub fn rise_in<E: IntoElement + Styled + 'static>(
@@ -501,4 +668,51 @@ mod tests {
             "with exits off a close is instant"
         );
     }
+}
+#[core::prelude::v1::test]
+fn the_segment_pill_glides_to_a_new_segment_and_snaps_under_reduce_motion() {
+    let seg = |x: f32, w: f32| Bounds {
+        origin: point(px(x), px(3.0)),
+        size: size(px(w), px(28.0)),
+    };
+    let start = Instant::now();
+    REDUCE_MOTION.with(|on| on.set(false));
+    let mut pill = PillSlide::new(seg(3.0, 40.0));
+    assert_eq!(pill.place(seg(3.0, 40.0), start), seg(3.0, 40.0));
+    assert!(!pill.active(start), "a resting pill does not animate");
+    assert_eq!(
+        pill.place(seg(3.2, 40.0), start),
+        seg(3.2, 40.0),
+        "a sub-pixel relayout is not a slide"
+    );
+    assert!(!pill.active(start));
+
+    let at = pill.place(seg(45.0, 60.0), start);
+    assert_eq!(
+        at,
+        seg(3.2, 40.0),
+        "a new selection starts where the pill was"
+    );
+    assert!(pill.active(start));
+    let mid = pill.at(start + MOTION_BASE / 2);
+    let x = f32::from(mid.origin.x);
+    let w = f32::from(mid.size.width);
+    assert!(x > 3.2 && x < 45.0, "halfway it is between: {x}");
+    assert!(w > 40.0 && w < 60.0, "and so is its width: {w}");
+    assert!(x > 24.0, "easing out, most of the way there: {x}");
+    let done = start + MOTION_BASE;
+    assert_eq!(pill.at(done), seg(45.0, 60.0));
+    assert!(!pill.active(done));
+
+    // Reselecting mid-slide carries on from where the pill is.
+    let mut pill = PillSlide::new(seg(3.0, 40.0));
+    pill.place(seg(45.0, 60.0), start);
+    let half = start + MOTION_BASE / 2;
+    let here = pill.at(half);
+    assert_eq!(pill.place(seg(3.0, 40.0), half), here);
+
+    REDUCE_MOTION.with(|on| on.set(true));
+    let mut pill = PillSlide::new(seg(3.0, 40.0));
+    assert_eq!(pill.place(seg(45.0, 60.0), start), seg(45.0, 60.0));
+    assert!(!pill.active(start), "Reduce Motion snaps");
 }

@@ -148,8 +148,9 @@ pub fn kbd(label: impl Into<SharedString>) -> Div {
 /// Segmented control container: `bg_0`, 8px radius,
 /// `line_2` outline, 3px inset, 2px between segments.
 pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
+    let id = id.into();
     div()
-        .id(id)
+        .id(id.clone())
         .p(px(3.0))
         .flex()
         .flex_row()
@@ -159,6 +160,17 @@ pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
         .bg(bg_0())
         .border_1()
         .border_color(line_2())
+        // The selected segment's fill, which glides to a new selection.
+        .child(crate::motion::segment_pill(id, bg_3(), segment_radius))
+}
+
+/// The pill's corners: the viewer's compact 24px segments are 4, the rest 6.
+fn segment_radius(height: Pixels) -> Pixels {
+    if height <= px(24.0) {
+        RADIUS_SM
+    } else {
+        RADIUS_MD
+    }
 }
 
 /// Segmented control item: 28px, 6px radius, 12.5. The selected one is
@@ -179,7 +191,8 @@ pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .cursor_pointer();
 
     if active {
-        base.bg(bg_3())
+        // The control's pill paints the bg-3 fill under the mark.
+        base.child(crate::motion::segment_mark())
             .text_color(t1())
             .font_weight(gpui::FontWeight::MEDIUM)
     } else {
