@@ -17,6 +17,10 @@ pub(crate) struct HudIdle {
     /// Pending hide; replacing or dropping it cancels the hide.
     task: Option<Task<()>>,
     pointer_on_hud: bool,
+    /// When the HUD last hid, while its fade-out may still be playing.
+    hidden_at: Option<std::time::Instant>,
+    /// Bumped by each hide, so every hide replays the fade.
+    hides: u64,
 }
 
 /// Banner shown when Edit in External Editor has no configured application.
@@ -392,9 +396,9 @@ impl LuminaApp {
 
     pub fn toggle_immersive_hud(&mut self, cx: &mut Context<Self>) {
         if self.immersive_hud_visible {
-            self.immersive_hud_visible = false;
-            self.hud_idle = Default::default();
-            cx.notify();
+            self.hud_idle.task = None;
+            self.hud_idle.pointer_on_hud = false;
+            self.hide_immersive_hud(cx);
         } else {
             self.wake_immersive_hud(cx);
         }
@@ -422,11 +426,39 @@ impl LuminaApp {
                     // ends without a move sends no wake of its own.
                     this.wake_immersive_hud(cx);
                 } else {
-                    this.immersive_hud_visible = false;
-                    cx.notify();
+                    this.hide_immersive_hud(cx);
                 }
             });
         }));
+    }
+
+    /// Hides the immersive HUD at once; its top bar and transport fade out
+    /// over `motion::EXIT` without taking input.
+    fn hide_immersive_hud(&mut self, cx: &mut Context<Self>) {
+        self.immersive_hud_visible = false;
+        if crate::motion::exits_on() {
+            self.hud_idle.hidden_at = Some(std::time::Instant::now());
+            self.hud_idle.hides += 1;
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(crate::motion::EXIT + std::time::Duration::from_millis(16))
+                    .await;
+                this.update(cx, |_, cx| cx.notify()).ok();
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
+    /// The fade-out id while the just-hidden HUD is still fading out.
+    pub(crate) fn hud_fading_out(&self) -> Option<u64> {
+        let fading = self.is_immersive_fullscreen
+            && !self.immersive_hud_visible
+            && self
+                .hud_idle
+                .hidden_at
+                .is_some_and(|at| at.elapsed() < crate::motion::EXIT);
+        fading.then_some(self.hud_idle.hides)
     }
 
     /// The HUD never hides under the pointer, over an open menu (context,
