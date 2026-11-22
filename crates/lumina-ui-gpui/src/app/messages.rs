@@ -331,6 +331,7 @@ impl LuminaApp {
                 self.video.frame_pending.store(false, Ordering::Release);
                 let playing = self.video.is_playing;
                 let mut frame = None;
+                let mut surface = None;
                 let mut playback_ended = false;
                 let mut playback_error = None;
                 let mut stop_ticker = false;
@@ -340,6 +341,7 @@ impl LuminaApp {
                         self.video.playback_time = player.position();
                         if player.is_playing() {
                             frame = player.next_frame();
+                            surface = player.take_surface();
                         } else if let Some(error) = player.take_playback_error() {
                             playback_error = Some(error);
                         } else {
@@ -367,6 +369,7 @@ impl LuminaApp {
                             if landed {
                                 self.video.playback_time = position;
                                 frame = player.next_frame();
+                                surface = player.take_surface();
                             }
                         }
                     } else {
@@ -389,6 +392,7 @@ impl LuminaApp {
                 if playing && self.enforce_loop_range(playback_ended) {
                     playback_ended = false;
                     frame = None;
+                    surface = None;
                 }
 
                 if playback_ended {
@@ -401,16 +405,20 @@ impl LuminaApp {
                     self.video.seek_refresh_until = None;
                     self.stop_video_ticker();
                     cx.notify();
-                } else if let Some(frame) = frame {
-                    if let Ok(img) = video_frame_to_gpui_image(frame) {
-                        self.show_video_frame(img);
-                        if !playing {
-                            // One frame is all the paused refresh needs.
-                            self.video.seek_refresh_until = None;
-                            self.stop_video_ticker();
-                        }
-                        self.repaint_for_video_frame(cx);
+                } else if frame.is_some() || surface.is_some() {
+                    if let Some(surface) = surface {
+                        self.video.surface = Some(surface);
                     }
+                    if let Some(img) = frame.and_then(|frame| video_frame_to_gpui_image(frame).ok())
+                    {
+                        self.show_video_frame(img);
+                    }
+                    if !playing {
+                        // One frame is all the paused refresh needs.
+                        self.video.seek_refresh_until = None;
+                        self.stop_video_ticker();
+                    }
+                    self.repaint_for_video_frame(cx);
                 } else if stop_ticker {
                     if !playing {
                         self.video.seek_refresh_until = None;

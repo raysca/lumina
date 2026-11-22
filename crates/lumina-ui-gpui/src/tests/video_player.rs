@@ -1529,3 +1529,55 @@ fn clicking_the_video_picture_toggles_playback() {
         "a click on a playing video's picture must pause it"
     );
 }
+
+/// The macOS player's native-size surface paints over the frame image, in
+/// the same rect (the image keeps the clicks, size and shadow). PiP takes
+/// it away from the viewer, and closing the video drops it.
+#[cfg(target_os = "macos")]
+#[core::prelude::v1::test]
+fn the_live_surface_paints_over_the_viewer_frame_until_pip_or_close() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1920,
+            1080,
+        ));
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
+        app.video.item = app.selected_item.clone();
+        app.video.surface = Some(crate::tests::helpers::test_surface());
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert_eq!(
+        vcx.debug_bounds("video-surface"),
+        Some(bounds(vcx, "viewer-media")),
+        "the surface must cover exactly the frame image"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.video.in_pip = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("video-surface").is_none(),
+        "the viewer must not paint a video that plays in PiP"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.video.in_pip = false;
+        app.stop_video_player();
+        cx.notify();
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.video.surface.is_none(),
+            "closing the video drops its surface"
+        );
+    });
+    assert!(vcx.debug_bounds("video-surface").is_none());
+}
