@@ -114,7 +114,7 @@ docs/             accessibility, search, network import, updates, Linux
   revert optimistic state, and report it to the user.
 - Background work (watcher, scan, cache cleanup) logs with `log::warn!` or
   `log::error!` and never panics the process.
-- External native tools (sips, QuickLook) run through the timeout helper. Never
+- External native tools (QuickLook, ffmpeg) run through the timeout helper. Never
   block a decode worker forever on a subprocess.
 
 ### 5.3 State, concurrency, database

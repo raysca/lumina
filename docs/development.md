@@ -91,9 +91,10 @@ Three layers of UI coverage live alongside the unit tests:
   catalog changed (at most once per app launch).
 - **Thumbnail cache budget**: startup cleanup removes entries older than 30 days
   and evicts oldest files down to a 1.5 GB budget (cache keys are format-versioned).
-- **Decode safety**: native `sips`/QuickLook helpers run with a 10 s timeout and
-  are killed if they hang (an unreadable photo fails at once; only RAW files
-  fall back to QuickLook), and the in-process AVFoundation video frame grab is
+- **Decode safety**: photos decode in process through ImageIO (an unreadable
+  photo fails at once); the QuickLook helper, used only when ImageIO cannot
+  render a RAW file, runs with a 10 s timeout and is killed if it hangs, and
+  the in-process AVFoundation video frame grab is
   cancelled after 10 s, so a bad file cannot pin a decode worker forever.
 
 ## Continuous integration

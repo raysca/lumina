@@ -41,7 +41,7 @@ pub(crate) fn install_library(
 }
 
 /// A library of files named `.jpg` that are not images: no size in the
-/// catalog, and every decode of them fails (fast: sips rejects them), so no
+/// catalog, and every decode of them fails (fast: ImageIO rejects them), so no
 /// texture ever lands. Only for tests about failed or texture-less cards
 /// and stages; for a card still decoding, see [`app_with_pending`].
 pub(crate) fn seed_library_undecodable(

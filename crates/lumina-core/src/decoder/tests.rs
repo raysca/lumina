@@ -391,9 +391,9 @@ fn temp_paths_never_repeat() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn concurrent_sips_decodes_of_one_item_all_succeed() {
+fn concurrent_native_decodes_of_one_item_all_succeed() {
     let dir = std::env::temp_dir().join(format!(
-        "lumina_sips_race_{}_{}",
+        "lumina_native_race_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -411,7 +411,7 @@ fn concurrent_sips_decodes_of_one_item_all_succeed() {
             let path = path.clone();
             std::thread::spawn(move || {
                 (0..4)
-                    .filter(|_| DecoderPipeline::decode_via_sips(MediaId(1), &path, 16).is_err())
+                    .filter(|_| DecoderPipeline::decode_via_imageio(MediaId(1), &path, 16).is_err())
                     .count()
             })
         })
@@ -791,11 +791,11 @@ fn huge_declared_image_is_refused_before_allocating() {
     );
 }
 
-/// The sRGB match that sips applies to every decode must leave sRGB and
+/// The sRGB match that ImageIO applies to every decode must leave sRGB and
 /// untagged pixels alone (no shift), checked against a lossless source.
 #[cfg(target_os = "macos")]
 #[test]
-fn sips_decode_does_not_shift_srgb_or_untagged_pixels() {
+fn imageio_decode_does_not_shift_srgb_or_untagged_pixels() {
     use image::ImageEncoder;
     let image = image::RgbImage::from_fn(64, 32, |x, y| {
         image::Rgb([(x * 4) as u8, (y * 8 + x) as u8, (255 - x * 3) as u8])
@@ -816,7 +816,7 @@ fn sips_decode_does_not_shift_srgb_or_untagged_pixels() {
     let srgb =
         fs::read("/System/Library/ColorSync/Profiles/sRGB Profile.icc").expect("sRGB profile");
     let dir = std::env::temp_dir().join(format!(
-        "lumina_sips_shift_{}_{}",
+        "lumina_imageio_shift_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -831,8 +831,8 @@ fn sips_decode_does_not_shift_srgb_or_untagged_pixels() {
     ] {
         let path = dir.join(name);
         fs::write(&path, png).expect("fixture writes");
-        let frame = DecoderPipeline::decode_via_sips(MediaId(1), &path, 64)
-            .expect("sips decodes the fixture");
+        let frame = DecoderPipeline::decode_via_imageio(MediaId(1), &path, 64)
+            .expect("ImageIO decodes the fixture");
         assert_eq!(
             (frame.width, frame.height),
             (64, 32),
@@ -859,12 +859,12 @@ fn sips_decode_does_not_shift_srgb_or_untagged_pixels() {
     }
 }
 
-/// Regression: the sips path (large JPEGs at small sizes, HEIC, RAW)
+/// Regression: the native path (large JPEGs at small sizes, HEIC, RAW)
 /// returned unrotated pixels while the in-process path applied EXIF
 /// orientation, so a crop picked a different region per decode size.
 #[cfg(target_os = "macos")]
 #[test]
-fn sips_and_in_process_decodes_agree_on_exif_orientation() {
+fn native_and_in_process_decodes_agree_on_exif_orientation() {
     let dir = std::env::temp_dir().join(format!(
         "lumina_orientation_{}_{}",
         std::process::id(),
@@ -877,7 +877,7 @@ fn sips_and_in_process_decodes_agree_on_exif_orientation() {
     let path = dir.join("rotated.jpg");
     orientation_six_jpeg(&path, 2800, 1400);
 
-    // 320 goes through sips (over 2560 px), 4096 decodes in process.
+    // 320 goes through ImageIO (over 2560 px), 4096 decodes with zune.
     for size in [320, 4096] {
         let frame = DecoderPipeline::decode_media(MediaId(1), MediaType::Image, &path, size)
             .expect("the fixture decodes");
@@ -937,5 +937,79 @@ fn thumbnail_downscale_keeps_edges_sharper_than_bilinear() {
     assert!(
         sharp > soft,
         "a thumbnail ({sharp}) must keep more edge contrast than a bilinear downscale ({soft})"
+    );
+}
+
+/// A fresh temp dir for one test, removed when the guard drops.
+#[cfg(target_os = "macos")]
+fn imageio_dir(name: &str) -> (std::path::PathBuf, TempDir) {
+    let dir = temp_path(&format!("lumina_imageio_{name}"));
+    let guard = TempDir::new(dir.clone());
+    fs::create_dir_all(&dir).expect("temp dir");
+    (dir, guard)
+}
+
+/// ImageIO fits the decode inside the size asked for but, like the
+/// in-process decoders, never enlarges it (sips did).
+#[cfg(target_os = "macos")]
+#[test]
+fn imageio_decode_fits_the_size_and_never_enlarges() {
+    let (dir, _guard) = imageio_dir("fit");
+    let path = dir.join("wide.png");
+    image::RgbImage::from_pixel(400, 200, image::Rgb([10, 200, 30]))
+        .save(&path)
+        .expect("fixture writes");
+    let fitted = DecoderPipeline::decode_via_imageio(MediaId(1), &path, 100).expect("decodes");
+    assert_eq!(
+        (fitted.width, fitted.height),
+        (100, 50),
+        "fits inside 100 px"
+    );
+    assert_eq!(fitted.data.len(), 100 * 50 * 4, "a tight BGRA buffer");
+    let whole = DecoderPipeline::decode_via_imageio(MediaId(1), &path, 2048).expect("decodes");
+    assert_eq!(
+        (whole.width, whole.height),
+        (400, 200),
+        "a decode larger than the image keeps its own size"
+    );
+}
+
+/// Frames hold straight alpha, as the image crate decodes it: ImageIO's
+/// premultiplied pixels are divided back out.
+#[cfg(target_os = "macos")]
+#[test]
+fn imageio_decode_keeps_straight_alpha() {
+    let (dir, _guard) = imageio_dir("alpha");
+    let path = dir.join("half.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([200, 100, 50, 128]))
+        .save(&path)
+        .expect("fixture writes");
+    let frame = DecoderPipeline::decode_via_imageio(MediaId(1), &path, 8).expect("decodes");
+    let bgra = &frame.data[..4];
+    let expected = [50u8, 100, 200, 128];
+    assert!(
+        bgra.iter().zip(expected).all(|(&got, want)| got.abs_diff(want) <= 2),
+        "a half-transparent pixel keeps its colour unpremultiplied: got BGRA {bgra:?}, want {expected:?}"
+    );
+}
+
+/// A file ImageIO cannot read fails fast with an error, and reports no
+/// pixel size, rather than a frame.
+#[cfg(target_os = "macos")]
+#[test]
+fn imageio_rejects_a_file_that_is_not_an_image() {
+    let (dir, _guard) = imageio_dir("reject");
+    let path = dir.join("fake.heic");
+    fs::write(&path, b"not an image at all").expect("fixture writes");
+    assert!(DecoderPipeline::decode_via_imageio(MediaId(1), &path, 64).is_err());
+    assert_eq!(native_pixel_size(&path), None);
+    let good = dir.join("good.png");
+    image::RgbImage::new(30, 20)
+        .save(&good)
+        .expect("fixture writes");
+    assert_eq!(
+        native_pixel_size(&good),
+        Some((30, 20)),
+        "control: a PNG's size"
     );
 }

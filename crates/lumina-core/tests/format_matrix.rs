@@ -22,11 +22,11 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const DISPLAY_P3: &str = "/System/Library/ColorSync/Profiles/Display P3.icc";
-/// Decode size for the 64x32 fixtures. The sips path scales up to it
-/// (`-Z`), so decode cells check the aspect ratio, not an exact size.
+/// Decode size for the 64x32 fixtures. Decode cells check the aspect
+/// ratio, not an exact size (sips, which decoded before ImageIO, scaled up).
 const SMALL_DECODE: u32 = 256;
 /// The large fixture is over 2560 px and larger than this target, so its
-/// decode takes the sips path.
+/// decode takes the ImageIO path.
 const LARGE_DECODE: u32 = 320;
 /// Per-channel distance from sRGB red (255, 0, 0) that a color cell allows.
 /// JPEG/HEIC quantization on a flat 16x16 block stays well inside it; the
@@ -361,7 +361,7 @@ fn jpeg_small_p3_color() {
 }
 
 /// The usual phone or camera portrait: a real colour match must not lose the
-/// orientation the sips route reads back from its output.
+/// orientation the ImageIO route applies.
 fn assert_rotated_p3(name: &str, large: bool, size: u32, cell: &str) {
     let spec = Spec {
         p3: true,
@@ -398,7 +398,7 @@ fn jpeg_small_orientation_6_scanned_dims() {
     assert_scanned_dims("a.jpg", ROTATED, (32, 64));
 }
 
-// JPEG > 2560 px: sips.
+// JPEG > 2560 px: ImageIO.
 
 const LARGE: Spec = Spec {
     large: true,
@@ -448,7 +448,7 @@ fn jpeg_large_orientation_6_scanned_dims() {
     assert_scanned_dims("big.jpg", spec, (1500, 3000));
 }
 
-// PNG / WebP: the image crate; wide-gamut files go through sips.
+// PNG / WebP: the image crate; wide-gamut files go through ImageIO.
 
 #[test]
 fn png_upright_and_color() {
@@ -490,7 +490,7 @@ fn webp_scanned_dims() {
     assert_scanned_dims("a.webp", PLAIN, (64, 32));
 }
 
-// HEIC: sips.
+// HEIC: ImageIO.
 
 #[test]
 fn heic_upright() {
@@ -527,7 +527,7 @@ fn heic_orientation_6_scanned_dims() {
     assert_scanned_dims("a.heic", ROTATED, (32, 64));
 }
 
-// TIFF: no image-crate codec, so sips.
+// TIFF: no image-crate codec, so ImageIO.
 
 #[test]
 fn tiff_srgb_color() {
@@ -564,7 +564,7 @@ fn tiff_orientation_6_scanned_dims() {
     assert_scanned_dims("a.tiff", ROTATED, (32, 64));
 }
 
-// Export: JPEG 2048 from a large orientation-6 JPEG (sips decode).
+// Export: JPEG 2048 from a large orientation-6 JPEG (ImageIO decode).
 
 #[test]
 fn export_jpeg2048_large_orientation_6_is_upright_portrait() {

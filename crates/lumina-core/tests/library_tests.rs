@@ -783,7 +783,7 @@ fn foreign_sidecar_is_not_overwritten() {
 
 // ---- Export presets ----
 // ponytail: fixtures stay at or below 2560 px; larger JPEGs decode through
-// sips, whose orientation path is checked by the format matrix's export cell.
+// ImageIO, whose orientation path is checked by the format matrix's export cell.
 
 /// A solid red baseline JPEG, `width` x `height`.
 fn red_jpeg(width: u32, height: u32) -> Vec<u8> {

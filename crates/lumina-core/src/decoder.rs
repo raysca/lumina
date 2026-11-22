@@ -12,8 +12,13 @@ use zune_jpeg::JpegDecoder;
 
 use crate::{DecodedFrame, MediaId, MediaType, PixelFormat};
 
+#[cfg(target_os = "macos")]
+mod imageio;
+
 /// RAII guard that removes a file on drop.
+#[cfg(any(target_os = "linux", test))]
 struct TempFile(std::path::PathBuf);
+#[cfg(any(target_os = "linux", test))]
 impl Drop for TempFile {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
@@ -41,16 +46,16 @@ impl Drop for TempDir {
     }
 }
 
-/// Whether `decode_image` tries the scaled native decoder (sips on macOS,
-/// ffmpeg on Linux) before decoding in process, given the lowercase
-/// extension and the file size.
+/// Whether `decode_image` tries the scaled native decoder (ImageIO on macOS,
+/// ffmpeg on Linux) before the in-process Rust decoders, given the
+/// lowercase extension and the file size.
 ///
 /// TIFFs always go native: the image crate's TIFF ICC read can come back
-/// empty (it did for a sips-written Display P3 TIFF), so an in-process decode
-/// would show a wide-gamut TIFF unconverted; sips colour matches (and applies
+/// empty (it did for a sips-written Display P3 TIFF), so its decode would
+/// show a wide-gamut TIFF unconverted; ImageIO colour matches (and applies
 /// the orientation). Large files (> 8 MB) go native so their full-resolution
-/// pixels are never held in memory. On macOS a large JPEG stays in process:
-/// `decode_jpeg_simd` already hands oversized JPEGs to sips. Linux has no
+/// pixels are never held in memory. On macOS a large JPEG stays with zune:
+/// `decode_jpeg_simd` already hands oversized JPEGs to ImageIO. Linux has no
 /// such cap in the JPEG path, so large JPEGs go native there too.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn uses_scaled_native_decode(ext: &str, len: u64) -> bool {
@@ -122,7 +127,7 @@ fn temp_path(prefix: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
 }
 
-/// Native helpers (sips, QuickLook, AVFoundation) must never hang a decode worker.
+/// Native helpers (QuickLook, AVFoundation, ffmpeg) must never hang a decode worker.
 pub(crate) const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
@@ -184,34 +189,12 @@ fn wait_with_timeout_inner(
     }
 }
 
-/// The pixel size of an image as macOS reads it (`sips -g`), for a file
-/// whose catalog size is unknown (an EXIF-less HEIC or RAW). `None` when the
-/// tool is missing, fails or times out. The output is two short lines, far
-/// below a pipe buffer, so reading it after the exit cannot deadlock.
+/// The pixel size of an image as macOS reads it (ImageIO), for a file
+/// whose catalog size is unknown (an EXIF-less HEIC or RAW). `None` when
+/// ImageIO cannot read it.
 #[cfg(target_os = "macos")]
 pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
-    use std::io::Read;
-    let mut child = Command::new("sips")
-        .args(["-g", "pixelWidth", "-g", "pixelHeight"])
-        .arg(path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    let mut stdout = child.stdout.take()?;
-    if !wait_with_timeout(child, NATIVE_TOOL_TIMEOUT)
-        .ok()?
-        .success()
-    {
-        return None;
-    }
-    let mut text = String::new();
-    stdout.read_to_string(&mut text).ok()?;
-    let value = |key: &str| {
-        text.lines()
-            .find_map(|line| line.trim().strip_prefix(key)?.trim().parse::<u32>().ok())
-    };
-    Some((value("pixelWidth:")?, value("pixelHeight:")?))
+    imageio::pixel_size(path)
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -366,9 +349,6 @@ pub(crate) mod live_children {
     }
 }
 
-/// The system sRGB profile that `sips -m` matches every decode to.
-const SRGB_PROFILE: &str = "/System/Library/ColorSync/Profiles/sRGB Profile.icc";
-
 /// Whether an ICC profile is sRGB, judged by its description ("sRGB
 /// IEC61966-2.1", "sRGB built-in", ...). A profile whose description cannot
 /// be read counts as not sRGB, so it is color matched rather than shown as
@@ -497,7 +477,7 @@ impl DecoderPipeline {
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         if uses_scaled_native_decode(&ext, fs::metadata(path).map_or(0, |m| m.len())) {
             #[cfg(target_os = "macos")]
-            if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+            if let Ok(frame) = Self::decode_via_imageio(id, path, target_size) {
                 return Ok(frame);
             }
             #[cfg(target_os = "linux")]
@@ -521,7 +501,7 @@ impl DecoderPipeline {
             .into_decoder()?;
         let (width, height) = decoder.dimensions();
         let icc = decoder.icc_profile().ok().flatten();
-        if let Some(frame) = Self::color_match_via_sips(id, path, target_size, icc, width, height) {
+        if let Some(frame) = Self::color_match_natively(id, path, target_size, icc, width, height) {
             return Ok(frame);
         }
         // `into_decoder` skips the output-buffer guard that `decode()` has;
@@ -607,19 +587,20 @@ impl DecoderPipeline {
         let orig_width = info.width as u32;
         let orig_height = info.height as u32;
 
-        // Cap longest edge: if larger than 2560px, decode scaled image via sips to prevent OOM
+        // Cap longest edge: over 2560 px, ImageIO decodes it scaled down, so
+        // the full-resolution pixels are never held.
         #[cfg(target_os = "macos")]
         if (orig_width > 2560 || orig_height > 2560)
             && (orig_width > target_size || orig_height > target_size)
         {
-            if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+            if let Ok(frame) = Self::decode_via_imageio(id, path, target_size) {
                 return Ok(frame);
             }
         }
 
         let icc = decoder.icc_profile();
         if let Some(frame) =
-            Self::color_match_via_sips(id, path, target_size, icc, orig_width, orig_height)
+            Self::color_match_natively(id, path, target_size, icc, orig_width, orig_height)
         {
             return Ok(frame);
         }
@@ -636,15 +617,10 @@ impl DecoderPipeline {
     /// The in-process decoders (zune-jpeg, the image crate) ignore color
     /// profiles, so a wide-gamut file (Display P3 from an iPhone or a macOS
     /// screenshot, Adobe RGB from a camera) decoded as if it were sRGB looks
-    /// dull. When `icc` is present and not sRGB, decode through sips, which
-    /// color matches; `None` (no profile, sRGB, or sips failed) means decode
-    /// in process as before. Not scaled past the image's own size, as the
-    /// in-process path never upscales either.
-    // ponytail: a sips process plus a PNG round trip costs about 50 ms per
-    // decode against about 5 ms for zune at 1600x1200 (release). Upgrade path
-    // if wide-gamut libraries feel slow: in-process ImageIO, a CGImageSource
-    // drawn into an sRGB CGBitmapContext as `video_frame_macos.m` does.
-    fn color_match_via_sips(
+    /// dull. When `icc` is present and not sRGB, decode through ImageIO,
+    /// which color matches; `None` (no profile, sRGB, or ImageIO failed)
+    /// means decode with zune or the image crate as before.
+    fn color_match_natively(
         id: MediaId,
         path: &Path,
         target_size: u32,
@@ -662,7 +638,7 @@ impl DecoderPipeline {
             if icc.is_none_or(|icc| is_srgb_profile(&icc)) {
                 return None;
             }
-            Self::decode_via_sips(id, path, target_size.min(width.max(height)))
+            Self::decode_via_imageio(id, path, target_size.min(width.max(height)))
                 .map_err(|err| {
                     log::warn!(
                         "colour conversion failed for {}, showing it unconverted: {err:#}",
@@ -673,42 +649,13 @@ impl DecoderPipeline {
         }
     }
 
-    /// Decodes through macOS `sips`, scaled to fit `target_size` and color
-    /// matched to sRGB (frames and the cache hold sRGB; untagged and sRGB
-    /// sources come back unchanged).
-    pub fn decode_via_sips(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        let temp_out = temp_path(&format!("lumina_sips_{}", id.0)).with_extension("png");
-        let _guard = TempFile(temp_out.clone());
-
-        let status = run_with_timeout(
-            Command::new("sips")
-                .arg("-s")
-                .arg("format")
-                .arg("png")
-                .arg("-m")
-                .arg(SRGB_PROFILE)
-                .arg("-Z")
-                .arg(target_size.to_string())
-                .arg(path)
-                .arg("--out")
-                .arg(&temp_out),
-            NATIVE_TOOL_TIMEOUT,
-        );
-
-        if let Ok(status) = status {
-            if status.success() && temp_out.exists() {
-                if let Ok(bytes) = fs::read(&temp_out) {
-                    if let Ok(img) = image::load_from_memory(&bytes) {
-                        // sips keeps the source pixels unrotated and copies the
-                        // orientation into the PNG's eXIf chunk; apply it, as
-                        // the in-process decoders do.
-                        let img = Self::apply_exif_orientation(img, &bytes);
-                        return Ok(Self::resize_to_frame(id, img, target_size));
-                    }
-                }
-            }
-        }
-        Err(anyhow!("sips decode failed"))
+    /// Decodes through ImageIO, in process: scaled to fit `target_size`
+    /// (never enlarged), turned by the EXIF orientation and color matched to
+    /// sRGB (frames and the cache hold sRGB; untagged and sRGB sources come
+    /// back unchanged).
+    #[cfg(target_os = "macos")]
+    pub fn decode_via_imageio(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
+        imageio::decode(id, path, target_size)
     }
 
     /// A video's thumbnail: a frame decoded in process by AVFoundation.
@@ -716,7 +663,7 @@ impl DecoderPipeline {
         crate::video_frame::decode(id, path, target_size, NATIVE_TOOL_TIMEOUT)
     }
 
-    /// QuickLook's thumbnail of `path`, for RAW files sips cannot read.
+    /// QuickLook's thumbnail of `path`, for RAW files ImageIO cannot read.
     /// qlmanage hangs on a file it cannot read, so each failure costs the
     /// tool timeout; images and videos never come here.
     #[cfg(target_os = "macos")]
@@ -774,8 +721,8 @@ impl DecoderPipeline {
             .to_lowercase();
 
         match media_type {
-            // Every scanned image format is one ImageIO reads, so sips covers
-            // what QuickLook would; and sips fails fast on a broken file,
+            // Every scanned image format is one ImageIO reads, so it covers
+            // what QuickLook would; and it fails fast on a broken file,
             // where qlmanage hangs until the tool timeout.
             MediaType::Image => {
                 #[cfg(target_os = "linux")]
@@ -785,14 +732,14 @@ impl DecoderPipeline {
                     ));
                 }
                 #[cfg(target_os = "macos")]
-                // No pure-Rust HEIC/HEIF decoder: ImageIO through sips.
+                // No pure-Rust HEIC/HEIF decoder: ImageIO.
                 if ext == "heic" || ext == "heif" {
-                    return Self::decode_via_sips(id, path, target_size);
+                    return Self::decode_via_imageio(id, path, target_size);
                 }
                 #[cfg(target_os = "macos")]
                 {
                     Self::decode_image(id, path, target_size)
-                        .or_else(|_| Self::decode_via_sips(id, path, target_size))
+                        .or_else(|_| Self::decode_via_imageio(id, path, target_size))
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
@@ -805,10 +752,10 @@ impl DecoderPipeline {
                 return Err(anyhow!("RAW preview decoding is not available on Linux"));
                 #[cfg(target_os = "macos")]
                 {
-                    // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode.
-                    // QuickLook stays as the fallback: RAW is unchecked on real
-                    // files, and it may render cameras sips does not.
-                    Self::decode_via_sips(id, path, target_size)
+                    // ImageIO's RAW rendering first. QuickLook stays as the
+                    // fallback: RAW is unchecked on real files, and it may
+                    // render cameras ImageIO does not.
+                    Self::decode_via_imageio(id, path, target_size)
                         .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
                 }
             }

@@ -49,7 +49,7 @@ impl ExifSize {
 
 /// The displayed size from the cheapest source that knows it: the decoded
 /// header (`header`), else EXIF PixelX/YDimension, else macOS's own reader
-/// (one `sips` call, so only files the first two cannot size pay it: HEIC
+/// (ImageIO opens the file, so only files the first two cannot size pay it: HEIC
 /// written without the EXIF size, TIFF and RAW without it). All three report
 /// the stored size, before orientation (checked for JPEG, HEIC and TIFF; for
 /// RAW it is unverified), so the EXIF orientation is applied last.
@@ -65,7 +65,7 @@ pub(crate) fn displayed_size(
         .or(exif.stored.filter(known))
         .or_else(|| {
             // A JPEG/PNG/WebP whose header the image crate cannot read is
-            // broken; asking sips about it only costs a process.
+            // broken; asking ImageIO about it only costs another read.
             let has_codec = image::ImageFormat::from_path(path).is_ok_and(|f| f.reading_enabled());
             if has_codec {
                 return None;

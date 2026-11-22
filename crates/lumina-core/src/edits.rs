@@ -62,7 +62,8 @@ pub fn edit_decode_size(target: u32, crop: Option<CropRect>, original: (u32, u32
     };
     let mut cap = MAX_EDIT_DECODE;
     if long > 0.0 {
-        // sips upscales; never decode beyond the original.
+        // Never decode beyond the original: nothing upscales, and the
+        // cache keys the decode by its size.
         cap = cap.min(long as u32);
     }
     ((target as f32 / fraction).ceil() as u32)
