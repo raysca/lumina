@@ -37,10 +37,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # elfutils: flatpak-builder strips and compresses debug info with the
+      # host's eu-strip and eu-elfcompress, which are only recommended.
       - name: Install flatpak-builder
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder dbus
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder dbus elfutils
           sudo flatpak remote-add --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
 
