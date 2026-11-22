@@ -125,6 +125,9 @@ impl LuminaApp {
         } else {
             self.grid_columns = new_columns;
         }
+        if new_columns != columns {
+            self.grid_dip += 1;
+        }
         match anchor {
             Some((anchor, y)) => {
                 let target =

@@ -200,6 +200,30 @@ impl Exits {
     }
 }
 
+/// Dips `el` to half opacity and back in over [`MOTION_BASE`] each time
+/// `generation` changes: the grid after a zoom or a long jump, so the new
+/// layout reads as a change rather than a jump cut. Nothing at generation 0.
+pub fn dip_in<E: IntoElement + Styled + 'static>(
+    el: E,
+    id: &'static str,
+    generation: u64,
+) -> AnyElement {
+    if generation == 0 {
+        return el.into_any_element();
+    }
+    el.with_animation(
+        ElementId::NamedInteger(id.into(), generation),
+        entrance(MOTION_BASE),
+        |el, t| el.opacity(0.5 + 0.5 * t),
+    )
+    .into_any_element()
+}
+
+/// How far a programmatic scroll has got at `t` in 0..=1 (entrance curve).
+pub fn scroll_progress(t: f32) -> f32 {
+    ease_out_quint()(t.clamp(0.0, 1.0))
+}
+
 /// The sidebar and right column sliding to new widths. Their targets
 /// change at once; for [`MOTION_SLOW`] after, each is still `slack` wider
 /// (or narrower, if negative) than its target, easing to zero. The grid
