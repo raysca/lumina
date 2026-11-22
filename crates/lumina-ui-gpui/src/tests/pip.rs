@@ -920,3 +920,93 @@ fn expand_over_a_media_less_page_shows_the_video_from_all_media() {
         expand_over_a_page_shows_the_video_from_all_media(prefix, page_row);
     }
 }
+
+/// Counts notifications of `entity` until the returned subscription drops.
+fn count_notifies<T: 'static>(
+    vcx: &mut gpui::VisualTestContext,
+    entity: &gpui::Entity<T>,
+) -> (std::rc::Rc<std::cell::Cell<usize>>, gpui::Subscription) {
+    let count = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counter = count.clone();
+    let subscription =
+        vcx.update(|_, cx| cx.observe(entity, move |_, _| counter.set(counter.get() + 1)));
+    (count, subscription)
+}
+
+/// Shows `frames` video frames 16 ms apart, as the frame tick does.
+fn play_frames(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    frames: usize,
+) -> std::sync::Arc<gpui::RenderImage> {
+    let mut last = None;
+    for _ in 0..frames {
+        let frame = crate::bridge::video_frame_to_gpui_image(crate::player::VideoFrame {
+            width: 2,
+            height: 2,
+            data: vec![0; 16],
+        })
+        .unwrap();
+        last = Some(frame.clone());
+        view.update(vcx, |app, cx| {
+            app.show_video_frame(frame);
+            app.repaint_for_video_frame(cx);
+        });
+        vcx.executor()
+            .advance_clock(std::time::Duration::from_millis(16));
+    }
+    last.unwrap()
+}
+
+/// A PiP frame repaints only the PiP window: notifying the app would rebuild
+/// the main window, library and all, at the video's frame rate. The main
+/// window follows at most about 15 times a second.
+#[core::prelude::v1::test]
+fn pip_frames_repaint_the_pip_window_and_throttle_the_main_window() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
+    let (weak_app, ui_tx) = (
+        view.downgrade(),
+        view.update(vcx, |app, _| app.ui_tx.clone()),
+    );
+    view.update(vcx, |app, _| app.video.in_pip = true);
+    vcx.update(|_, cx| crate::app::windows::open_floating_pip_window(weak_app, ui_tx, cx));
+    vcx.run_until_parked();
+    let pip = view
+        .update(vcx, |app, _| app.floating_pip_window)
+        .and_then(|window| window.downcast::<crate::views::floating_pip::FloatingPipPlayerView>())
+        .expect("the PiP window opens for a PiP session");
+    let pip_view = vcx.update(|_, cx| pip.entity(cx)).expect("PiP view");
+
+    let (main, _main_sub) = count_notifies(vcx, &view);
+    let (pip_repaints, _pip_sub) = count_notifies(vcx, &pip_view);
+    // One second of 60 fps playback.
+    let last = play_frames(&view, vcx, 60);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.video.pip_frame.as_ref().map(|frame| frame.id),
+            Some(last.id),
+            "PiP shows the latest frame"
+        );
+    });
+    assert!(
+        pip_repaints.get() >= 60,
+        "every frame must repaint the PiP window, got {}",
+        pip_repaints.get()
+    );
+    assert!(
+        (10..=16).contains(&main.get()),
+        "the main window repaints about 15 times a second during PiP, not per frame; got {}",
+        main.get()
+    );
+}
+
+/// The viewer shows the frame in the main window, so it repaints each frame.
+#[core::prelude::v1::test]
+fn viewer_frames_repaint_the_main_window_every_frame() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
+    let (main, _sub) = count_notifies(vcx, &view);
+    play_frames(&view, vcx, 30);
+    assert_eq!(main.get(), 30, "each viewer frame repaints the main window");
+}

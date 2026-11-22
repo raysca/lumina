@@ -409,7 +409,7 @@ impl LuminaApp {
                             self.video.seek_refresh_until = None;
                             self.stop_video_ticker();
                         }
-                        cx.notify();
+                        self.repaint_for_video_frame(cx);
                     }
                 } else if stop_ticker {
                     if !playing {
