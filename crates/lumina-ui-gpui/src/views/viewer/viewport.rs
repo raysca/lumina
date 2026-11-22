@@ -139,6 +139,16 @@ impl ViewerViewport {
         });
 
         let preview_image = this.viewer_image.clone();
+        // The live frame of the video playing here (not one in PiP).
+        let live_surface = this
+            .video
+            .surface
+            .as_ref()
+            .filter(|_| is_video && !this.video.in_pip && this.video.player.is_some())
+            .filter(|_| {
+                this.video.item.as_ref().map(|i| i.id) == this.selected_item.as_ref().map(|i| i.id)
+            });
+        let surface_layer = crate::views::video_surface::video_surface_layer(live_surface);
         let scale = this.viewer_state.zoom_scale;
         let (pan_x, pan_y) = this.viewer_state.pan_offset;
         let is_zoomed = scale > 1.0;
@@ -310,6 +320,7 @@ impl ViewerViewport {
                                     CursorStyle::OpenHand
                                 })
                                 .child(media.size_full())
+                                .children(surface_layer)
                                 .into_any_element()
                         } else {
                             div()
@@ -322,6 +333,7 @@ impl ViewerViewport {
                                 // Fit fills the canvas (contain), enlarging
                                 // small media like Photos does.
                                 .child(media.size_full())
+                                .children(surface_layer)
                                 .into_any_element()
                         }
                     } else if is_video {

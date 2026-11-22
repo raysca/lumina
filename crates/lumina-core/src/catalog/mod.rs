@@ -8,6 +8,7 @@
 mod albums;
 mod annotations;
 mod captions;
+mod capture_dates;
 mod dims;
 pub use albums::{Album, AlbumCard, AlbumStats};
 mod downloads;

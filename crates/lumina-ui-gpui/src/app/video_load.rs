@@ -178,8 +178,10 @@ impl LuminaApp {
                 }
                 if self.video.is_playing {
                     self.start_video_ticker();
-                } else if target != start || target > 0.0 {
-                    // No preroll frame shows this destination; fetch it.
+                } else {
+                    // Fetch the frame at the destination: no preroll frame
+                    // shows a seek, and the GPU surface never comes with the
+                    // load (macOS pulls it in the background).
                     self.arm_seek_refresh();
                 }
                 self.request_scrub_strip(cx);

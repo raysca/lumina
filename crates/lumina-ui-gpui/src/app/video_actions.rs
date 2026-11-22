@@ -201,6 +201,7 @@ impl LuminaApp {
         if let Some(mut player) = self.video.player.take() {
             player.pause();
         }
+        self.video.surface = None;
         // A failed clip has no resume point to finish.
         if let Some(state) = self.grid_state.as_ref() {
             state.video_resume.finish();
@@ -247,6 +248,7 @@ impl LuminaApp {
             state.video_resume.finish();
         }
         self.video.player = None;
+        self.video.surface = None;
         self.video.item = None;
         self.video.pending_load_seek = None;
         self.video.is_playing = false;
@@ -454,6 +456,9 @@ impl LuminaApp {
                 .and_then(|frame| video_frame_to_gpui_image(frame).ok())
             {
                 frame = Some(img);
+            }
+            if let Some(surface) = player.take_surface() {
+                self.video.surface = Some(surface);
             }
         } else if self.video.item.is_some() && self.video.load_error.is_none() {
             self.video.pending_load_seek = Some(target);

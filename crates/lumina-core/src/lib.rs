@@ -201,6 +201,9 @@ impl LuminaEngine {
             catalog
                 .mark_dims_oriented()
                 .context("marking photo sizes as current")?;
+            catalog
+                .mark_capture_dates_current()
+                .context("marking capture dates as current")?;
         }
         let decoder = DecoderPipeline::new(0)?;
 

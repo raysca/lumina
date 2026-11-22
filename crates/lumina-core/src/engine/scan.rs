@@ -1,4 +1,4 @@
-//! Library scans and the photo size backfill.
+//! Library scans and the one-time catalog backfills.
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -143,18 +143,20 @@ impl LuminaEngine {
             let _ = self
                 .event_tx
                 .send(EngineEvent::ScanComplete { total_items });
-            self.backfill_photo_sizes(&cancel_flag, measure_photo);
+            self.run_backfills(&cancel_flag, measure_photo);
         }
     }
 
     /// Once per catalog, after ScanComplete so the library opens without
-    /// waiting: fixes photo sizes stored before the scanner applied EXIF
-    /// orientation (re-reading every photo once, slow on a large RAW or
-    /// external-disk library). When rows changed, a second ScanComplete
-    /// refreshes counts, as a rescan does. A cancelled scan (rescan, or the
-    /// library closing) sends nothing: the next scan runs the backfill again,
-    /// and the UI drops a closed library's events by generation.
-    fn backfill_photo_sizes(
+    /// waiting: re-dates items that got their import day as their date
+    /// (candidates only, a header read each), then fixes photo sizes stored
+    /// before the scanner applied EXIF orientation (re-reading every photo
+    /// once, slow on a large RAW or external-disk library). When rows
+    /// changed, a second ScanComplete refreshes counts and the timeline, as a
+    /// rescan does. A cancelled scan (rescan, or the library closing) sends
+    /// nothing: the next scan runs the backfills again, and the UI drops a
+    /// closed library's events by generation.
+    fn run_backfills(
         &self,
         cancel_flag: &AtomicBool,
         measure_photo: impl Fn(&Path) -> Option<(u32, u32)>,
@@ -162,17 +164,28 @@ impl LuminaEngine {
         if cancel_flag.load(Ordering::Relaxed) {
             return;
         }
-        match self
+        let redated = self
+            .catalog
+            .backfill_capture_dates(crate::scanner::capture_time, cancel_flag)
+            .unwrap_or_else(|e| {
+                log::warn!("capture date backfill failed: {e:#}");
+                0
+            });
+        let resized = self
             .catalog
             .backfill_oriented_dims(measure_photo, cancel_flag)
-        {
-            Ok(0) => {}
-            Ok(_) if cancel_flag.load(Ordering::Relaxed) => {}
-            Ok(_) => {
+            .unwrap_or_else(|e| {
+                log::warn!("photo size backfill failed: {e:#}");
+                0
+            });
+        match redated + resized {
+            0 => {}
+            _ if cancel_flag.load(Ordering::Relaxed) => {}
+            _ => {
                 let total_items = match self.catalog.total_count() {
                     Ok(total) => total,
                     Err(e) => {
-                        log::warn!("counting items after the photo size backfill failed: {e:#}");
+                        log::warn!("counting items after the backfills failed: {e:#}");
                         return;
                     }
                 };
@@ -180,7 +193,6 @@ impl LuminaEngine {
                     .event_tx
                     .send(EngineEvent::ScanComplete { total_items });
             }
-            Err(e) => log::warn!("photo size backfill failed: {e:#}"),
         }
     }
 }

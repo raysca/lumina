@@ -1010,3 +1010,33 @@ fn viewer_frames_repaint_the_main_window_every_frame() {
     play_frames(&view, vcx, 30);
     assert_eq!(main.get(), 30, "each viewer frame repaints the main window");
 }
+
+/// In PiP the floating window paints the live surface over its frame.
+#[cfg(target_os = "macos")]
+#[core::prelude::v1::test]
+fn the_pip_window_paints_the_live_surface() {
+    let lib = pip_library("surface");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+    view.update(vcx, |app, cx| {
+        app.video.pip_frame = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            320,
+            180,
+        ));
+        app.video.surface = Some(crate::tests::helpers::test_surface());
+        cx.notify();
+    });
+    pip.update(|window, _| window.refresh());
+    pip.run_until_parked();
+    assert!(
+        pip.debug_bounds("video-surface").is_some(),
+        "the PiP window must paint the live surface"
+    );
+    assert!(
+        vcx.debug_bounds("video-surface").is_none(),
+        "the main window must not paint the video playing in PiP"
+    );
+}

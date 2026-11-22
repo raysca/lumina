@@ -11,6 +11,12 @@ license = "MIT"
 name = "Lumina"
 path = "src/main.rs"
 
+# Real AVFoundation playback: it needs the main run loop, which libtest's
+# harness never runs, so this test drives it from its own main().
+[[test]]
+name = "frame_pump"
+harness = false
+
 [features]
 linux-ui-smoke = []
 
@@ -38,6 +44,10 @@ smallvec = "1.14"
 # NSView, to keep it visible while Lumina is inactive (player/macos.rs).
 [target.'cfg(target_os = "macos")'.dependencies]
 raw-window-handle = "0.6"
+# The video surface GPUI paints (player/macos.rs). Already built by gpui
+# (same versions and features, so no new crate).
+objc2-core-foundation = { version = "0.3.2", default-features = false }
+objc2-core-video = { version = "0.3.2", default-features = false, features = ["CVBuffer", "CVImageBuffer", "CVPixelBuffer"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gstreamer = "0.25.4"

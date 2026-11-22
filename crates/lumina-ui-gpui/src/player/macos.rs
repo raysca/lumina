@@ -1,7 +1,8 @@
-use super::backend::{VideoFrame, VideoMetadata, VideoPlayerBackend};
+use super::backend::{VideoFrame, VideoMetadata, VideoPlayerBackend, VideoSurface};
 use anyhow::{anyhow, Result};
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::path::Path;
+use std::ptr::NonNull;
 
 extern "C" {
     fn lumina_player_create() -> *mut c_void;
@@ -27,6 +28,7 @@ extern "C" {
     fn lumina_player_set_muted(player: *mut c_void, muted: c_int);
     fn lumina_player_set_looping(player: *mut c_void, looping: c_int);
     fn lumina_player_has_new_frame(player: *mut c_void) -> c_int;
+    fn lumina_player_take_surface(player: *mut c_void) -> *mut c_void;
     fn lumina_player_copy_frame(
         player: *mut c_void,
         dst: *mut u8,
@@ -227,7 +229,7 @@ impl VideoPlayerBackend for AvFoundationPlayer {
         unsafe { lumina_player_is_looping(self.handle) == 1 }
     }
 
-    /// Copies the newest frame, allocating only when one is ready. The
+    /// Copies the newest snapshot, allocating only when one is ready. The
     /// frame's `Vec` becomes the GPUI image, so each frame needs its own;
     /// it is sized from the last frame and not zeroed (the bridge writes
     /// every byte before it is read).
@@ -273,6 +275,12 @@ impl VideoPlayerBackend for AvFoundationPlayer {
             }
         }
         None
+    }
+
+    fn take_surface(&mut self) -> Option<VideoSurface> {
+        let raw = unsafe { lumina_player_take_surface(self.handle) };
+        // SAFETY: the bridge hands over a +1 retained CVPixelBuffer (or null).
+        NonNull::new(raw.cast()).map(|buffer| unsafe { VideoSurface::from_raw(buffer) })
     }
 
     fn take_playback_error(&mut self) -> Option<String> {

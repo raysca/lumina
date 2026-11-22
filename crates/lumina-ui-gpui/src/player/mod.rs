@@ -13,7 +13,7 @@ pub mod linux;
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub mod dummy;
 
-pub use backend::{VideoFrame, VideoPlayerBackend};
+pub use backend::{VideoFrame, VideoPlayerBackend, VideoSurface};
 
 #[cfg(target_os = "macos")]
 pub type NativeVideoPlayer = macos::AvFoundationPlayer;

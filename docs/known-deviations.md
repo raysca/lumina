@@ -9,7 +9,7 @@ Regenerate with:
 
     grep -rn ponytail crates --include="*.rs"
 
-Total: 119 notes.
+Total: 120 notes.
 
 
 ## crates/lumina-core/src/cache.rs
@@ -266,7 +266,8 @@ Total: 119 notes.
 
 ## crates/lumina-ui-gpui/src/player/backend.rs
 
-- L25: ponytail: the default assumes 30 fps; the macOS player overrides it
+- L21: ponytail: SDR only; HDR is tone-mapped (GPUI paints 8-bit 4:2:0 with a
+- L37: ponytail: the default assumes 30 fps; the macOS player overrides it
 
 ## crates/lumina-ui-gpui/src/tests/delete_dialog.rs
 
