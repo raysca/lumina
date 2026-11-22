@@ -6,13 +6,51 @@ use crate::app::LuminaApp;
 use crate::views::context_menu::ContextMenuState;
 
 impl LuminaApp {
+    /// The docked inspector is drawn: Info is on, and the page holds media.
+    pub(crate) fn docked_inspector_shown(&self) -> bool {
+        // The Albums overview, the Tags page and the Downloads screen hold
+        // no media, and Review Duplicates' cards show each copy's facts.
+        self.inspector_open
+            && !self.is_fullscreen_viewer
+            && !self.non_media_page_shown()
+            && !self.duplicates_review_shown()
+    }
+
+    /// The drawn widths of the sidebar (with its resizer) and of the right
+    /// column (the inspector with its resizer, or an album's panel).
+    pub(crate) fn panel_widths(&self) -> (f32, f32) {
+        use crate::views::grid::{RESIZER_WIDTH, SIDEBAR_COLLAPSED_WIDTH};
+        let sidebar = if self.sidebar_collapsed {
+            SIDEBAR_COLLAPSED_WIDTH
+        } else {
+            self.sidebar_width + RESIZER_WIDTH
+        };
+        let right = if self.docked_inspector_shown() {
+            self.inspector_width + RESIZER_WIDTH
+        } else if self.album_panel_shown() && !(self.inspector_open && !self.is_fullscreen_viewer) {
+            crate::views::album_page::panel::ALBUM_PANEL_WIDTH
+        } else {
+            0.0
+        };
+        (sidebar, right)
+    }
+
+    /// Slides the panels from the widths `before` a toggle to the current
+    /// ones.
+    fn slide_panels(&mut self, before: (f32, f32)) {
+        let after = self.panel_widths();
+        self.panel_slide.start(before, after);
+    }
+
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        let before = self.panel_widths();
         self.sidebar_collapsed = !self.sidebar_collapsed;
         // A failed save is in the banner; put the sidebar back so the
         // screen matches the saved setting.
         if !self.save_config() {
             self.sidebar_collapsed = !self.sidebar_collapsed;
         }
+        self.slide_panels(before);
         // The View menu names what the item will do next.
         cx.set_menus(crate::menus::build_menus(self.sidebar_collapsed));
         cx.notify();
@@ -32,10 +70,12 @@ impl LuminaApp {
             cx.notify();
             return;
         }
+        let before = self.panel_widths();
         self.inspector_open = !self.inspector_open;
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
         self.save_config();
+        self.slide_panels(before);
         cx.notify();
     }
 

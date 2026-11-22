@@ -218,10 +218,7 @@ impl Render for LuminaApp {
             // stays hidden there (Info stays on for other views). Review
             // Duplicates hides it too: the compare cards show each copy's
             // facts.
-            let inspector_shown = self.inspector_open
-                && !self.is_fullscreen_viewer
-                && !self.non_media_page_shown()
-                && !self.duplicates_review_shown();
+            let inspector_shown = self.docked_inspector_shown();
             // Sidebar (full height) + resizer + main column (banner,
             // header, canvas, inspector)
             root.child(self.render_library_columns(

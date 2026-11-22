@@ -200,6 +200,49 @@ impl Exits {
     }
 }
 
+/// The sidebar and right column sliding to new widths. Their targets
+/// change at once; for [`MOTION_SLOW`] after, each is still `slack` wider
+/// (or narrower, if negative) than its target, easing to zero. The grid
+/// lays out against the slid widths, so it resizes with the panels.
+/// Under Reduce Motion panels snap.
+#[derive(Clone, Copy, Default)]
+pub struct PanelSlide {
+    from: (f32, f32),
+    at: Option<Instant>,
+}
+
+impl PanelSlide {
+    /// Starts a slide from the (sidebar, right column) widths `before` to
+    /// `after`, carrying on from wherever a running slide has reached.
+    pub fn start(&mut self, before: (f32, f32), after: (f32, f32)) {
+        if reduce_motion() {
+            *self = Self::default();
+            return;
+        }
+        let now = self.slack();
+        self.from = (before.0 + now.0 - after.0, before.1 + now.1 - after.1);
+        self.at = Some(Instant::now());
+    }
+
+    /// How much wider than its target each panel still is.
+    pub fn slack(&self) -> (f32, f32) {
+        let Some(at) = self.at else {
+            return (0.0, 0.0);
+        };
+        let t = at.elapsed().as_secs_f32() / MOTION_SLOW.as_secs_f32();
+        if t >= 1.0 {
+            return (0.0, 0.0);
+        }
+        let left = 1.0 - ease_out_quint()(t);
+        (self.from.0 * left, self.from.1 * left)
+    }
+
+    /// True while a slide is playing.
+    pub fn active(&self) -> bool {
+        self.at.is_some_and(|at| at.elapsed() < MOTION_SLOW)
+    }
+}
+
 /// Fades `el` in while it rises 8px into place; only fades under Reduce
 /// Motion. `el` must not set its own `top`.
 pub fn rise_in<E: IntoElement + Styled + 'static>(
@@ -367,6 +410,27 @@ mod tests {
         ] {
             assert!(d <= Duration::from_millis(220), "{d:?} is over budget");
         }
+    }
+
+    #[core::prelude::v1::test]
+    fn panels_slide_from_their_old_width_to_the_new_one() {
+        REDUCE_MOTION.with(|on| on.set(false));
+        let mut slide = PanelSlide::default();
+        assert_eq!(slide.slack(), (0.0, 0.0), "at rest");
+        slide.start((244.0, 0.0), (48.0, 324.0));
+        let (sidebar, right) = slide.slack();
+        assert!(
+            (sidebar - 196.0).abs() < 2.0 && (right + 324.0).abs() < 2.0,
+            "starts at the old widths: {sidebar} {right}"
+        );
+        assert!(slide.active());
+        slide.at = slide.at.map(|at| at - MOTION_SLOW);
+        assert_eq!(slide.slack(), (0.0, 0.0), "lands on the new widths");
+        assert!(!slide.active());
+
+        REDUCE_MOTION.with(|on| on.set(true));
+        slide.start((244.0, 0.0), (48.0, 324.0));
+        assert_eq!(slide.slack(), (0.0, 0.0), "snaps under Reduce Motion");
     }
 
     #[core::prelude::v1::test]
