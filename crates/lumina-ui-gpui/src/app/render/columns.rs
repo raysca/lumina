@@ -23,12 +23,33 @@ impl LuminaApp {
         // controls out of the tree, as the sidebar does (VoiceOver listed
         // them under the viewer). The viewer reads items without the grid.
         let covered = self.viewer_shown();
-        div()
-            .flex_1()
-            .size_full()
+        // While the panels slide, each is clipped to its slid width and
+        // keeps its content at full width, so nothing reflows mid-way.
+        let sliding = self.panel_slide.active();
+        if sliding {
+            window.request_animation_frame();
+        }
+        let (sidebar_slack, right_slack) = self.panel_slide.slack();
+        let (sidebar_w, right_w) = self.panel_widths();
+        let slid = |el: Div, width: f32| {
+            if sliding {
+                div()
+                    .flex_none()
+                    .h_full()
+                    .w(px(width.max(0.0)))
+                    .overflow_hidden()
+                    .bg(theme::bg_1())
+                    .child(el.flex_none())
+            } else {
+                el
+            }
+        };
+        // A closing inspector keeps its content while it slides shut.
+        let inspector_drawn = inspector_shown || (sliding && right_slack > 0.0);
+        let sidebar = div()
+            .h_full()
             .flex()
             .flex_row()
-            .overflow_hidden()
             // Sidebar
             .child(SidebarView::render(self, cx))
             // Sidebar Resizer Drag Handle (180–320px)
@@ -49,7 +70,14 @@ impl LuminaApp {
                     .into_any_element()
             } else {
                 Empty.into_any_element()
-            })
+            });
+        div()
+            .flex_1()
+            .size_full()
+            .flex()
+            .flex_row()
+            .overflow_hidden()
+            .child(slid(sidebar, sidebar_w + sidebar_slack))
             // Main column: the banner and header sit beside the
             // full-height sidebar, above the canvas and inspector.
             .child(
@@ -176,42 +204,49 @@ impl LuminaApp {
                                     .child(self.render_status_bar(total_count, cx))
                                     .into_any_element()
                             })
-                            // Inspector Resizer Drag Handle (260–380px)
-                            .child(if inspector_shown {
+                            .child(slid(
                                 div()
-                                    .id("inspector-resizer")
-                                    .w(px(4.0))
                                     .h_full()
-                                    .cursor_col_resize()
-                                    .hover(|s| s.bg(theme::line_2()))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                                            this.is_dragging_inspector_resizer = true;
-                                            cx.notify();
-                                        }),
-                                    )
-                                    .into_any_element()
-                            } else {
-                                Empty.into_any_element()
-                            })
-                            // Right Slide-out Metadata & Location Inspector
-                            .child(if inspector_shown {
-                                div()
-                                    .debug_selector(|| "inspector-panel".to_string())
-                                    .flex_none()
-                                    .w(px(self.inspector_width))
-                                    .h_full()
-                                    .border_l_1()
-                                    .border_color(theme::line())
-                                    .child(InspectorView::render(self, cx))
-                                    .into_any_element()
-                            } else {
-                                Empty.into_any_element()
-                            })
-                            // With Info off an open album's settings
-                            // panel takes the right column.
-                            .child(crate::views::album_page::panel::render(self, cx)),
+                                    .flex()
+                                    .flex_row()
+                                    // Inspector Resizer Drag Handle (260–380px)
+                                    .child(if inspector_drawn {
+                                        div()
+                                            .id("inspector-resizer")
+                                            .w(px(4.0))
+                                            .h_full()
+                                            .cursor_col_resize()
+                                            .hover(|s| s.bg(theme::line_2()))
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                                                    this.is_dragging_inspector_resizer = true;
+                                                    cx.notify();
+                                                }),
+                                            )
+                                            .into_any_element()
+                                    } else {
+                                        Empty.into_any_element()
+                                    })
+                                    // Right Slide-out Metadata & Location Inspector
+                                    .child(if inspector_drawn {
+                                        div()
+                                            .debug_selector(|| "inspector-panel".to_string())
+                                            .flex_none()
+                                            .w(px(self.inspector_width))
+                                            .h_full()
+                                            .border_l_1()
+                                            .border_color(theme::line())
+                                            .child(InspectorView::render(self, cx))
+                                            .into_any_element()
+                                    } else {
+                                        Empty.into_any_element()
+                                    })
+                                    // With Info off an open album's settings
+                                    // panel takes the right column.
+                                    .child(crate::views::album_page::panel::render(self, cx)),
+                                right_w + right_slack,
+                            )),
                     ),
             )
     }
