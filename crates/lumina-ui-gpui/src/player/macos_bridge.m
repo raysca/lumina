@@ -30,6 +30,13 @@
 @implementation LuminaPlayerBridge {
     float _volume;
     BOOL _isMuted;
+    /// Token of the failed-to-play-to-end observer, removed in teardown.
+    id _failedObserver;
+    /// The mid-clip playback error not yet taken by the app. Written by the
+    /// notification on AVFoundation's thread, read on the UI thread.
+    NSString *_playbackError;
+    /// The item's failed status was already reported, so it is not again.
+    BOOL _statusErrorTaken;
 }
 
 - (instancetype)init {
@@ -59,6 +66,14 @@
                                                          name:AVPlayerItemDidPlayToEndTimeNotification
                                                        object:_playerItem];
     }
+    if (_failedObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_failedObserver];
+        _failedObserver = nil;
+    }
+    @synchronized (self) {
+        _playbackError = nil;
+    }
+    _statusErrorTaken = NO;
     if (_player) {
         [_player pause];
         _player = nil;
@@ -71,10 +86,17 @@
     _chapterTitles = nil;
 }
 
+/// Loads `path` and waits up to `waitSecs` for the item to be ready to play.
+/// Runs on a background thread: AVFoundation reports the item status through
+/// the main queue, so a wait on the main thread could never finish (it is
+/// skipped there, as with `waitSecs` 0). On failure `*outError` describes the
+/// cause for the log.
 - (BOOL)loadFile:(NSString *)path
+        waitSecs:(double)waitSecs
        duration:(double *)outDuration
           width:(int *)outWidth
-         height:(int *)outHeight {
+         height:(int *)outHeight
+           error:(NSString **)outError {
     [self teardown];
 
     if (!path || path.length == 0) {
@@ -161,8 +183,37 @@
                                                  name:AVPlayerItemDidPlayToEndTimeNotification
                                                object:_playerItem];
 
+    __weak LuminaPlayerBridge *weakSelf = self;
+    _failedObserver = [[NSNotificationCenter defaultCenter]
+        addObserverForName:AVPlayerItemFailedToPlayToEndTimeNotification
+                    object:_playerItem
+                     queue:nil
+                usingBlock:^(NSNotification *note) {
+                    NSError *err = note.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
+                    [weakSelf notePlaybackError:err];
+                }];
+
     _player = [AVPlayer playerWithPlayerItem:_playerItem];
     _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+
+    // The asset reads above can succeed for a file the item still cannot
+    // play (an unsupported container, a damaged index): wait for its verdict.
+    if (waitSecs > 0 && ![NSThread isMainThread]) {
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:waitSecs];
+        while (_playerItem.status == AVPlayerItemStatusUnknown) {
+            if (deadline.timeIntervalSinceNow <= 0) {
+                if (outError) *outError = @"the player item was not ready in time";
+                [self teardown];
+                return NO;
+            }
+            usleep(5000);
+        }
+    }
+    if (_playerItem.status == AVPlayerItemStatusFailed) {
+        if (outError) *outError = _playerItem.error.description ?: @"the player item failed";
+        [self teardown];
+        return NO;
+    }
 
     // Synchronous reads, like duration and tracks above: the asset is local.
     _audioGroup = [asset mediaSelectionGroupForMediaCharacteristic:AVMediaCharacteristicAudible];
@@ -194,6 +245,27 @@
     }
     _chapterStarts = starts;
     _chapterTitles = titles;
+}
+
+- (void)notePlaybackError:(NSError *)err {
+    @synchronized (self) {
+        _playbackError = err.description ?: @"playback failed";
+    }
+}
+
+/// A playback error after a successful load, once: the failed-to-play-to-end
+/// notification, or the item's failed status. Nil when there is none.
+- (NSString *)takePlaybackError {
+    NSString *taken = nil;
+    @synchronized (self) {
+        taken = _playbackError;
+        _playbackError = nil;
+    }
+    if (!taken && !_statusErrorTaken && _playerItem.status == AVPlayerItemStatusFailed) {
+        _statusErrorTaken = YES;
+        taken = _playerItem.error.description ?: @"the player item failed";
+    }
+    return taken;
 }
 
 - (NSInteger)selectedAudioIndex {
@@ -433,15 +505,36 @@ void lumina_player_destroy(void* player) {
     }
 }
 
-int lumina_player_load(void* player, const char* path, double* out_duration, int* out_width, int* out_height) {
+static char *lumina_copy_utf8(NSString *text);
+
+/// `*out_error`, when set, is a malloc'd description for the log; Rust frees
+/// it with lumina_player_free_string.
+int lumina_player_load(void* player, const char* path, double wait_secs, double* out_duration,
+                       int* out_width, int* out_height, char** out_error) {
+    if (out_error) *out_error = NULL;
     if (!player || !path || strlen(path) == 0) return 0;
     @autoreleasepool {
         LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
         NSString *str = [NSString stringWithUTF8String:path];
-        if (!str || ![[NSFileManager defaultManager] fileExistsAtPath:str]) {
-            return 0;
-        }
-        return [bridge loadFile:str duration:out_duration width:out_width height:out_height] ? 1 : 0;
+        NSString *error = nil;
+        BOOL ok = str && [bridge loadFile:str
+                                 waitSecs:wait_secs
+                                 duration:out_duration
+                                    width:out_width
+                                   height:out_height
+                                    error:&error];
+        if (!ok && error && out_error) *out_error = lumina_copy_utf8(error);
+        return ok ? 1 : 0;
+    }
+}
+
+/// The playback error not yet taken, malloc'd, or NULL when there is none.
+char* lumina_player_take_error(void* player) {
+    if (!player) return NULL;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        NSString *error = [bridge takePlaybackError];
+        return error ? lumina_copy_utf8(error) : NULL;
     }
 }
 

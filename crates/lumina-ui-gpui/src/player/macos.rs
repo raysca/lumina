@@ -9,10 +9,13 @@ extern "C" {
     fn lumina_player_load(
         player: *mut c_void,
         path: *const c_char,
+        wait_secs: f64,
         out_duration: *mut f64,
         out_width: *mut c_int,
         out_height: *mut c_int,
+        out_error: *mut *mut c_char,
     ) -> c_int;
+    fn lumina_player_take_error(player: *mut c_void) -> *mut c_char;
     fn lumina_player_play(player: *mut c_void);
     fn lumina_player_pause(player: *mut c_void);
     fn lumina_player_is_playing(player: *mut c_void) -> c_int;
@@ -58,6 +61,17 @@ extern "C" {
     fn lumina_player_is_muted(player: *mut c_void) -> c_int;
     fn lumina_player_is_looping(player: *mut c_void) -> c_int;
 }
+
+/// How long a load waits for AVFoundation to say whether the item can play,
+/// the same bound as the native tool timeout (`decoder::NATIVE_TOOL_TIMEOUT`).
+/// Tests skip the wait: AVFoundation reports the item status on the main
+/// queue, which the test harness never runs, so it would always time out.
+const READY_WAIT_SECS: f64 = if cfg!(test) { 0.0 } else { 10.0 };
+
+/// Shown in the playback-failed card when decoding fails mid-clip. The
+/// AVFoundation error goes to the log only.
+const PLAYBACK_FAILED_MESSAGE: &str =
+    "This video stopped playing because part of it could not be decoded.";
 
 /// Takes ownership of a malloc'd UTF-8 string from the bridge. Null is "".
 fn take_bridge_string(raw: *mut c_char) -> String {
@@ -122,18 +136,25 @@ impl VideoPlayerBackend for AvFoundationPlayer {
         let mut duration = 0.0f64;
         let mut width = 0i32;
         let mut height = 0i32;
+        let mut error: *mut c_char = std::ptr::null_mut();
 
         let ok = unsafe {
             lumina_player_load(
                 self.handle,
                 c_path.as_ptr(),
+                READY_WAIT_SECS,
                 &mut duration,
                 &mut width,
                 &mut height,
+                &mut error,
             )
         };
 
+        let error = take_bridge_string(error);
         if ok != 1 {
+            if !error.is_empty() {
+                log::warn!("AVFoundation could not load {}: {error}", path.display());
+            }
             return Err(anyhow!(
                 "The system player could not open {}",
                 path.display()
@@ -271,6 +292,15 @@ impl VideoPlayerBackend for AvFoundationPlayer {
             height: height as u32,
             data: vec,
         })
+    }
+
+    fn take_playback_error(&mut self) -> Option<String> {
+        let raw = unsafe { lumina_player_take_error(self.handle) };
+        if raw.is_null() {
+            return None;
+        }
+        log::error!("AVFoundation playback error: {}", take_bridge_string(raw));
+        Some(PLAYBACK_FAILED_MESSAGE.to_string())
     }
 
     fn audio_tracks(&self) -> Vec<String> {

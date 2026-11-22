@@ -139,6 +139,52 @@ fn video_load_failure_says_so() {
     });
 }
 
+/// The load runs in the background: its failure shows the card when it
+/// lands, unless the session moved on since it started.
+#[core::prelude::v1::test]
+fn a_failed_background_load_shows_the_card_unless_it_is_stale() {
+    let (_fixture, engine, video) = broken_video("playback_failed_async");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.open_viewer(video.clone(), cx);
+        // Model the load still running: no result has landed yet.
+        app.video.load_error = None;
+        app.video.load_file_gone = false;
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-playback-failed").is_none(),
+        "no failure card while the load runs"
+    );
+
+    view.update(vcx, |app, cx| {
+        let generation = app.video.load_generation;
+        app.finish_video_load(generation.wrapping_sub(1), video.id, Err("old".into()), cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-playback-failed").is_none(),
+        "a failure from an earlier load must not show on the current one"
+    );
+
+    view.update(vcx, |app, cx| {
+        let generation = app.video.load_generation;
+        app.finish_video_load(generation, video.id, Err("could not open".into()), cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-playback-failed").is_some(),
+        "the current load's failure shows the playback-failed card"
+    );
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.load_error.clone())
+            .as_deref(),
+        Some("could not open"),
+        "the card shows the load's error"
+    );
+}
+
 #[core::prelude::v1::test]
 fn pip_load_failure_shows_a_compact_message() {
     let (_fixture, engine, video) = broken_video("playback_failed_pip");

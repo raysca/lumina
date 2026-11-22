@@ -903,6 +903,47 @@ fn another_video_or_closing_the_viewer_drops_the_range() {
     );
 }
 
+/// A background load for an item the user already left must not install
+/// its player over the item now shown.
+#[core::prelude::v1::test]
+fn a_late_load_for_the_previous_video_is_ignored() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clip.mp4");
+    let (previous, generation, late) = view.update(vcx, |app, _| {
+        let previous = app.selected_item.clone().expect("the video is shown");
+        let settings = crate::app::video_actions::VideoSettings::of(&app.video);
+        let late = crate::app::video_load::load_video_in_background(&clip, None, settings);
+        (previous, app.video.load_generation, late)
+    });
+    assert!(
+        late.is_ok(),
+        "the fixture clip loads: {:?}",
+        late.as_ref().err()
+    );
+
+    let mut next = previous.clone();
+    next.id = lumina_core::MediaId(previous.id.0 + 1000);
+    next.path = std::path::PathBuf::from("/nonexistent/next.mp4");
+    view.update(vcx, |app, cx| {
+        app.load_video_player(&next, cx);
+        app.finish_video_load(generation, previous.id, late, cx);
+        assert_eq!(
+            app.video.item.as_ref().map(|item| item.id),
+            Some(next.id),
+            "the session stays on the video now shown"
+        );
+        assert!(
+            app.video.player.is_none(),
+            "the previous video's late load must not install its player"
+        );
+        assert!(
+            app.video.load_error.is_some(),
+            "the shown video keeps its own (failed) load result"
+        );
+    });
+}
+
 #[core::prelude::v1::test]
 fn alt_i_sets_in_point_without_toggling_inspector() {
     let mut cx = crate::tests::TestApp::single();
