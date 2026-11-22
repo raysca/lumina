@@ -82,14 +82,19 @@ pub(super) fn render(
                 .justify_center()
                 .items_center()
                 .cursor_pointer()
-                .child(render_icon(
-                    if video.is_playing {
-                        Icon::Pause
-                    } else {
-                        Icon::Play
-                    },
-                    theme::ICON_MD,
-                    theme::bg_0(),
+                // Play and Pause cross-fade: each swap fades the new icon in.
+                .child(crate::motion::fade_in(
+                    render_icon(
+                        if video.is_playing {
+                            Icon::Pause
+                        } else {
+                            Icon::Play
+                        },
+                        theme::ICON_MD,
+                        theme::bg_0(),
+                    ),
+                    ElementId::NamedInteger("video-play-icon".into(), video.is_playing as u64),
+                    crate::motion::MOTION_FAST,
                 ))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.toggle_video_play(cx);

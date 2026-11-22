@@ -226,3 +226,32 @@ fn test_immersive_fullscreen_mode_lifecycle() {
     });
     cx.run_until_parked();
 }
+
+#[core::prelude::v1::test]
+fn the_hidden_hud_fades_out_without_taking_clicks() {
+    crate::motion::EXITS.with(|on| on.set(true));
+    let mut cx = crate::tests::TestApp::single();
+    let (_dir, view, vcx) = open_viewer("hud_fade", &mut cx);
+    view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
+    render_ui(vcx);
+    idle(vcx, HUD_IDLE + std::time::Duration::from_millis(100));
+    assert!(!hud(&view, vcx), "the HUD hides after 2 s of idle");
+    assert!(
+        vcx.debug_bounds("viewer-top-bar").is_some(),
+        "the hidden HUD's top bar fades out"
+    );
+    let back = vcx.debug_bounds("viewer-back").expect("Back fades with it");
+    vcx.simulate_click(back.center(), Modifiers::default());
+    view.update(vcx, |app, _| {
+        assert!(app.is_fullscreen_viewer, "a fading Back takes no click")
+    });
+
+    std::thread::sleep(crate::motion::EXIT + std::time::Duration::from_millis(30));
+    view.update(vcx, |_, cx| cx.notify());
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-top-bar").is_none(),
+        "gone after the fade"
+    );
+    crate::motion::EXITS.with(|on| on.set(false));
+}
