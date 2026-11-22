@@ -313,8 +313,13 @@ impl LuminaApp {
             self.play_in_pip(item, cx);
             return;
         }
+        let was_open = self.is_fullscreen_viewer;
         self.select_item(item, cx);
         self.is_fullscreen_viewer = true;
+        // Selecting with the viewer open already asked for the frame.
+        if !was_open {
+            self.request_shown_viewer_frame(cx);
+        }
         self.prefetch_viewer_neighbours();
         self.viewer_state.reset();
         self.sync_viewer_player(cx);

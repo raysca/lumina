@@ -113,7 +113,14 @@ fn keyboard_only_crop_persists() {
         .expect("the photo must decode");
     let id = ids[0];
     view.update(vcx, |app, cx| {
-        app.handle_ui_message(crate::app::UiMessage::ViewerLoaded { id, frame }, cx)
+        app.handle_ui_message(
+            crate::app::UiMessage::ViewerLoaded {
+                id,
+                generation: app.viewer_frame.generation,
+                frame,
+            },
+            cx,
+        )
     });
     view.update(vcx, |app, _| {
         let size = app.viewer_image.as_ref().expect("viewer frame").size(0);

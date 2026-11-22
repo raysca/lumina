@@ -2,6 +2,13 @@
 
 use crate::*;
 
+/// Largest decode written to the disk cache: the biggest grid thumbnail
+/// (`THUMBNAIL_SIZE_MAX` in the UI). Larger decodes (the 2048 px viewer,
+/// edit and two-up compare frames) are 12-17 MB raw each and are only ever
+/// shown for the item open, so they are decoded per request instead of
+/// filling the cache. A cached copy of that size is still read.
+const MAX_CACHED_DECODE: u32 = 1280;
+
 impl LuminaEngine {
     pub fn request_thumbnail<F>(&self, id: MediaId, target_size: u32, callback: F)
     where
@@ -103,7 +110,7 @@ impl LuminaEngine {
         }
         match DecoderPipeline::decode_media(item.id, item.media_type, &item.path, size) {
             Ok(frame) => {
-                if cacheable {
+                if cacheable && size <= MAX_CACHED_DECODE {
                     if let Err(err) = cache.put_cached(
                         &item.path,
                         item.file_size,

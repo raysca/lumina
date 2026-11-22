@@ -125,6 +125,7 @@ mod video_scrub_drag;
 mod video_tiles;
 mod video_tracks;
 mod viewer_filmstrip;
+mod viewer_frame;
 mod viewer_journey;
 mod viewer_pinch;
 mod viewer_stage;

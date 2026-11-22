@@ -297,8 +297,8 @@ fn cropped_viewer_decode_is_not_cached() {
     assert_eq!((plain.width, plain.height), (2048, 1024));
     assert_eq!(
         cache_file_count(&dir),
-        1,
-        "control: the unedited viewer decode is cached"
+        0,
+        "a viewer-size decode must not be written to the disk cache"
     );
     engine
         .catalog
@@ -313,8 +313,28 @@ fn cropped_viewer_decode_is_not_cached() {
     );
     assert_eq!(
         cache_file_count(&dir),
-        1,
+        0,
         "a cropped viewer decode must not be written to the disk cache"
+    );
+    drop(engine);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn grid_size_decodes_are_cached_and_viewer_size_decodes_are_not() {
+    let dir = temp_library("viewer_size_cache");
+    let (engine, item) = engine_with_image(&dir, "photo.png", 2100, 1050);
+    request_thumbnail_frame(&engine, item.id, 1280);
+    assert_eq!(
+        cache_file_count(&dir),
+        1,
+        "the largest grid thumbnail is written to the disk cache"
+    );
+    request_thumbnail_frame(&engine, item.id, 2048);
+    assert_eq!(
+        cache_file_count(&dir),
+        1,
+        "a 2048 px viewer decode must not be written to the disk cache"
     );
     drop(engine);
     let _ = fs::remove_dir_all(&dir);

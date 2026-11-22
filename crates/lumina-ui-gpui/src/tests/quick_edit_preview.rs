@@ -47,6 +47,7 @@ fn stale_preview_is_dropped() {
         app.handle_ui_message(
             crate::app::UiMessage::ViewerLoaded {
                 id: photos[0],
+                generation: app.viewer_frame.generation,
                 frame: lumina_core::DecodedFrame {
                     id: photos[0],
                     width: 1,
