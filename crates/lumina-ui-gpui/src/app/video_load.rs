@@ -1,12 +1,11 @@
-//! Linux video loads: GStreamer can take seconds to preroll, so the player
-//! loads on a background thread and `finish_video_load` installs the result
-//! on the UI thread, unless the session moved on meanwhile. Tests drive the
-//! two halves directly (they load synchronously through `load_video_player`).
+//! Video loads: opening a file can take seconds (AVFoundation reads the
+//! asset and waits for the item to be ready; GStreamer prerolls), so the
+//! player loads on a background thread and `finish_video_load` installs the
+//! result on the UI thread, unless the session moved on meanwhile. Tests run
+//! the background half inline so they never depend on its timing.
 
 use gpui::*;
-use lumina_core::MediaId;
-#[cfg(not(test))]
-use lumina_core::MediaItem;
+use lumina_core::{MediaId, MediaItem};
 
 use super::video_actions::{fill_missing_dimensions, VideoSettings};
 use crate::app::types::format_duration_badge;
@@ -15,21 +14,22 @@ use crate::bridge::video_frame_to_gpui_image;
 use crate::config::resume_start_time;
 use crate::player::{self, VideoPlayerBackend};
 
-/// What a background Linux load hands to the UI thread.
+/// What a background load hands to the UI thread.
 pub(crate) struct LoadedVideo {
     player: player::NativeVideoPlayer,
     meta: player::backend::VideoMetadata,
     tracks: crate::app::video_tracks::VideoTracks,
-    /// The preroll frame, only when the load starts at time zero: a resumed
-    /// start must show the destination, not the time-zero preroll.
+    /// The first frame, only when the load starts at time zero: a resumed
+    /// start must show the destination, not the time-zero frame.
     first_frame: Option<player::VideoFrame>,
     /// Where the load left the player: the resume point, or zero.
     start: f64,
 }
 
-/// Loads `path` off the UI thread (GStreamer can take seconds to preroll),
-/// applying `settings` and seeking to the resume point from `saved`.
-fn load_video_in_background(
+/// Loads `path` off the UI thread, applying `settings` and seeking to the
+/// resume point from `saved`. The player is created here and then used only
+/// from the UI thread.
+pub(crate) fn load_video_in_background(
     path: &std::path::Path,
     saved: Option<f64>,
     settings: VideoSettings,
@@ -64,8 +64,13 @@ fn pending_load_target(pending: Option<f64>, start: f64, duration: f64) -> f64 {
 }
 
 impl LuminaApp {
-    #[cfg(not(test))]
-    pub(super) fn load_video_player_async(&mut self, item: &MediaItem, cx: &mut Context<Self>) {
+    /// Starts a player session for `item`, replacing any current one. The
+    /// file loads in the background; seeks and play pressed meanwhile are
+    /// applied when it lands. Frames go to the viewer or, while
+    /// `video.in_pip` is set, to the PiP window.
+    pub fn load_video_player(&mut self, item: &MediaItem, cx: &mut Context<Self>) {
+        // Finish the previous video before associating the session with the
+        // new media id.
         self.stop_video_player();
         let generation = self.video.load_generation;
         if let Some(state) = self.grid_state.as_ref() {
@@ -84,18 +89,27 @@ impl LuminaApp {
             .as_ref()
             .and_then(|state| state.video_resume.saved(id));
         let settings = VideoSettings::of(&self.video);
-        let task = cx
-            .background_executor()
-            .spawn(async move { load_video_in_background(&path, saved, settings) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            // The view is gone when the window closed mid-load; nothing
-            // is left to update.
-            let _ = this.update(cx, |app, cx| {
-                app.finish_video_load(generation, id, result, cx)
-            });
-        })
-        .detach();
+        #[cfg(test)]
+        {
+            crate::app::playback_failed::VIDEO_LOADS.with(|n| n.set(n.get() + 1));
+            let result = load_video_in_background(&path, saved, settings);
+            self.finish_video_load(generation, id, result, cx);
+        }
+        #[cfg(not(test))]
+        {
+            let task = cx
+                .background_executor()
+                .spawn(async move { load_video_in_background(&path, saved, settings) });
+            cx.spawn(async move |this, cx| {
+                let result = task.await;
+                // The view is gone when the window closed mid-load; nothing
+                // is left to update.
+                let _ = this.update(cx, |app, cx| {
+                    app.finish_video_load(generation, id, result, cx)
+                });
+            })
+            .detach();
+        }
         cx.notify();
     }
 
@@ -124,6 +138,7 @@ impl LuminaApp {
                 start,
             }) => {
                 self.video.duration = meta.duration_secs;
+                self.video.failed_focus = None;
                 let pending_seek = self.video.pending_load_seek.take();
                 let target = pending_load_target(pending_seek, start, meta.duration_secs);
                 self.video.playback_time = target;
@@ -181,11 +196,12 @@ impl LuminaApp {
     }
 }
 
-#[cfg(test)]
+// These drive the GStreamer player directly; the cross-platform load tests
+// live in `tests/video_player.rs` and `tests/playback_failed.rs`.
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
     use crate::app::types::UiMessage;
-    use lumina_core::MediaItem;
     use std::path::Path;
     use std::time::{Duration, Instant};
 
@@ -480,6 +496,11 @@ mod tests {
         });
         let _ = std::fs::remove_file(&clip);
     }
+}
+
+#[cfg(test)]
+mod load_tests {
+    use super::*;
 
     #[core::prelude::v1::test]
     fn pending_seek_during_load_overrides_resume_position_and_is_clamped() {
@@ -490,7 +511,7 @@ mod tests {
     }
 
     #[core::prelude::v1::test]
-    fn scrub_and_relative_seek_are_retained_while_linux_player_loads() {
+    fn scrub_and_relative_seek_are_retained_while_the_player_loads() {
         let mut test_app = crate::tests::TestApp::single();
         let (view, cx) = test_app.add_window_view(|_window, cx| LuminaApp::new(cx));
         let item = crate::app::types::get_sample_items()

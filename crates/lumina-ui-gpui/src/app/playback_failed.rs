@@ -44,10 +44,13 @@ impl LuminaApp {
         // it, so ↵ can try again without another Tab.
         let focus = self.video.failed_focus;
         self.load_video_player(&item, cx);
-        if self.video.load_error.is_some() {
+        // Until the load lands it may fail again: keep the focus for that
+        // card. A successful load clears it.
+        if self.video.player.is_none() {
             self.video.failed_focus = focus;
         }
-        if self.video.in_pip && self.video.player.is_some() && !self.video.is_playing {
+        // Play pressed while the load runs plays the clip when it lands.
+        if self.video.in_pip && self.video.load_error.is_none() && !self.video.is_playing {
             self.toggle_video_play(cx);
         }
     }

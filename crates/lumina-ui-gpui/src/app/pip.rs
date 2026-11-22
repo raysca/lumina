@@ -40,6 +40,9 @@ impl LuminaApp {
                 self.video.is_playing = true;
                 self.video.seek_refresh_until = None;
                 self.start_video_ticker();
+            } else if self.video.load_error.is_none() {
+                // Still loading: the load plays the clip when it lands.
+                self.video.is_playing = true;
             }
         }
         if self.floating_pip_window.is_none() {

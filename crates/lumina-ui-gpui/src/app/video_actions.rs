@@ -28,7 +28,7 @@ const RESUME_PROGRESS_INTERVAL: f64 = 5.0;
 
 /// The UI's playback preferences, applied to each newly loaded player.
 #[derive(Clone, Copy)]
-pub(super) struct VideoSettings {
+pub(crate) struct VideoSettings {
     looping: bool,
     volume: f32,
     muted: bool,
@@ -36,7 +36,7 @@ pub(super) struct VideoSettings {
 }
 
 impl VideoSettings {
-    pub(super) fn of(video: &super::state::VideoPlaybackState) -> Self {
+    pub(crate) fn of(video: &super::state::VideoPlaybackState) -> Self {
         Self {
             looping: video.is_looping,
             volume: video.volume,
@@ -184,78 +184,6 @@ impl LuminaApp {
         }
         if self.record_video_resume(position) {
             self.save_config();
-        }
-    }
-
-    /// Starts a player session for `item`, replacing any current one. Frames
-    /// go to the viewer or, while `video.in_pip` is set, to the PiP window.
-    pub fn load_video_player(&mut self, item: &MediaItem, cx: &mut Context<Self>) {
-        #[cfg(all(target_os = "linux", not(test)))]
-        {
-            self.load_video_player_async(item, cx);
-        }
-
-        // Tests on every platform load synchronously, so they never depend
-        // on a background load's timing.
-        #[cfg(any(not(target_os = "linux"), test))]
-        {
-            // Finish the previous video before associating the player with the new
-            // media id.
-            self.stop_video_player();
-            if let Some(state) = self.grid_state.as_ref() {
-                state.video_resume.begin(item.id);
-            }
-            self.video.item = Some(item.clone());
-            let media_id = Some(item.id);
-
-            let mut player = crate::player::create_native_player();
-            self.video.playback_time = 0.0;
-            #[cfg(test)]
-            crate::app::playback_failed::VIDEO_LOADS.with(|n| n.set(n.get() + 1));
-            let loaded = player.load(&item.path);
-            match loaded {
-                Ok(meta) => {
-                    VideoSettings::of(&self.video).apply(&mut player);
-                    self.video.duration = meta.duration_secs;
-                    self.video.tracks =
-                        crate::app::video_tracks::VideoTracks::read(&player, meta.duration_secs);
-                    // The scanner reads MP4/MOV sizes only; for other containers show
-                    // what the player knows. ponytail: session only.
-                    for shown in [self.selected_item.as_mut(), self.video.item.as_mut()]
-                        .into_iter()
-                        .flatten()
-                        .filter(|shown| shown.id == item.id)
-                    {
-                        fill_missing_dimensions(shown, meta.width, meta.height);
-                    }
-                    let saved = media_id.and_then(|id| {
-                        self.grid_state
-                            .as_ref()
-                            .and_then(|state| state.video_resume.saved(id))
-                    });
-                    let start = resume_start_time(saved, meta.duration_secs);
-                    self.video.playback_time = start;
-                    if start > 0.0 {
-                        player.seek(start);
-                        self.last_action = Some(format!(
-                            "Resumed at {}",
-                            crate::app::types::format_duration_badge(start)
-                        ));
-                    }
-                    let first_frame = player
-                        .next_frame()
-                        .and_then(|frame| video_frame_to_gpui_image(frame).ok());
-                    self.video.player = Some(player);
-                    if let Some(img) = first_frame {
-                        self.show_video_frame(img);
-                    }
-                    // The scrubber and the chapter rows show strip frames without a
-                    // hover; closing or changing media cancels it.
-                    self.request_scrub_strip(cx);
-                }
-                Err(err) => self.record_video_failure(format!("{err:#}")),
-            }
-            cx.notify();
         }
     }
 
@@ -448,7 +376,7 @@ impl LuminaApp {
 
     pub fn seek_video_relative(&mut self, delta_secs: f64, cx: &mut Context<Self>) {
         let Some(player) = self.video.player.as_ref() else {
-            #[cfg(target_os = "linux")]
+            // Still loading: the seek lands when the player does.
             if self.video.item.is_some() && self.video.load_error.is_none() {
                 let duration = self.video_scrub_duration();
                 let maximum = if duration > 0.0 { duration } else { 3600.0 };
