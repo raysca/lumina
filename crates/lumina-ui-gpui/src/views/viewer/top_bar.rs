@@ -24,48 +24,19 @@ pub(crate) fn position_label(index: usize, count: usize) -> String {
     format!("{} / {}", index + 1, count)
 }
 
-/// The video top bar's title and meta line: the display title, then
-/// "14 Jun 2025 · 4K" (the resolution label only when the size is known).
-pub(crate) fn video_title_meta(item: &MediaItem) -> (String, String) {
-    let mut meta = item.format_timestamp("%-d %b %Y");
-    if item.width > 0 && item.height > 0 {
-        meta.push_str(" · ");
-        meta.push_str(&crate::views::inspector::summary::resolution_label(
-            item.width,
-            item.height,
-        ));
-    }
-    (crate::views::inspector::body::display_title(item), meta)
-}
-
-/// Title (Inter Tight 15/600) over the mono meta line, after Back.
-fn video_title_block(item: &MediaItem) -> Div {
-    let (title, meta) = video_title_meta(item);
+/// The video's display title, after Back. Only the title: the date and
+/// resolution live in the inspector, which keeps the bar quiet.
+fn video_title_block(item: &MediaItem) -> Stateful<Div> {
     div()
+        .id("viewer-title")
+        .debug_selector(|| "viewer-title".to_string())
         .min_w_0()
-        .flex()
-        .flex_col()
-        .child(
-            div()
-                .id("viewer-title")
-                .debug_selector(|| "viewer-title".to_string())
-                .truncate()
-                .font_family(theme::FONT_DISPLAY)
-                .text_size(px(15.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::t1())
-                .child(title),
-        )
-        .child(
-            div()
-                .id("viewer-meta")
-                .debug_selector(|| "viewer-meta".to_string())
-                .truncate()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(10.0))
-                .text_color(theme::t3())
-                .child(meta),
-        )
+        .truncate()
+        .font_family(theme::FONT_DISPLAY)
+        .text_size(px(15.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme::t1())
+        .child(crate::views::inspector::body::display_title(item))
 }
 
 /// A 30x30 icon button with a tooltip and an accessible label; `on` shows

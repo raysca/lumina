@@ -12,6 +12,15 @@ use crate::theme;
 /// hang from its bottom edge.
 pub(crate) const PAGE_HEADER_HEIGHT: f32 = theme::TITLEBAR_HEIGHT + 1.0;
 
+const TITLE_SIZE: f32 = 20.0;
+const META_SIZE: f32 = 10.5;
+/// GPUI lays text out with no baseline, so `items_baseline` lines up the
+/// boxes' bottom edges, and the smaller meta lands below the title's
+/// baseline. Its baseline sits 0.365 of the font size above its box's
+/// bottom (Inter and the mono alike, at the default line height), so the
+/// meta is lifted by the difference to share the title's baseline.
+pub(crate) const META_BASELINE_LIFT: f32 = 0.365 * (TITLE_SIZE - META_SIZE);
+
 /// The header row: `leading` (the sidebar toggle while the sidebar is
 /// collapsed), the title with its meta after it on the same baseline,
 /// a drag area (it moves a frameless window when `draggable`), and `actions`.
@@ -57,7 +66,7 @@ pub(crate) fn page_header_with_meta_font(
                 .overflow_hidden()
                 .flex()
                 .flex_row()
-                .items_baseline()
+                .items_end()
                 .gap(px(10.0))
                 .child(
                     // ponytail: the design's -0.3 tracking is skipped; GPUI
@@ -67,7 +76,7 @@ pub(crate) fn page_header_with_meta_font(
                         .min_w_0()
                         .truncate()
                         .font_family(theme::FONT_DISPLAY)
-                        .text_size(px(20.0))
+                        .text_size(px(TITLE_SIZE))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
                         .children(text_marker("page-title", &title))
@@ -80,7 +89,8 @@ pub(crate) fn page_header_with_meta_font(
                         .min_w_0()
                         .truncate()
                         .font_family(meta_font)
-                        .text_size(px(10.5))
+                        .text_size(px(META_SIZE))
+                        .mb(px(META_BASELINE_LIFT))
                         .text_color(theme::t3())
                         .children(marker)
                         .children(text_marker("page-meta-font", &meta_font.into()))

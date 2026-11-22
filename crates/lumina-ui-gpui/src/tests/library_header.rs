@@ -45,6 +45,12 @@ fn header_sits_in_the_main_column_with_title_meta_and_actions() {
         meta.left() >= title.right() && inside(header, meta),
         "the meta follows the title on its line, inside the header: {meta:?} vs {title:?}"
     );
+    let lift = f32::from(title.bottom()) - f32::from(meta.bottom());
+    assert!(
+        (lift - crate::views::page_header::META_BASELINE_LIFT).abs() < 0.5,
+        "the meta is lifted onto the title's baseline, not bottom-aligned: \
+         {meta:?} vs {title:?}"
+    );
     let centre = |b: gpui::Bounds<gpui::Pixels>| f32::from(b.center().y);
     assert!(
         (centre(header) - crate::theme::TITLEBAR_HEIGHT / 2.0).abs() < 1.0
