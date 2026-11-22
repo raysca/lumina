@@ -30,8 +30,13 @@
 @implementation LuminaPlayerBridge {
     float _volume;
     BOOL _isMuted;
-    /// Token of the failed-to-play-to-end observer, removed in teardown.
+    /// Tokens of the end-of-item and failed-to-play-to-end observers,
+    /// removed in teardown.
+    id _endObserver;
     id _failedObserver;
+    /// A frame too big for the caller's buffer, kept for the retry with a
+    /// bigger one so it is not lost.
+    CVPixelBufferRef _heldFrame;
     /// The mid-clip playback error not yet taken by the app. Written by the
     /// notification on AVFoundation's thread, read on the UI thread.
     NSString *_playbackError;
@@ -61,10 +66,13 @@
 }
 
 - (void)teardown {
-    if (_playerItem) {
-        [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                         name:AVPlayerItemDidPlayToEndTimeNotification
-                                                       object:_playerItem];
+    if (_endObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_endObserver];
+        _endObserver = nil;
+    }
+    if (_heldFrame) {
+        CVPixelBufferRelease(_heldFrame);
+        _heldFrame = NULL;
     }
     if (_failedObserver) {
         [[NSNotificationCenter defaultCenter] removeObserver:_failedObserver];
@@ -178,12 +186,17 @@
     }
     [_playerItem addOutput:_videoOutput];
 
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(onItemEnd:)
-                                                 name:AVPlayerItemDidPlayToEndTimeNotification
-                                               object:_playerItem];
-
+    // The UI thread (the main thread) drives the player; the loop seek and
+    // the playing state must not race it, so the end is handled there.
     __weak LuminaPlayerBridge *weakSelf = self;
+    _endObserver = [[NSNotificationCenter defaultCenter]
+        addObserverForName:AVPlayerItemDidPlayToEndTimeNotification
+                    object:_playerItem
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *__unused note) {
+                    [weakSelf onItemEnd];
+                }];
+
     _failedObserver = [[NSNotificationCenter defaultCenter]
         addObserverForName:AVPlayerItemFailedToPlayToEndTimeNotification
                     object:_playerItem
@@ -283,7 +296,7 @@
     [_playerItem selectMediaOption:_audioGroup.options[index] inMediaSelectionGroup:_audioGroup];
 }
 
-- (void)onItemEnd:(NSNotification *)notif {
+- (void)onItemEnd {
     if (_isLooping && _player) {
         [_player seekToTime:kCMTimeZero toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
         if (_isPlayingState) {
@@ -372,118 +385,66 @@
     return _player ? _player.isMuted : _isMuted;
 }
 
-- (BOOL)copyFrameIntoWidth:(int *)outWidth
-                    height:(int *)outHeight
-                      data:(uint8_t **)outData
-                       len:(int *)outLen {
-    if (!_videoOutput || !_playerItem) {
-        return NO;
-    }
-
-    CMTime itemTime = [_playerItem currentTime];
-    // Only hand back a frame AVFoundation has not vended yet. Without this the
-    // caller re-uploads the same picture on every poll, and after a seek it
-    // could take the pre-seek frame as the destination.
-    if (![_videoOutput hasNewPixelBufferForItemTime:itemTime]) {
-        return NO;
-    }
-    CVPixelBufferRef buf = [_videoOutput copyPixelBufferForItemTime:itemTime itemTimeForDisplay:NULL];
-    if (!buf) {
-        return NO;
-    }
-
-    CVReturn lockErr = CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-    if (lockErr != kCVReturnSuccess) {
-        CVPixelBufferRelease(buf);
-        return NO;
-    }
-
-    size_t w = CVPixelBufferGetWidth(buf);
-    size_t h = CVPixelBufferGetHeight(buf);
-    size_t stride = CVPixelBufferGetBytesPerRow(buf);
-    uint8_t *src = (uint8_t *)CVPixelBufferGetBaseAddress(buf);
-
-    if (src && w > 0 && h > 0) {
-        size_t tightStride = w * 4;
-        size_t totalBytes = tightStride * h;
-        uint8_t *dst = (uint8_t *)malloc(totalBytes);
-        if (dst) {
-            if (stride == tightStride) {
-                memcpy(dst, src, totalBytes);
-            } else {
-                for (size_t row = 0; row < h; row++) {
-                    memcpy(dst + row * tightStride, src + row * stride, tightStride);
-                }
-            }
-            CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-            CVPixelBufferRelease(buf);
-
-            *outWidth = (int)w;
-            *outHeight = (int)h;
-            *outData = dst;
-            *outLen = (int)totalBytes;
-            return YES;
-        }
-    }
-
-    CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-    CVPixelBufferRelease(buf);
-    return NO;
+/// Whether a frame newer than the last one copied is ready (cheap: no copy).
+- (BOOL)hasNewFrame {
+    if (_heldFrame) return YES;
+    if (!_videoOutput || !_playerItem) return NO;
+    return [_videoOutput hasNewPixelBufferForItemTime:[_playerItem currentTime]];
 }
 
-- (BOOL)copyFrameDirect:(uint8_t *)dst
-                 maxLen:(int)maxLen
-               outWidth:(int *)outWidth
-              outHeight:(int *)outHeight
-                 outLen:(int *)outLen {
-    if (!_videoOutput || !_playerItem || !dst || !outWidth || !outHeight || !outLen) {
-        return NO;
-    }
-
-    CMTime itemTime = [_playerItem currentTime];
-    if (![_videoOutput hasNewPixelBufferForItemTime:itemTime]) {
-        return NO;
-    }
-    CVPixelBufferRef buf = [_videoOutput copyPixelBufferForItemTime:itemTime itemTimeForDisplay:NULL];
+/// Copies the newest frame, tightly packed BGRA, into `dst` and reports its
+/// size. 1: copied. 0: no new frame. -1: `capacity` is too small for
+/// `*outWidth` x `*outHeight`; the frame is kept for a retry with a bigger
+/// buffer.
+- (int)copyFrameInto:(uint8_t *)dst
+            capacity:(size_t)capacity
+               width:(int *)outWidth
+              height:(int *)outHeight {
+    CVPixelBufferRef buf = _heldFrame;
+    _heldFrame = NULL;
     if (!buf) {
-        return NO;
+        if (!_videoOutput || !_playerItem) return 0;
+        CMTime itemTime = [_playerItem currentTime];
+        // Only hand back a frame AVFoundation has not vended yet. Without
+        // this the caller re-uploads the same picture on every poll, and
+        // after a seek it could take the pre-seek frame as the destination.
+        if (![_videoOutput hasNewPixelBufferForItemTime:itemTime]) return 0;
+        buf = [_videoOutput copyPixelBufferForItemTime:itemTime itemTimeForDisplay:NULL];
+        if (!buf) return 0;
     }
-
-    CVReturn lockErr = CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-    if (lockErr != kCVReturnSuccess) {
-        CVPixelBufferRelease(buf);
-        return NO;
-    }
-
     size_t w = CVPixelBufferGetWidth(buf);
     size_t h = CVPixelBufferGetHeight(buf);
+    *outWidth = (int)w;
+    *outHeight = (int)h;
+    size_t tightStride = w * 4;
+    if (w == 0 || h == 0) {
+        CVPixelBufferRelease(buf);
+        return 0;
+    }
+    if (!dst || capacity < tightStride * h) {
+        _heldFrame = buf;
+        return -1;
+    }
+    if (CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) {
+        CVPixelBufferRelease(buf);
+        return 0;
+    }
     size_t stride = CVPixelBufferGetBytesPerRow(buf);
     uint8_t *src = (uint8_t *)CVPixelBufferGetBaseAddress(buf);
-
-    if (src && w > 0 && h > 0) {
-        size_t tightStride = w * 4;
-        size_t totalBytes = tightStride * h;
-        *outWidth = (int)w;
-        *outHeight = (int)h;
-        *outLen = (int)totalBytes;
-
-        if ((size_t)maxLen >= totalBytes) {
-            if (stride == tightStride) {
-                memcpy(dst, src, totalBytes);
-            } else {
-                for (size_t row = 0; row < h; row++) {
-                    memcpy(dst + row * tightStride, src + row * stride, tightStride);
-                }
+    int copied = 0;
+    if (src) {
+        if (stride == tightStride) {
+            memcpy(dst, src, tightStride * h);
+        } else {
+            for (size_t row = 0; row < h; row++) {
+                memcpy(dst + row * tightStride, src + row * stride, tightStride);
             }
-            CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-            CVPixelBufferRelease(buf);
-            return YES;
         }
+        copied = 1;
     }
-
     CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
     CVPixelBufferRelease(buf);
-    return NO;
+    return copied;
 }
 
 @end
@@ -650,28 +611,21 @@ int lumina_player_is_looping(void* player) {
     }
 }
 
-int lumina_player_copy_frame(void* player, int* out_width, int* out_height, uint8_t** out_data, int* out_len) {
-    if (!player || !out_width || !out_height || !out_data || !out_len) return 0;
+int lumina_player_has_new_frame(void* player) {
+    if (!player) return 0;
     @autoreleasepool {
         LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
-        return [bridge copyFrameIntoWidth:out_width height:out_height data:out_data len:out_len] ? 1 : 0;
+        return [bridge hasNewFrame] ? 1 : 0;
     }
 }
 
-int lumina_player_copy_frame_direct(void* player, uint8_t* dst, int max_len, int* out_width, int* out_height, int* out_len) {
-    if (!player || !dst || !out_width || !out_height || !out_len) return 0;
+int lumina_player_copy_frame(void* player, uint8_t* dst, size_t capacity, int* out_width, int* out_height) {
+    if (!player || !out_width || !out_height) return 0;
     @autoreleasepool {
         LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
-        return [bridge copyFrameDirect:dst maxLen:max_len outWidth:out_width outHeight:out_height outLen:out_len] ? 1 : 0;
+        return [bridge copyFrameInto:dst capacity:capacity width:out_width height:out_height];
     }
 }
-
-void lumina_player_free_frame(uint8_t* data) {
-    if (data) {
-        free(data);
-    }
-}
-
 
 // Strings below are malloc'd UTF-8; Rust frees them with lumina_player_free_string.
 static char *lumina_copy_utf8(NSString *text) {
