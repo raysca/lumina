@@ -58,7 +58,7 @@ fn ghost_icon_button(
         .relative()
         .when(on, |button| button.bg(theme::media_scrim()))
         .tooltip(theme::tooltip_label(tooltip))
-        .child(render_icon(icon, px(13.0), theme::t1()))
+        .child(render_icon(icon, theme::ICON_SM, theme::t1()))
 }
 
 /// The page header's Downloads, Add filter, Sort and Info, as ghost
@@ -194,7 +194,7 @@ pub(crate) fn render(
                             ghost_button("album-slideshow-btn", t("command.slideshow").into())
                                 .px(px(11.0))
                                 .tooltip(theme::tooltip_label(t("album_page.slideshow_tooltip")))
-                                .child(render_icon(Icon::Play, px(13.0), theme::t1()))
+                                .child(render_icon(Icon::Play, theme::ICON_SM, theme::t1()))
                                 .child(t("command.slideshow"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, window, cx| {
                                     this.start_slideshow(window, cx);
@@ -285,7 +285,10 @@ fn breadcrumb(title: SharedString, cx: &mut Context<LuminaApp>) -> Div {
                     this.show_albums_overview(cx);
                 })),
         )
-        .child(render_icon(Icon::ChevronRight, px(12.0), theme::on_media_muted()).flex_shrink_0())
+        .child(
+            render_icon(Icon::ChevronRight, theme::ICON_XS, theme::on_media_muted())
+                .flex_shrink_0(),
+        )
         .child(
             div()
                 .debug_selector(|| "album-crumb-current".to_string())

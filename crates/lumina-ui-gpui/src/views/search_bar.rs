@@ -55,7 +55,7 @@ impl SearchBarView {
                 cx.notify();
             }))
             .child(
-                crate::icons::render_icon(crate::icons::Icon::Search, px(14.0), theme::t3())
+                crate::icons::render_icon(crate::icons::Icon::Search, theme::ICON_SM, theme::t3())
                     .flex_none(),
             )
             .child(
@@ -118,7 +118,7 @@ impl SearchBarView {
                             .text_color(theme::t2())
                             .child(crate::icons::render_icon(
                                 crate::icons::Icon::X,
-                                px(10.0),
+                                theme::ICON_XS,
                                 theme::t2(),
                             ))
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -220,7 +220,7 @@ impl SearchBarView {
                         .debug_selector(move || format!("search-suggestion-recent-{index}"))
                         .child(crate::icons::render_icon(
                             crate::icons::Icon::RotateCcw,
-                            px(11.0),
+                            theme::ICON_XS,
                             theme::t2(),
                         ))
                 }));

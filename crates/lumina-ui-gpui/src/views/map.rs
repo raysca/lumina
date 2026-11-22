@@ -126,7 +126,7 @@ fn zoom_button(
         .tooltip(theme::tooltip_label(label))
         .bg(theme::bg_2())
         .border_color(theme::line())
-        .child(render_icon(icon, px(14.0), theme::t1()))
+        .child(render_icon(icon, theme::ICON_SM, theme::t1()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.zoom_map(step, cx);
         }))

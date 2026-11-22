@@ -60,7 +60,11 @@ fn bar_button(id: &'static str, label: String, on: bool) -> Stateful<Div> {
 }
 
 fn bar_icon(icon: Icon, on: bool) -> Svg {
-    render_icon(icon, px(16.0), if on { theme::t1() } else { theme::t2() })
+    render_icon(
+        icon,
+        theme::ICON_MD,
+        if on { theme::t1() } else { theme::t2() },
+    )
 }
 
 /// The star popover's card: five stars (filled up to the rating) and the
@@ -101,7 +105,7 @@ fn rate_card(rating: u8, cx: &mut Context<LuminaApp>) -> Div {
                         .hover(|s| s.bg(theme::bg_3()))
                         .child(render_icon(
                             if filled { Icon::StarFilled } else { Icon::Star },
-                            px(16.0),
+                            theme::ICON_MD,
                             if filled {
                                 theme::rating()
                             } else {
@@ -177,7 +181,7 @@ impl ViewerTopBar {
             .flex_row()
             .items_center()
             .gap(px(8.0))
-            .child(render_icon(Icon::ChevronLeft, px(15.0), theme::t2()))
+            .child(render_icon(Icon::ChevronLeft, theme::ICON_SM, theme::t2()))
             .when(!compact, |back| {
                 back.child(
                     div()
@@ -265,7 +269,7 @@ impl ViewerTopBar {
                                         } else {
                                             Icon::Heart
                                         },
-                                        px(16.0),
+                                        theme::ICON_MD,
                                         if is_fav { theme::rating() } else { theme::t2() },
                                     ),
                                     this.mark_pop.heart(Some(item.id)),

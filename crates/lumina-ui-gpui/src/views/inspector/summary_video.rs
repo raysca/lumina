@@ -190,7 +190,11 @@ fn chapter_row(weak_app: WeakEntity<LuminaApp>, row: ChapterRow) -> Stateful<Div
                 div()
                     .debug_selector(|| "inspector-chapter-current".to_string())
                     .flex_none()
-                    .child(render_icon(Icon::AudioLines, px(14.0), theme::accent())),
+                    .child(render_icon(
+                        Icon::AudioLines,
+                        theme::ICON_SM,
+                        theme::accent(),
+                    )),
             )
         })
         .on_click(move |_e, _w, cx| {

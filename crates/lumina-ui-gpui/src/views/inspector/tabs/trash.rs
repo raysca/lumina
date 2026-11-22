@@ -44,7 +44,7 @@ pub fn render_trash_lifecycle(weak_app: WeakEntity<LuminaApp>) -> AnyElement {
                         .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
-                        .child(render_icon(Icon::Undo2, px(12.0), theme::t1()))
+                        .child(render_icon(Icon::Undo2, theme::ICON_XS, theme::t1()))
                         .child("Put Back")
                         .on_click(move |_e, _window, cx| {
                             if let Some(app) = app_restore.upgrade() {
@@ -74,7 +74,7 @@ pub fn render_trash_lifecycle(weak_app: WeakEntity<LuminaApp>) -> AnyElement {
                         .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
-                        .child(render_icon(Icon::X, px(12.0), theme::t1()))
+                        .child(render_icon(Icon::X, theme::ICON_XS, theme::t1()))
                         .child("Delete Now")
                         .on_click(move |_e, _window, cx| {
                             if let Some(app) = app_delete.upgrade() {

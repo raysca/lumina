@@ -152,7 +152,7 @@ fn thumb(
             None if failed => thumb.child(
                 div()
                     .debug_selector(move || format!("viewer-filmstrip-failed-{id}"))
-                    .child(render_icon(Icon::Image, px(16.0), theme::t3())),
+                    .child(render_icon(Icon::Image, theme::ICON_MD, theme::t3())),
             ),
             // Still decoding: the plain well.
             None => thumb,

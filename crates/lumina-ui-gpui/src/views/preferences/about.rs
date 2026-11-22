@@ -26,7 +26,11 @@ pub(super) fn render_about(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Sparkles, px(38.0), theme::on_accent())),
+                .child(render_icon(
+                    Icon::Sparkles,
+                    theme::ICON_XL,
+                    theme::on_accent(),
+                )),
         )
         .child(
             div()

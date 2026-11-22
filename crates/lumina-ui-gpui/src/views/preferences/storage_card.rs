@@ -147,7 +147,7 @@ pub(super) fn render_storage_card(
         .whitespace_nowrap()
         .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
-        .child(render_icon(Icon::Eraser, px(12.0), theme::t2()))
+        .child(render_icon(Icon::Eraser, theme::ICON_XS, theme::t2()))
         .child(
             div()
                 .debug_selector(move || format!("settings-storage-clear-cache-text:{clear_marker}"))
@@ -174,7 +174,7 @@ pub(super) fn render_storage_card(
                 .flex_row()
                 .items_center()
                 .gap(px(8.0))
-                .child(render_icon(Icon::HardDrive, px(15.0), theme::t2()))
+                .child(render_icon(Icon::HardDrive, theme::ICON_SM, theme::t2()))
                 .child(
                     div()
                         .flex_1()

@@ -145,7 +145,7 @@ fn card(
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(icon, px(16.0), theme::t2())),
+                .child(render_icon(icon, theme::ICON_MD, theme::t2())),
         )
         .child(
             div()
@@ -175,7 +175,7 @@ fn card(
                         .child(sub),
                 ),
         )
-        .child(render_icon(Icon::ChevronRight, px(14.0), theme::t3()).flex_none())
+        .child(render_icon(Icon::ChevronRight, theme::ICON_SM, theme::t3()).flex_none())
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.open_top_match(i, cx);
         }))

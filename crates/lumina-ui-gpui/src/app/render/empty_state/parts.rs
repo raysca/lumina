@@ -20,7 +20,7 @@ pub(crate) fn empty_glyph(size: Pixels, icon: Icon, ink: Rgba) -> Div {
         .flex()
         .items_center()
         .justify_center()
-        .child(render_icon(icon, px(20.0), ink))
+        .child(render_icon(icon, theme::ICON_LG, ink))
 }
 
 /// The First Run glyph: a 150 px box holding an 84 px
@@ -51,7 +51,7 @@ pub(crate) fn hero_glyph(icon: Icon) -> Div {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(icon, px(36.0), theme::accent())),
+                .child(render_icon(icon, theme::ICON_XL, theme::accent())),
         )
 }
 

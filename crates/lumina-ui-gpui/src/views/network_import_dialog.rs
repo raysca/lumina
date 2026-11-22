@@ -35,7 +35,7 @@ fn hint(bytes: Option<u64>) -> Div {
         .flex_row()
         .items_center()
         .gap(px(7.0))
-        .child(render_icon(Icon::FolderDown, px(13.0), theme::t3()))
+        .child(render_icon(Icon::FolderDown, theme::ICON_SM, theme::t3()))
         .child(
             div()
                 .debug_selector(|| "net-import-hint".to_string())
@@ -109,7 +109,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .items_center()
                         .gap(px(10.0))
                         .overflow_hidden()
-                        .child(render_icon(Icon::Link2, px(15.0), theme::t3()).flex_none())
+                        .child(render_icon(Icon::Link2, theme::ICON_SM, theme::t3()).flex_none())
                         .child(
                             // min_w_0 lets a long URL clip here instead of
                             // pushing the clear button out of the field.
@@ -144,7 +144,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .items_center()
                                 .justify_center()
                                 .cursor_pointer()
-                                .child(render_icon(Icon::X, px(11.0), theme::t2()))
+                                .child(render_icon(Icon::X, theme::ICON_XS, theme::t2()))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.set_network_import_url(String::new(), cx);
                                 }))
@@ -200,7 +200,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex_row()
                 .items_center()
                 .gap(px(8.0))
-                .child(render_icon(Icon::Link2, px(13.0), theme::t3()))
+                .child(render_icon(Icon::Link2, theme::ICON_SM, theme::t3()))
                 .child(text(checking));
             StageParts {
                 title: "Checking Link…",
@@ -262,7 +262,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Link, px(16.0), theme::accent())),
+                .child(render_icon(Icon::Link, theme::ICON_MD, theme::accent())),
         )
         .child(
             // ponytail: the design's -0.3 tracking is skipped; GPUI 0.3.11 has

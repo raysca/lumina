@@ -136,7 +136,7 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
                         .text_size(theme::TEXT_SMALL)
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(danger)
-                        .child(render_icon(Icon::Trash, px(13.0), danger))
+                        .child(render_icon(Icon::Trash, theme::ICON_SM, danger))
                         .child(label)
                         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.prompt_delete_album(id, cx);

@@ -140,7 +140,7 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
             .rounded(theme::RADIUS_SM)
             .cursor_pointer()
             .tooltip(theme::tooltip_label(t(tooltip)))
-            .child(render_icon(icon, px(11.0), theme::t2()))
+            .child(render_icon(icon, theme::ICON_XS, theme::t2()))
     };
 
     theme::nav_item(
@@ -192,7 +192,7 @@ fn render_rename_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
             .rounded(theme::RADIUS_SM)
             .bg(bg)
             .cursor_pointer()
-            .child(render_icon(icon, px(10.0), fg))
+            .child(render_icon(icon, theme::ICON_XS, fg))
     };
     div()
         .debug_selector(|| "album-rename-field".to_string())

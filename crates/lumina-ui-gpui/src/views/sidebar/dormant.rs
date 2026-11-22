@@ -44,8 +44,12 @@ pub(crate) fn render_dormant(app: &LuminaApp) -> Div {
                 .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t3())
                 .child(
-                    crate::icons::render_icon(crate::icons::Icon::Search, px(14.0), theme::t3())
-                        .flex_none(),
+                    crate::icons::render_icon(
+                        crate::icons::Icon::Search,
+                        theme::ICON_SM,
+                        theme::t3(),
+                    )
+                    .flex_none(),
                 )
                 .child(t("sidebar.dormant_search")),
         )

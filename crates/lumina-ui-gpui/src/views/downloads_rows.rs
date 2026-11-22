@@ -114,7 +114,7 @@ fn icon_button(
         .text_color(fg)
         .cursor_pointer()
         .hover(|s| s.opacity(0.85))
-        .child(render_icon(icon, px(14.0), fg))
+        .child(render_icon(icon, theme::ICON_SM, fg))
         .children(text)
 }
 
@@ -438,7 +438,7 @@ pub(crate) fn completed_row(
         .flex()
         .items_center()
         .justify_center()
-        .child(render_icon(Icon::Check, px(12.0), theme::positive()));
+        .child(render_icon(Icon::Check, theme::ICON_XS, theme::positive()));
     let items = row_menu_items(entry);
     let menu = app
         .downloads

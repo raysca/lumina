@@ -129,7 +129,9 @@ pub(super) fn card(
                         .size_full()
                         .object_fit(ObjectFit::Contain)
                         .into_any_element(),
-                    None => render_icon(Icon::Image, px(24.0), theme::t3()).into_any_element(),
+                    None => {
+                        render_icon(Icon::Image, theme::ICON_LG, theme::t3()).into_any_element()
+                    }
                 })
                 .children(text_marker("duplicate-tag", &format!("{id}:{tag}").into()))
                 .child(media_tag(tag).top(px(10.0)).left(px(10.0)))

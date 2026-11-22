@@ -177,7 +177,7 @@ fn text_button(
         })
         .when_some(disabled, |b, why| b.opacity(0.5).aria_description(why))
         .children(text_marker(selector, &label))
-        .child(render_icon(icon, px(14.0), theme::t1()))
+        .child(render_icon(icon, theme::ICON_SM, theme::t1()))
         .child(label)
 }
 

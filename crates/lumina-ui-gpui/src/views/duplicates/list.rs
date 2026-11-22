@@ -171,7 +171,7 @@ fn row(
                         .when(i == 0, |front| front.border_2().border_color(theme::bg_1()));
                     match tex {
                         Some(tex) => thumb.child(img(tex).size_full()),
-                        None => thumb.child(render_icon(Icon::Image, px(14.0), theme::t3())),
+                        None => thumb.child(render_icon(Icon::Image, theme::ICON_SM, theme::t3())),
                     }
                 })),
         )

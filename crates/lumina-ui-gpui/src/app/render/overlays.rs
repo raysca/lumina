@@ -267,6 +267,6 @@ fn dock_button(
         .cursor_pointer()
         .hover(|s| s.bg(theme::bg_3()))
         .text_color(color)
-        .children(icon.map(|icon| render_icon(icon, px(14.0), color)))
+        .children(icon.map(|icon| render_icon(icon, theme::ICON_SM, color)))
         .when(!label.is_empty(), |d| d.child(label))
 }

@@ -83,7 +83,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .px(px(18.0))
                         .border_b_1()
                         .border_color(theme::line())
-                        .child(render_icon(Icon::Search, px(16.0), theme::t2()))
+                        .child(render_icon(Icon::Search, theme::ICON_MD, theme::t2()))
                         .child(
                             div()
                                 .flex_1()
@@ -192,7 +192,7 @@ fn render_row(
         })
         .child(render_icon(
             row.icon,
-            px(16.0),
+            theme::ICON_MD,
             if is_selected {
                 theme::on_accent()
             } else {

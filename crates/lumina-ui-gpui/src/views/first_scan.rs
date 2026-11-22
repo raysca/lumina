@@ -235,7 +235,7 @@ fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
         .text_size(theme::TEXT_BODY)
         .text_color(color)
         .child(if done {
-            render_icon(Icon::Check, px(13.0), theme::t2()).into_any_element()
+            render_icon(Icon::Check, theme::ICON_SM, theme::t2()).into_any_element()
         } else {
             div()
                 .size(px(8.0))

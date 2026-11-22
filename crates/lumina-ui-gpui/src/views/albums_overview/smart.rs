@@ -237,7 +237,7 @@ fn card(this: &LuminaApp, album: &SmartAlbum, cx: &mut Context<LuminaApp>) -> An
                                 .flex_row()
                                 .items_center()
                                 .gap(px(6.0))
-                                .child(render_icon(Icon::Sparkles, px(13.0), theme::accent()))
+                                .child(render_icon(Icon::Sparkles, theme::ICON_SM, theme::accent()))
                                 .child(
                                     div()
                                         .min_w_0()
@@ -314,7 +314,7 @@ fn chips(album: &SmartAlbum) -> Div {
             .font_features(theme::tabular_figures())
             .text_size(theme::TEXT_CAPTION)
             .text_color(theme::t2())
-            .children(icon.map(|icon| render_icon(icon, px(10.0), theme::t2())))
+            .children(icon.map(|icon| render_icon(icon, theme::ICON_XS, theme::t2())))
             .children(text_marker("smart-chip", &label))
             .child(div().min_w_0().truncate().child(label))
     };

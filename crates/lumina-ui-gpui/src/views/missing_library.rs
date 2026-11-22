@@ -140,7 +140,9 @@ pub(crate) fn missing_library_state(props: MissingLibraryProps) -> AnyElement {
                         .items_center()
                         .gap(px(7.0))
                         .children(text_marker("missing-library-path", &path))
-                        .child(render_icon(Icon::HardDrive, px(12.0), theme::t3()).flex_none())
+                        .child(
+                            render_icon(Icon::HardDrive, theme::ICON_XS, theme::t3()).flex_none(),
+                        )
                         // A long path loses its middle, keeping the volume and the folder.
                         .child(
                             div()

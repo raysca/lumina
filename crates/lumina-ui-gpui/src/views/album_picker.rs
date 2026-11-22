@@ -97,7 +97,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .px(px(14.0))
                         .border_b_1()
                         .border_color(theme::line())
-                        .child(render_icon(Icon::Search, px(14.0), theme::t2()))
+                        .child(render_icon(Icon::Search, theme::ICON_SM, theme::t2()))
                         .child(
                             div()
                                 .flex_1()
@@ -175,7 +175,7 @@ fn row(
                 r.hover(|s| s.bg(theme::bg_3()))
             }
         })
-        .child(render_icon(icon, px(14.0), fg))
+        .child(render_icon(icon, theme::ICON_SM, fg))
         .child(
             div()
                 .flex_1()

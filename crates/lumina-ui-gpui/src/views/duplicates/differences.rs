@@ -89,7 +89,11 @@ pub(super) fn render(this: &LuminaApp, group: &DuplicateGroup) -> Div {
         .flex_wrap()
         .items_center()
         .gap(px(8.0))
-        .child(render_icon(Icon::GitCompareArrows, px(14.0), theme::t2()))
+        .child(render_icon(
+            Icon::GitCompareArrows,
+            theme::ICON_SM,
+            theme::t2(),
+        ))
         .child(
             div()
                 .mr(px(4.0))

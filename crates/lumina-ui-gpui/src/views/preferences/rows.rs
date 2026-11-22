@@ -143,7 +143,7 @@ pub(super) fn path_pill(id: &'static str, path: String) -> Stateful<Div> {
         .border_1()
         .border_color(theme::line_2())
         .bg(theme::bg_0())
-        .child(render_icon(Icon::Folder, px(14.0), theme::t3()).flex_shrink_0())
+        .child(render_icon(Icon::Folder, theme::ICON_SM, theme::t3()).flex_shrink_0())
         .child(
             div()
                 // Tests read the path as `<id>-text:<path>`.
@@ -192,7 +192,7 @@ pub(super) fn row_button(
         .font_weight(FontWeight::MEDIUM)
         .text_color(theme::t1())
         .cursor_pointer()
-        .children(icon.map(|icon| render_icon(icon, px(14.0), theme::t2())))
+        .children(icon.map(|icon| render_icon(icon, theme::ICON_SM, theme::t2())))
         // Tests read the label as `<id>-text:<label>`.
         .child(
             div()

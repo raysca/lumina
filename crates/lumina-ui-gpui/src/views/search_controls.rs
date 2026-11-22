@@ -76,7 +76,7 @@ impl LuminaApp {
                         .text_color(theme::accent())
                 })
                 .when(!on, |chip| chip.hover(|s| s.bg(theme::bg_2())))
-                .child(render_icon(icon, px(13.0), ink))
+                .child(render_icon(icon, theme::ICON_SM, ink))
                 .child(
                     div()
                         .when(on, |d| {
@@ -121,7 +121,7 @@ impl LuminaApp {
             .bg(theme::bg_3())
             .text_size(theme::TEXT_SMALL)
             .text_color(theme::t1())
-            .child(render_icon(Icon::Sparkles, px(12.0), theme::t1()))
+            .child(render_icon(Icon::Sparkles, theme::ICON_XS, theme::t1()))
             .child(label)
             .when(enabled, |b| {
                 b.cursor_pointer()

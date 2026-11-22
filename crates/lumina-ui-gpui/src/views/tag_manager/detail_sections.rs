@@ -25,7 +25,11 @@ pub(super) fn render_aliases(
             .debug_selector(move || chip_selector.clone())
             .bg(theme::bg_2())
             .text_color(theme::t2())
-            .child(render_icon(Icon::CornerDownRight, px(13.0), theme::t3()))
+            .child(render_icon(
+                Icon::CornerDownRight,
+                theme::ICON_SM,
+                theme::t3(),
+            ))
             .child(alias)
             .child(
                 div()
@@ -35,7 +39,7 @@ pub(super) fn render_aliases(
                     .aria_label(label.clone())
                     .tooltip(theme::tooltip_label(label))
                     .cursor_pointer()
-                    .child(render_icon(Icon::X, px(10.0), theme::t3()))
+                    .child(render_icon(Icon::X, theme::ICON_XS, theme::t3()))
                     .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                         this.remove_keyword_alias(remove.clone(), cx);
                     })),
@@ -63,7 +67,7 @@ pub(super) fn render_aliases(
             .text_color(theme::t3())
             .cursor_pointer()
             .hover(|s| s.bg(theme::bg_2()))
-            .child(render_icon(Icon::Plus, px(12.0), theme::t3()))
+            .child(render_icon(Icon::Plus, theme::ICON_XS, theme::t3()))
             .child(t("tags.alias_add"))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.start_alias_input(cx);
@@ -189,7 +193,7 @@ fn organise_row(selector: &'static str, icon: Icon, label: String, sub: String) 
         .bg(theme::bg_0())
         .hover(|s| s.bg(theme::bg_2()))
         .cursor_pointer()
-        .child(render_icon(icon, px(15.0), theme::t2()))
+        .child(render_icon(icon, theme::ICON_SM, theme::t2()))
         .child(
             div()
                 .flex_1()
@@ -210,7 +214,7 @@ fn organise_row(selector: &'static str, icon: Icon, label: String, sub: String) 
                         .child(sub),
                 ),
         )
-        .child(render_icon(Icon::ChevronRight, px(14.0), theme::t3()))
+        .child(render_icon(Icon::ChevronRight, theme::ICON_SM, theme::t3()))
 }
 
 /// Most targets the picker lists; typing narrows the rest.

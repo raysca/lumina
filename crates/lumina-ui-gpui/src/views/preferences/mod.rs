@@ -173,7 +173,7 @@ fn reset_button(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .text_size(theme::TEXT_SMALL)
         .text_color(theme::t1())
         .cursor_pointer()
-        .child(render_icon(Icon::RefreshCw, px(14.0), theme::t2()))
+        .child(render_icon(Icon::RefreshCw, theme::ICON_SM, theme::t2()))
         .child("Reset to defaults")
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             button.press(this, cx);

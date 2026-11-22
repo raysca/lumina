@@ -124,7 +124,7 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
                     "{} (Esc)",
                     t("compare.close")
                 )))
-                .child(render_icon(Icon::X, px(12.0), theme::t1()))
+                .child(render_icon(Icon::X, theme::ICON_XS, theme::t1()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.close_compare(cx);
                 })),

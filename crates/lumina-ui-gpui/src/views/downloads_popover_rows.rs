@@ -344,7 +344,7 @@ pub(crate) fn earlier_row(
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Check, px(11.0), theme::positive())),
+                .child(render_icon(Icon::Check, theme::ICON_XS, theme::positive())),
         )
         .child(
             div()

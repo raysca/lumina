@@ -33,7 +33,11 @@ pub(crate) fn logo() -> Div {
         .justify_center()
         .items_center()
         .shadow_lg()
-        .child(render_icon(Icon::Sparkles, px(26.0), theme::on_accent()))
+        .child(render_icon(
+            Icon::Sparkles,
+            theme::ICON_XL,
+            theme::on_accent(),
+        ))
 }
 
 /// A click handler for a welcome control.
@@ -237,7 +241,7 @@ fn hint_card(i: usize, icon: Icon, title_key: &str, body_key: &str) -> Div {
         .bg(theme::bg_1())
         .border_1()
         .border_color(theme::line())
-        .child(render_icon(icon, px(16.0), theme::accent()))
+        .child(render_icon(icon, theme::ICON_MD, theme::accent()))
         .child(
             div()
                 .text_size(theme::TEXT_SMALL)
@@ -369,7 +373,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
         .child(
             render_icon(
                 Icon::Folder,
-                px(16.0),
+                theme::ICON_MD,
                 if row.unavailable {
                     theme::t3()
                 } else {
@@ -445,7 +449,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                     cx.stop_propagation();
                     on_remove(event, window, cx);
                 })
-                .child(render_icon(Icon::X, px(13.0), theme::t2())),
+                .child(render_icon(Icon::X, theme::ICON_SM, theme::t2())),
         )
         // Last, so the two row actions keep one order: forget, then remove.
         .child(
@@ -468,7 +472,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                     cx.stop_propagation();
                     on_delete(event, window, cx);
                 })
-                .child(render_icon(Icon::Trash, px(13.0), theme::danger())),
+                .child(render_icon(Icon::Trash, theme::ICON_SM, theme::danger())),
         )
 }
 

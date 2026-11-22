@@ -256,7 +256,7 @@ pub fn render_tags_section(
                                 .id(ElementId::Name(format!("remove-tag-{}", tag_name).into()))
                                 .tooltip(theme::tooltip_label("Remove tag"))
                                 .cursor_pointer()
-                                .child(render_icon(Icon::X, px(10.0), theme::t1()))
+                                .child(render_icon(Icon::X, theme::ICON_XS, theme::t1()))
                                 .on_click(move |_e, _window, cx| {
                                     if let Some(app) = app_remove.upgrade() {
                                         app.update(cx, |this, cx| {

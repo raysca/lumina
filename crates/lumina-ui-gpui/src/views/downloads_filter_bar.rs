@@ -54,7 +54,7 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
         ))
         .child(render_icon(
             filter.icon(),
-            px(13.0),
+            theme::ICON_SM,
             if on { theme::accent() } else { theme::t2() },
         ))
         .child(label)
@@ -135,7 +135,7 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
                 .bg(theme::bg_2())
                 .hover(|s| s.bg(theme::bg_3()))
                 .cursor_pointer()
-                .child(render_icon(Icon::Settings2, px(14.0), theme::t2()))
+                .child(render_icon(Icon::Settings2, theme::ICON_SM, theme::t2()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.open_preferences_at(PreferencesTab::Downloads, cx);
                 })),

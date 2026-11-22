@@ -75,7 +75,7 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                                 .gap_1()
                                 .text_size(theme::TEXT_SMALL)
                                 .text_color(theme::positive())
-                                .child(render_icon(Icon::Check, px(12.0), theme::positive()))
+                                .child(render_icon(Icon::Check, theme::ICON_XS, theme::positive()))
                                 .child("Cleared")
                         }))
                         .child(row_button(

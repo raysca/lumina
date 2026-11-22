@@ -164,7 +164,7 @@ fn render_header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Sparkles, px(18.0), theme::accent())),
+                .child(render_icon(Icon::Sparkles, theme::ICON_MD, theme::accent())),
         )
         .child(
             rows::text_field(
@@ -214,7 +214,7 @@ fn render_header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.close_album_builder(cx);
                 }))
-                .child(render_icon(Icon::X, px(14.0), theme::t2())),
+                .child(render_icon(Icon::X, theme::ICON_SM, theme::t2())),
         )
 }
 

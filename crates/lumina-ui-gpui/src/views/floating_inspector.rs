@@ -189,7 +189,11 @@ impl Render for FloatingInspectorView {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(render_icon(Icon::ArrowDownToLine, px(14.0), theme::t2()))
+                            .child(render_icon(
+                                Icon::ArrowDownToLine,
+                                theme::ICON_SM,
+                                theme::t2(),
+                            ))
                             .on_click(cx.listener(move |_this, _e: &ClickEvent, window, cx| {
                                 if let Some(app_entity) = app_redock.upgrade() {
                                     app_entity.update(cx, |app, cx| {

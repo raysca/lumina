@@ -277,7 +277,7 @@ impl LuminaApp {
                             .flex_row()
                             .items_center()
                             .gap(px(4.0))
-                            .child(render_icon(Icon::MapPin, px(11.0), theme::t2()))
+                            .child(render_icon(Icon::MapPin, theme::ICON_XS, theme::t2()))
                             .child(
                                 div()
                                     .font_family(theme::FONT_SANS)
@@ -317,7 +317,7 @@ impl LuminaApp {
                             .text_color(theme::t3())
                             .hover(|s| s.text_color(theme::t1()))
                             .child(crate::i18n::t("mosaic.select"))
-                            .child(render_icon(Icon::ChevronRight, px(12.0), theme::t3()))
+                            .child(render_icon(Icon::ChevronRight, theme::ICON_XS, theme::t3()))
                             // Keep the press from starting the surface's
                             // marquee, whose still release clears the selection.
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

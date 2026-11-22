@@ -123,13 +123,18 @@ fn solid(svg: &str) -> String {
     svg.replacen("fill=\"none\"", "fill=\"black\"", 1)
 }
 
+/// Lucide's stroke 2 reads bold next to 13px Inter; outlines draw at 1.5.
+const STROKE: &str = "stroke-width=\"1.5\"";
+
 /// Asset path → SVG. In Lucide icons `currentColor` becomes black: GPUI
 /// paints them as an alpha mask tinted by `text_color`, so only coverage
-/// matters. The brand mark keeps its colours.
+/// matters. Strokes thin to [`STROKE`]. The brand mark keeps its colours.
 static ICONS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     let mut m = HashMap::new();
     for &(name, svg) in LUCIDE {
-        let svg = svg.replace("currentColor", "black");
+        let svg = svg
+            .replace("currentColor", "black")
+            .replace("stroke-width=\"2\"", STROKE);
         if FILLED_VARIANTS.contains(&name) {
             m.insert(format!("icons/{name}-filled.svg"), solid(&svg));
         }

@@ -60,7 +60,7 @@ pub(crate) fn read_only_field(url: &str) -> Div {
         .items_center()
         .gap(px(10.0))
         .overflow_hidden()
-        .child(render_icon(Icon::Link2, px(15.0), theme::t3()).flex_none())
+        .child(render_icon(Icon::Link2, theme::ICON_SM, theme::t3()).flex_none())
         .child(
             div()
                 .flex_1()
@@ -88,7 +88,7 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
         .flex()
         .items_center()
         .justify_center()
-        .child(render_icon(Icon::Film, px(22.0), theme::t3()))
+        .child(render_icon(Icon::Film, theme::ICON_LG, theme::t3()))
         .children(info.duration_secs.map(|secs| {
             marked("net-import-preview-duration", format_clock(secs, true))
                 .absolute()
@@ -176,6 +176,6 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Check, px(13.0), theme::positive())),
+                .child(render_icon(Icon::Check, theme::ICON_SM, theme::positive())),
         )
 }

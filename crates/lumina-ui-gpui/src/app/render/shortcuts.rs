@@ -278,7 +278,7 @@ impl LuminaApp {
                                     .id("shortcuts-close")
                                     .debug_selector(|| "shortcuts-close".to_string())
                                     .cursor_pointer()
-                                    .child(render_icon(Icon::X, px(12.0), theme::t1()))
+                                    .child(render_icon(Icon::X, theme::ICON_XS, theme::t1()))
                                     .tooltip(theme::tooltip_label("Close"))
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                         this.close_shortcuts_overlay(cx);
