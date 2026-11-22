@@ -58,6 +58,33 @@ fn focused(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Option<Medi
 }
 
 #[core::prelude::v1::test]
+fn the_compare_title_clears_the_window_controls() {
+    let (_dir, engine) = seed_library("compare_titlebar", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let ids = ids(&view, vcx);
+    select_first(vcx, &ids, 2);
+    keystrokes(vcx, "c");
+    let header = vcx
+        .debug_bounds("compare-header")
+        .expect("compare has a header");
+    let title = vcx.debug_bounds("compare-title").expect("and a title");
+    assert!(
+        (f32::from(header.size.height) - crate::theme::TITLEBAR_HEIGHT).abs() < 0.5,
+        "the header is the title bar band: {header:?}"
+    );
+    let inset = if cfg!(target_os = "macos") {
+        crate::theme::TRAFFIC_LIGHTS_INSET
+    } else {
+        0.0
+    };
+    assert!(
+        f32::from(title.left()) >= inset,
+        "the title starts right of the window controls: {title:?}"
+    );
+}
+
+#[core::prelude::v1::test]
 fn c_opens_compare_with_selection_and_esc_closes() {
     let (_dir, engine) = seed_library("compare_open", 4);
     let mut cx = crate::tests::TestApp::single();

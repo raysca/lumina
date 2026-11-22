@@ -90,11 +90,17 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .into_any_element()
 }
 
+/// Compare covers the whole window, so its header is the title bar band:
+/// it shares the window controls' line and, on macOS, starts right of them.
 fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement {
     div()
-        .h(px(44.0))
+        .debug_selector(|| "compare-header".to_string())
+        .h(px(theme::TITLEBAR_HEIGHT))
         .flex_none()
         .px_3()
+        .when(cfg!(target_os = "macos"), |header| {
+            header.pl(px(theme::TRAFFIC_LIGHTS_INSET))
+        })
         .flex()
         .flex_row()
         .items_center()
@@ -103,6 +109,8 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .border_color(theme::line())
         .child(
             div()
+                .debug_selector(|| "compare-title".to_string())
+                .flex_none()
                 .text_size(theme::TEXT_BODY)
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
@@ -111,8 +119,13 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .child(
             div()
                 .flex_1()
+                .min_w_0()
+                .h_full()
+                .flex()
+                .items_center()
                 .text_size(theme::TEXT_SMALL)
                 .text_color(theme::t2())
+                .truncate()
                 .child(t("compare.hint")),
         )
         .child(
