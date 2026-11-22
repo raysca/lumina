@@ -89,8 +89,9 @@ Three layers of UI coverage live alongside the unit tests:
   `busy_timeout` is enabled, a quick integrity check runs on open, and a
   single-generation `.db.bak` snapshot is written with `VACUUM INTO` when the
   catalog changed (at most once per app launch).
-- **Thumbnail cache budget**: startup cleanup removes entries older than 30 days
-  and evicts oldest files down to a 1.5 GB budget (cache keys are format-versioned).
+- **Thumbnail cache budget**: entries are stored compressed (JPEG, or PNG when
+  transparent); startup cleanup removes entries unused for 30 days and evicts the
+  least recently used down to a 1.5 GB budget (cache keys are format-versioned).
 - **Decode safety**: photos decode in process through ImageIO (an unreadable
   photo fails at once); the QuickLook helper, used only when ImageIO cannot
   render a RAW file, runs with a 10 s timeout and is killed if it hangs, and
