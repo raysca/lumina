@@ -1,5 +1,6 @@
-//! Entrance motion: the touched mark pops, fresh thumbnails fade, and
-//! fading overlays stay fully usable while they animate.
+//! Motion: the touched mark pops, fresh thumbnails fade, fading-in
+//! overlays stay fully usable, and closed ones fade out without taking
+//! input.
 
 use crate::tests::helpers::{
     app_with_library, click, keystrokes, render_ui, seed_library, seed_library_undecodable,
@@ -81,6 +82,50 @@ fn a_fading_palette_and_toast_work_mid_animation() {
     view.update(vcx, |app, _| {
         assert!(app.toast.current().is_none(), "a rising toast takes clicks")
     });
+}
+
+#[core::prelude::v1::test]
+fn closed_overlays_and_toasts_fade_out_and_take_no_clicks() {
+    crate::motion::EXITS.with(|on| on.set(true));
+    let (_dir, engine) = seed_library("motion_exits", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.show_undo_toast("Moved to Trash", cx));
+    render_ui(vcx);
+    click(vcx, "toast-dismiss");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("toast").is_some(),
+        "a dismissed toast fades out where it stood"
+    );
+    click(vcx, "toast-action");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "the fading toast's Undo takes no click: {:?}",
+            app.toast.current().map(|t| t.message.clone())
+        )
+    });
+
+    // The palette closes last: while it fades, its layer swallows clicks.
+    keystrokes(vcx, "secondary-k");
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.command_palette_open));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("command-palette").is_some(),
+        "a closed palette stays drawn while it fades out"
+    );
+
+    std::thread::sleep(crate::motion::EXIT + std::time::Duration::from_millis(30));
+    view.update(vcx, |_, cx| cx.notify());
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("command-palette").is_none(),
+        "gone after the fade"
+    );
+    assert!(vcx.debug_bounds("toast").is_none(), "gone after the fade");
+    crate::motion::EXITS.with(|on| on.set(false));
 }
 
 #[core::prelude::v1::test]

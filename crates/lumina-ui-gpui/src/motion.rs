@@ -1,21 +1,34 @@
-//! Entrance motion (v3.1 motion sheet): one easing, nothing over 220 ms.
-//! GPUI has no exit or layout animation, so only entrances animate;
-//! closing is instant. Reduce Motion keeps fades and drops movement and
-//! scale. Overlays and the fullscreen viewer fade in with [`overlay_in`];
-//! stepping between viewer items does not animate.
+//! Motion (v3.1 motion sheet): three durations, nothing over 220 ms.
+//! Entrances ease out; exits are faster and ease in, so closing never feels
+//! sticky. Reduce Motion keeps fades and drops movement and scale.
+//! Overlays and the fullscreen viewer fade in with [`overlay_in`]; overlays
+//! and toasts fade out through [`Exits`] and [`fade_out`]. Stepping between
+//! viewer items does not animate. Every animation goes through this file
+//! (a theme lint enforces it).
 
+use std::any::Any;
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use gpui::*;
 
+/// Exits, hover-revealed controls, icon swaps, fresh thumbnails.
+pub const MOTION_FAST: Duration = Duration::from_millis(120);
+/// Overlay entrances, indicators, cross-fades.
+pub const MOTION_BASE: Duration = Duration::from_millis(160);
+/// Panel widths, the viewer zoom, slideshow slides.
+pub const MOTION_SLOW: Duration = Duration::from_millis(220);
+
 /// Menus, dialogs, sheets and the palette.
-const OVERLAY_IN: Duration = Duration::from_millis(160);
+const OVERLAY_IN: Duration = MOTION_BASE;
+/// Every close: overlays, menus and toasts.
+pub const EXIT: Duration = MOTION_FAST;
 /// A toast rises 8px while it fades in.
 pub const TOAST_IN: Duration = Duration::from_millis(180);
 /// A freshly decoded grid thumbnail; cached ones appear at once.
-pub const THUMB_IN: Duration = Duration::from_millis(120);
+pub const THUMB_IN: Duration = MOTION_FAST;
 /// The immersive viewer HUD coming back.
-pub const HUD_IN: Duration = Duration::from_millis(120);
+pub const HUD_IN: Duration = MOTION_FAST;
 /// The star or heart the user just set.
 const POP: Duration = Duration::from_millis(140);
 /// How long a just-set mark still pops. Tests get a generous window: a
@@ -28,6 +41,34 @@ const POP_LIVE: Duration = if cfg!(test) {
 
 fn entrance(duration: Duration) -> Animation {
     Animation::new(duration).with_easing(ease_out_quint())
+}
+
+/// Exits accelerate away: slow start, quick finish.
+fn ease_in_cubic(t: f32) -> f32 {
+    t * t * t
+}
+
+fn exit() -> Animation {
+    Animation::new(EXIT).with_easing(ease_in_cubic)
+}
+
+/// Whether closes fade out. Always in the app; off by default in tests,
+/// which read resting layout and would otherwise see overlays linger.
+pub fn exits_on() -> bool {
+    #[cfg(test)]
+    {
+        EXITS.with(|on| on.get())
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Off by default in tests; exit tests turn it on.
+    pub(crate) static EXITS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// The system's Reduce Motion setting, read once.
@@ -82,6 +123,81 @@ pub fn overlay_in(open: bool, el: impl IntoElement, id: &'static str) -> AnyElem
         return el.into_any_element();
     }
     fade_in(div().absolute().inset_0().child(el), id, OVERLAY_IN).into_any_element()
+}
+
+/// Fades a closed element out over [`EXIT`], replaying for each new `id`.
+/// A layer over it swallows the pointer, so the copy fading out takes no
+/// clicks or hovers: the close has already taken effect.
+pub fn fade_out(el: impl IntoElement, id: impl Into<ElementId>) -> AnyElement {
+    div()
+        .relative()
+        .child(el)
+        .child(div().absolute().inset_0().occlude())
+        .with_animation(id, exit(), |el, t| el.opacity(1.0 - t))
+        .into_any_element()
+}
+
+/// A full-window overlay fading out after it closed (see [`Exits`]).
+pub fn overlay_out(el: impl IntoElement, id: ElementId) -> AnyElement {
+    div()
+        .absolute()
+        .inset_0()
+        .child(el)
+        .child(div().absolute().inset_0().occlude())
+        .with_animation(id, exit(), |el, t| el.opacity(1.0 - t))
+        .into_any_element()
+}
+
+/// What an overlay last showed, so it can fade out after its state is
+/// gone. Each frame an open overlay leaves a copy of its state; the frame
+/// it closes, that copy is rendered once more, fading out for [`EXIT`].
+#[derive(Default)]
+pub struct Exits {
+    slots: HashMap<&'static str, ExitSlot>,
+}
+
+#[derive(Default)]
+struct ExitSlot {
+    last_open: Option<Box<dyn Any>>,
+    closing: Option<(Box<dyn Any>, Instant)>,
+    generation: u64,
+}
+
+impl Exits {
+    /// Call once a frame per overlay with its state while open, `None`
+    /// once closed. Returns the state to fade out, the fade's id, and
+    /// whether the close happened this frame, while the overlay is closing.
+    pub fn track<T: Clone + 'static>(
+        &mut self,
+        id: &'static str,
+        open: Option<T>,
+    ) -> Option<(T, ElementId, bool)> {
+        let slot = self.slots.entry(id).or_default();
+        if let Some(state) = open {
+            slot.last_open = Some(Box::new(state));
+            slot.closing = None;
+            return None;
+        }
+        let mut started = false;
+        if let Some(last) = slot.last_open.take() {
+            if exits_on() {
+                slot.generation += 1;
+                slot.closing = Some((last, Instant::now()));
+                started = true;
+            }
+        }
+        let (state, at) = slot.closing.as_ref()?;
+        if at.elapsed() >= EXIT {
+            slot.closing = None;
+            return None;
+        }
+        let state = state.downcast_ref::<T>()?.clone();
+        Some((
+            state,
+            ElementId::NamedInteger(format!("{id}-out").into(), slot.generation),
+            started,
+        ))
+    }
 }
 
 /// Fades `el` in while it rises 8px into place; only fades under Reduce
@@ -240,8 +356,61 @@ mod tests {
 
     #[core::prelude::v1::test]
     fn nothing_runs_longer_than_220ms() {
-        for d in [OVERLAY_IN, TOAST_IN, THUMB_IN, HUD_IN, POP] {
+        for d in [
+            OVERLAY_IN,
+            TOAST_IN,
+            THUMB_IN,
+            HUD_IN,
+            POP,
+            EXIT,
+            MOTION_SLOW,
+        ] {
             assert!(d <= Duration::from_millis(220), "{d:?} is over budget");
         }
+    }
+
+    #[core::prelude::v1::test]
+    fn exits_are_faster_than_entrances_and_ease_in() {
+        assert!(EXIT < OVERLAY_IN, "closing is quicker than opening");
+        assert!(ease_in_cubic(0.5) < 0.5, "an exit starts slow");
+        assert_eq!(ease_in_cubic(1.0), 1.0, "and lands fully closed");
+    }
+
+    #[core::prelude::v1::test]
+    fn a_closed_overlay_fades_its_last_state_then_goes() {
+        EXITS.with(|on| on.set(true));
+        let mut exits = Exits::default();
+        assert!(exits.track("menu", Some(1u8)).is_none(), "open: no exit");
+        assert!(exits.track("menu", Some(2u8)).is_none());
+        let (state, first, started) = exits.track::<u8>("menu", None).expect("fades out");
+        assert_eq!(state, 2, "the last state it showed");
+        assert!(started, "the close is reported once");
+        let (_, _, started) = exits.track::<u8>("menu", None).expect("still fading");
+        assert!(!started);
+        exits
+            .slots
+            .get_mut("menu")
+            .unwrap()
+            .closing
+            .as_mut()
+            .unwrap()
+            .1 -= EXIT;
+        assert!(exits.track::<u8>("menu", None).is_none(), "gone after EXIT");
+
+        exits.track("menu", Some(3u8));
+        let (_, again, _) = exits.track::<u8>("menu", None).unwrap();
+        assert_ne!(first, again, "each close replays the fade");
+        assert!(
+            exits.track("menu", Some(4u8)).is_none(),
+            "reopening cancels it"
+        );
+        assert!(exits.track::<u8>("menu", None).is_some());
+
+        EXITS.with(|on| on.set(false));
+        exits.track("menu", Some(5u8));
+        assert!(
+            exits.track::<u8>("menu", None).is_none(),
+            "with exits off a close is instant"
+        );
     }
 }

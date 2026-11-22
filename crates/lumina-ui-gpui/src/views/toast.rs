@@ -97,6 +97,8 @@ pub struct Toast {
 pub struct ToastState {
     current: Option<Toast>,
     next_id: u64,
+    /// The toast just dismissed, fading out, and when it went.
+    leaving: Option<(Toast, std::time::Instant)>,
 }
 
 impl ToastState {
@@ -123,6 +125,7 @@ impl ToastState {
         // A toast replacing one under a resting pointer gets no new hover
         // event (same element id), so it inherits the hover state.
         let hovered = self.current.as_ref().is_some_and(|toast| toast.hovered);
+        self.leaving = None;
         self.current = Some(Toast {
             kind,
             message,
@@ -136,7 +139,21 @@ impl ToastState {
 
     /// Clears the visible toast. Returns true when one was showing.
     pub fn dismiss(&mut self) -> bool {
-        self.current.take().is_some()
+        let Some(toast) = self.current.take() else {
+            return false;
+        };
+        if crate::motion::exits_on() {
+            self.leaving = Some((toast, std::time::Instant::now()));
+        }
+        true
+    }
+
+    /// The dismissed toast still fading out, if any.
+    fn leaving(&self) -> Option<&Toast> {
+        self.leaving
+            .as_ref()
+            .filter(|(_, at)| at.elapsed() < crate::motion::EXIT)
+            .map(|(toast, _)| toast)
     }
 
     /// Marks the visible toast hovered or not.
@@ -152,7 +169,7 @@ impl ToastState {
         match self.current.as_ref() {
             Some(toast) if toast.id == id && toast.hovered => Tick::Wait,
             Some(toast) if toast.id == id => {
-                self.current = None;
+                self.dismiss();
                 Tick::Dismissed
             }
             _ => Tick::Done,
@@ -194,8 +211,23 @@ impl LuminaApp {
     /// Dismisses the visible toast, if any.
     pub fn dismiss_toast(&mut self, cx: &mut Context<Self>) {
         if self.toast.dismiss() {
+            self.drop_toast_after_fade(cx);
             cx.notify();
         }
+    }
+
+    /// Repaints once the dismissed toast's fade is over, dropping it.
+    fn drop_toast_after_fade(&self, cx: &mut Context<Self>) {
+        if !crate::motion::exits_on() {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(crate::motion::EXIT + Duration::from_millis(16))
+                .await;
+            this.update(cx, |_, cx| cx.notify()).ok();
+        })
+        .detach();
     }
 
     /// Applies the toast's Undo and closes it.
@@ -225,6 +257,7 @@ impl LuminaApp {
             let tick = this.update(async_cx, |this, cx| {
                 let tick = this.toast.tick(id);
                 if matches!(tick, Tick::Dismissed) {
+                    this.drop_toast_after_fade(cx);
                     cx.notify();
                 }
                 tick
@@ -240,13 +273,14 @@ impl LuminaApp {
     /// Toast centred over the grid column, 20px above the status bar, or
     /// stacked above the selection dock when that is showing.
     pub fn render_toast_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
-        if !self.toast.is_visible() {
-            return Empty.into_any_element();
-        }
-        let Some(toast) = self.toast.current() else {
-            return Empty.into_any_element();
+        // A dismissed toast fades out where it stood.
+        let (toast, leaving) = match (self.toast.current(), self.toast.leaving()) {
+            (Some(toast), _) => (toast, false),
+            (None, Some(toast)) => (toast, true),
+            (None, None) => return Empty.into_any_element(),
         };
         let kind = toast.kind;
+        let id = toast.id;
         let colour = kind.colour();
         let message = toast.message.clone();
         let subtitle = toast.subtitle.clone();
@@ -393,11 +427,20 @@ impl LuminaApp {
             .flex()
             .justify_center()
             // A replacing toast keeps this element, so it swaps text in place.
-            .child(crate::motion::rise_in(
-                toast,
-                "toast-in",
-                crate::motion::TOAST_IN,
-            ))
+            .map(|d| {
+                if leaving {
+                    d.child(crate::motion::fade_out(
+                        toast,
+                        ElementId::NamedInteger("toast-out".into(), id),
+                    ))
+                } else {
+                    d.child(crate::motion::rise_in(
+                        toast,
+                        "toast-in",
+                        crate::motion::TOAST_IN,
+                    ))
+                }
+            })
             .into_any_element()
     }
 }

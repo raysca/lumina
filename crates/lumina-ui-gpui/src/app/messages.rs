@@ -254,6 +254,8 @@ impl LuminaApp {
             // Already recorded in the failure set by the decode callback.
             UiMessage::ThumbnailFailed => cx.notify(),
             UiMessage::ViewerLoaded { id, frame } => {
+                #[cfg(test)]
+                crate::app::state::VIEWER_ANSWERS.with(|n| n.set(n.get() + 1));
                 // A poster must not replace live frames of the video the
                 // viewer is playing.
                 let playing_here = !self.video.in_pip
@@ -285,6 +287,8 @@ impl LuminaApp {
                 }
             }
             UiMessage::ViewerFailed { id } => {
+                #[cfg(test)]
+                crate::app::state::VIEWER_ANSWERS.with(|n| n.set(n.get() + 1));
                 if self
                     .selected_item
                     .as_ref()

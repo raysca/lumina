@@ -267,6 +267,63 @@ impl LuminaApp {
             }));
     }
 
+    /// An overlay that fades in on open and out on close. `state` is the
+    /// field its render reads; while it is closing, the field's last open
+    /// value is put back for this one render, then the current one again.
+    pub(crate) fn overlay<T: Clone + 'static>(
+        &mut self,
+        id: &'static str,
+        state: fn(&mut Self) -> &mut T,
+        open: fn(&T) -> bool,
+        render: impl FnOnce(&mut Self, &mut Context<Self>) -> AnyElement,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let current = state(self);
+        let is_open = open(current);
+        let copy = is_open.then(|| current.clone());
+        match self.exits.track(id, copy) {
+            None => motion::overlay_in(is_open, render(self, cx), id),
+            Some((last, fade, started)) => {
+                if started {
+                    // One frame after the fade ends drops the faded copy.
+                    cx.spawn(async move |this, cx| {
+                        cx.background_executor()
+                            .timer(motion::EXIT + std::time::Duration::from_millis(16))
+                            .await;
+                        this.update(cx, |_, cx| cx.notify()).ok();
+                    })
+                    .detach();
+                }
+                let now = std::mem::replace(state(self), last);
+                let el = render(self, cx);
+                *state(self) = now;
+                motion::overlay_out(el, fade)
+            }
+        }
+    }
+
+    /// Settings, over the library or the welcome screen.
+    pub(super) fn preferences_layer(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        self.overlay(
+            "preferences-in",
+            |a| &mut a.preferences_open,
+            |open| *open,
+            |a, cx| crate::views::preferences::render_preferences_modal(a, cx).into_any_element(),
+            cx,
+        )
+    }
+
+    /// The remove-library confirmation, over Settings and the library.
+    pub(super) fn library_delete_layer(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        self.overlay(
+            "library-delete-in",
+            |a| &mut a.library_delete,
+            Option::is_some,
+            |a, cx| a.render_library_delete_modal(cx).into_any_element(),
+            cx,
+        )
+    }
+
     /// The layers above the library columns, bottom to top: compare, the
     /// viewer, modals and menus, the shortcut sheet, settings, the palette
     /// and the drop target.
@@ -276,124 +333,156 @@ impl LuminaApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        root
+        let root = root
             // 5b. Compare / survey, under the viewer it can open
             .child(crate::views::compare::render(self, cx))
             // 6. Fullscreen Detail Viewer Modal
-            .child(self.render_viewer_modal(cx))
+            .child(self.render_viewer_modal(cx));
+        // Each fades in on open and out on close, bottom to top.
+        let layers = [
             // 7. Visual Smart Album Builder Modal
-            .child(motion::overlay_in(
-                self.album_draft.modal_open,
-                self.render_album_builder_modal(cx),
+            self.overlay(
                 "album-builder-in",
-            ))
+                |a| &mut a.album_draft,
+                |d| d.modal_open,
+                |a, cx| a.render_album_builder_modal(cx).into_any_element(),
+                cx,
+            ),
             // 8. Delete / Empty Trash Confirmation Modal
-            .child(motion::overlay_in(
-                self.delete_confirm_state.is_some(),
-                self.render_delete_confirm_modal(cx),
+            self.overlay(
                 "delete-confirm-in",
-            ))
+                |a| &mut a.delete_confirm_state,
+                Option::is_some,
+                |a, cx| a.render_delete_confirm_modal(cx).into_any_element(),
+                cx,
+            ),
             // 8b. Smart album delete confirmation
-            .child(motion::overlay_in(
-                self.album_draft.confirm_delete.is_some(),
-                crate::views::smart_album_delete::render(self, cx),
+            self.overlay(
                 "smart-album-delete-in",
-            ))
+                |a| &mut a.album_draft.confirm_delete,
+                Option::is_some,
+                |a, cx| crate::views::smart_album_delete::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8b2. Album delete confirmation
-            .child(motion::overlay_in(
-                self.albums.confirm_delete.is_some(),
-                crate::views::album_delete::render(self, cx),
+            self.overlay(
                 "album-delete-in",
-            ))
+                |a| &mut a.albums.confirm_delete,
+                Option::is_some,
+                |a, cx| crate::views::album_delete::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8b3. Add to Album picker
-            .child(motion::overlay_in(
-                self.albums.picker.is_some(),
-                crate::views::album_picker::render(self, cx),
+            self.overlay(
                 "album-picker-in",
-            ))
+                |a| &mut a.albums.picker,
+                Option::is_some,
+                |a, cx| crate::views::album_picker::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8c. Import dialog
-            .child(motion::overlay_in(
-                self.import.dialog.is_some(),
-                crate::views::import_dialog::render(self, cx),
+            self.overlay(
                 "import-dialog-in",
-            ))
+                |a| &mut a.import.dialog,
+                Option::is_some,
+                |a, cx| crate::views::import_dialog::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8d. Network video import dialog
-            .child(motion::overlay_in(
-                self.network_import.stage.is_some(),
-                crate::views::network_import_dialog::render(self, cx),
+            self.overlay(
                 "network-import-dialog-in",
-            ))
+                |a| &mut a.network_import.stage,
+                Option::is_some,
+                |a, cx| crate::views::network_import_dialog::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8d2. Metadata template editor
-            .child(motion::overlay_in(
-                self.templates.editor.is_some(),
-                crate::views::template_editor::render(self, cx),
+            self.overlay(
                 "template-editor-in",
-            ))
+                |a| &mut a.templates.editor,
+                Option::is_some,
+                |a, cx| crate::views::template_editor::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8e. Downloads dropdown
-            .child(motion::overlay_in(
-                self.downloads.open,
-                crate::views::downloads_panel::render(self, cx),
+            self.overlay(
                 "downloads-panel-in",
-            ))
+                |a| &mut a.downloads.open,
+                |open| *open,
+                |a, cx| crate::views::downloads_panel::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 8f. "Downloads are still running" before quit / library switch
-            .child(motion::overlay_in(
-                self.downloads.confirm.is_some(),
-                crate::views::downloads_confirm::render(self, cx),
+            self.overlay(
                 "downloads-confirm-in",
-            ))
+                |a| &mut a.downloads.confirm,
+                Option::is_some,
+                |a, cx| crate::views::downloads_confirm::render(a, cx).into_any_element(),
+                cx,
+            ),
             // 9. Media Card Context Menu Overlay
-            .child(motion::overlay_in(
-                self.context_menu_state.is_some(),
-                self.render_context_menu_overlay(window, cx),
+            self.overlay(
                 "context-menu-in",
-            ))
+                |a| &mut a.context_menu_state,
+                Option::is_some,
+                |a, cx| a.render_context_menu_overlay(window, cx).into_any_element(),
+                cx,
+            ),
             // 9b. Sort popover
-            .child(motion::overlay_in(
-                self.sort_menu_open,
-                crate::views::sort_menu::render_sort_menu_overlay(self, cx),
+            self.overlay(
                 "sort-menu-in",
-            ))
+                |a| &mut a.sort_menu_open,
+                |open| *open,
+                |a, cx| crate::views::sort_menu::render_sort_menu_overlay(a, cx).into_any_element(),
+                cx,
+            ),
             // 9b2. Album page More menu backdrop (the card hangs from More)
-            .child(motion::overlay_in(
-                self.albums.page.menu.is_some(),
-                crate::views::album_page::render_menu_backdrop(self, cx),
+            self.overlay(
                 "album-menu-in",
-            ))
+                |a| &mut a.albums.page.menu,
+                Option::is_some,
+                |a, cx| crate::views::album_page::render_menu_backdrop(a, cx).into_any_element(),
+                cx,
+            ),
             // 9c. Add filter menu backdrop (the card hangs from its opener)
-            .child(motion::overlay_in(
-                self.filter_menu.is_some(),
-                crate::views::filter_bar::render_filter_menu_overlay(self, cx),
+            self.overlay(
                 "filter-menu-in",
-            ))
+                |a| &mut a.filter_menu,
+                Option::is_some,
+                |a, cx| {
+                    crate::views::filter_bar::render_filter_menu_overlay(a, cx).into_any_element()
+                },
+                cx,
+            ),
             // 11. Keyboard Shortcuts Cheat Sheet
-            .child(motion::overlay_in(
-                self.shortcuts_overlay_open,
-                self.render_shortcuts_overlay(cx),
+            self.overlay(
                 "shortcuts-in",
-            ))
+                |a| &mut a.shortcuts_overlay_open,
+                |open| *open,
+                |a, cx| a.render_shortcuts_overlay(cx).into_any_element(),
+                cx,
+            ),
             // 12. Settings (About is its last category): a full-window page
-            .child(motion::overlay_in(
-                self.preferences_open,
-                crate::views::preferences::render_preferences_modal(self, cx),
-                "preferences-in",
-            ))
+            self.preferences_layer(cx),
             // 12a. Remove-library confirmation over Settings (and the library)
-            .child(motion::overlay_in(
-                self.library_delete.is_some(),
-                self.render_library_delete_modal(cx),
-                "library-delete-in",
-            ))
+            self.library_delete_layer(cx),
+        ];
+        let root = root
+            .children(layers)
             // 12b. The toast over settings (opaque); the columns draw it
             // otherwise.
             .when(self.preferences_open, |root| {
                 root.child(self.render_toast_overlay(cx))
-            })
-            // 13. Command palette (topmost)
-            .child(motion::overlay_in(
-                self.command_palette_open,
-                crate::views::command_palette::render_command_palette(self, cx),
-                "command-palette-in",
-            ))
+            });
+        // 13. Command palette (topmost)
+        let palette = self.overlay(
+            "command-palette-in",
+            |a| &mut a.command_palette_open,
+            |open| *open,
+            |a, cx| crate::views::command_palette::render_command_palette(a, cx).into_any_element(),
+            cx,
+        );
+        root.child(palette)
             // 14. Files dragged in from Finder (shown only during a drag)
             .children(
                 (self.grid_state.is_some() && !self.import_blocked_by_modal())

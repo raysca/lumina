@@ -263,6 +263,7 @@ pub struct KeywordState {
 }
 
 /// Smart album builder sheet state. See `smart_draft` for the row model.
+#[derive(Clone)]
 pub struct AlbumDraftState {
     pub modal_open: bool,
     pub editing_album_id: Option<i64>,
@@ -515,6 +516,8 @@ pub struct LuminaApp {
     pub updates: crate::app::updates::UpdateState,
     /// Keyboard shortcut cheat sheet visibility.
     pub shortcuts_overlay_open: bool,
+    /// Overlays fading out after they closed.
+    pub exits: crate::motion::Exits,
     /// Last persisted window bounds: (x, y, width, height).
     pub window_bounds: Option<(f32, f32, f32, f32)>,
     /// The window's backing scale (2.0 on Retina). Refreshed every frame by
@@ -790,6 +793,7 @@ impl LuminaApp {
             toast: crate::views::toast::ToastState::default(),
             updates: Default::default(),
             shortcuts_overlay_open: false,
+            exits: Default::default(),
             window_bounds: config.restored_window_bounds(),
             window_scale: 1.0,
             window_bounds_subscription: None,
@@ -1201,6 +1205,9 @@ pub(crate) fn on_viewer_frame(
 thread_local! {
     /// Thumbnail decodes actually sent to the engine from this test thread.
     pub(crate) static THUMB_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Viewer decodes answered (loaded or failed) on this test thread, so a
+    /// test can wait out the viewer's own load before staging an image.
+    pub(crate) static VIEWER_ANSWERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Id and file mtime of each decode sent with a row the UI already held;
     /// a stale row would decode (or hit the disk cache for) the old file.
     pub(crate) static THUMB_REQUEST_ITEMS: std::cell::RefCell<Vec<(MediaId, i64)>> =

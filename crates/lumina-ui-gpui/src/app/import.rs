@@ -13,6 +13,7 @@ use crate::i18n;
 use crate::LuminaApp;
 
 /// The import confirmation dialog.
+#[derive(Clone)]
 pub(crate) enum ImportDialog {
     /// Walking, reading and duplicate-checking `count` dropped or picked
     /// paths; `checked` is (files read, files found) once the walk is done.
