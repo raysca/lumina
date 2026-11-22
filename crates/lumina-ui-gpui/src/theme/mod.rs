@@ -12,6 +12,22 @@ mod widgets;
 pub use controls::*;
 pub use widgets::*;
 
+/// The title bar band every top row shares: page headers, the sidebar's top
+/// row and the viewer's top bar. Its controls centre on `TITLEBAR_HEIGHT / 2`,
+/// the same line as the macOS window controls (see `main.rs`).
+pub const TITLEBAR_HEIGHT: f32 = 52.0;
+/// Where content may start on macOS, right of the window controls, measured
+/// from the window's left edge. The sidebar toggle sits here in both sidebar
+/// states, so it never moves.
+pub const TRAFFIC_LIGHTS_INSET: f32 = 84.0;
+
+/// Left padding for a main-column header while the sidebar is collapsed on
+/// macOS: the window controls reach past the rail into the header, so its
+/// first control starts at [`TRAFFIC_LIGHTS_INSET`].
+pub fn collapsed_header_inset() -> Pixels {
+    px(TRAFFIC_LIGHTS_INSET - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)
+}
+
 /// Body text: sidebar rows, fields and menus (v3.1 type scale).
 pub const TEXT_BODY: Pixels = px(13.0);
 

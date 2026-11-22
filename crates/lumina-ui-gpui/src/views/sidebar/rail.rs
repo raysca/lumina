@@ -24,9 +24,10 @@ pub(super) fn render_rail(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl
         .flex()
         .flex_col()
         .items_center()
-        // macOS draws the traffic lights over the top of the rail.
+        // macOS draws the window controls over the top of the rail: its
+        // buttons start under the title bar band.
         .pt(px(if cfg!(target_os = "macos") {
-            52.0
+            theme::TITLEBAR_HEIGHT
         } else {
             16.0
         }))

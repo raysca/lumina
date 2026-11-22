@@ -163,12 +163,13 @@ pub(crate) fn render(
                 .relative()
                 .size_full()
                 .px(px(28.0))
-                .py(px(20.0))
+                // The top row is the title bar band; the title block keeps 20 below.
+                .pb(px(20.0))
                 // The traffic lights reach past a collapsed sidebar, as in
                 // the page header.
                 .when(
                     cfg!(target_os = "macos") && this.sidebar_collapsed,
-                    |band| band.pl(px(84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)),
+                    |band| band.pl(theme::collapsed_header_inset()),
                 )
                 .flex()
                 .flex_col()
@@ -176,6 +177,8 @@ pub(crate) fn render(
                 .child(
                     div()
                         .w_full()
+                        .h(px(theme::TITLEBAR_HEIGHT))
+                        .flex_none()
                         .flex()
                         .flex_row()
                         .items_center()

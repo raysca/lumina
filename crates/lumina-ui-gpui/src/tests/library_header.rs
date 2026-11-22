@@ -42,8 +42,15 @@ fn header_sits_in_the_main_column_with_title_meta_and_actions() {
 
     let meta = bounds(vcx, "page-meta");
     assert!(
-        meta.top() >= title.bottom() && inside(header, meta),
-        "the meta line sits under the title, inside the header: {meta:?} vs {title:?}"
+        meta.left() >= title.right() && inside(header, meta),
+        "the meta follows the title on its line, inside the header: {meta:?} vs {title:?}"
+    );
+    let centre = |b: gpui::Bounds<gpui::Pixels>| f32::from(b.center().y);
+    assert!(
+        (centre(header) - crate::theme::TITLEBAR_HEIGHT / 2.0).abs() < 1.0
+            && (centre(title) - centre(header)).abs() < 2.0,
+        "the header is the title bar band and the title centres on its line: \
+         {title:?} in {header:?}"
     );
     view.update(vcx, |app, _| {
         assert_eq!(

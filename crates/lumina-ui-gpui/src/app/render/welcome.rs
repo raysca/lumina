@@ -62,7 +62,7 @@ impl LuminaApp {
                                 col.child(self.render_error_banner(cx))
                             })
                             .child(crate::views::page_header::page_header(
-                                Empty,
+                                None,
                                 crate::i18n::t("view.all_media"),
                                 Some(crate::i18n::t("header.no_media").into()),
                                 Empty,

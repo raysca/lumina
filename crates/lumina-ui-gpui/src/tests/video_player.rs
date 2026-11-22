@@ -425,7 +425,7 @@ fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
         let media = bounds(vcx, "viewer-media");
         let transport = bounds(vcx, "video-transport");
         assert!(
-            (f32::from(media.top()) - (60.0 + 12.0)).abs() < 0.5
+            (f32::from(media.top()) - (crate::theme::TITLEBAR_HEIGHT + 12.0)).abs() < 0.5
                 && (f32::from(transport.top() - media.bottom()) - 12.0).abs() < 0.5
                 && f32::from(transport.bottom()) <= window.1,
             "{frame:?} in {window:?}: the frame keeps a 12px gap under the top bar and \

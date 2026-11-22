@@ -4,6 +4,7 @@ pub(crate) mod nav;
 mod rail;
 mod sections;
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::SystemAlbum;
 
@@ -55,6 +56,11 @@ pub fn tag_color(name: &str) -> Rgba {
     }
 }
 
+/// The sidebar's side padding; its top row starts at the window's top edge.
+pub(crate) const SIDEBAR_PADDING_X: f32 = 12.0;
+/// The gap between the sidebar's top row, search field and sections.
+pub(crate) const SIDEBAR_GAP: f32 = 18.0;
+
 pub struct SidebarView;
 
 impl SidebarView {
@@ -83,11 +89,14 @@ impl SidebarView {
             .border_color(theme::line())
             .flex()
             .flex_col()
-            .gap(px(18.0))
-            .py(px(16.0))
-            .px(px(12.0))
+            .gap(px(SIDEBAR_GAP))
+            .pb(px(16.0))
+            .px(px(SIDEBAR_PADDING_X))
             .text_color(theme::t1())
-            .child(render_brand("sidebar-brand"))
+            .child(render_brand(
+                "sidebar-brand",
+                Some(this.render_sidebar_toggle(cx).into_any_element()),
+            ))
             .child(crate::views::search_bar::SearchBarView::render_field(
                 this, cx,
             ))
@@ -113,16 +122,33 @@ impl SidebarView {
     }
 }
 
-/// Brand row: the aperture mark and "Lumina". On macOS it starts after the
-/// traffic lights, which the window draws over the sidebar's top-left.
-/// Settings draws it too; `selector` (and `{selector}-icon` for the mark)
-/// tells the two apart, since settings is an overlay above the library.
-pub(crate) fn render_brand(selector: &'static str) -> impl IntoElement {
-    // 84px from the window edge, less the sidebar's 12px padding.
-    let inset = if cfg!(target_os = "macos") { 72.0 } else { 2.0 };
+/// Whether the sidebar's top row shows the mark and "Lumina". macOS leaves
+/// them out: the window controls already sit in that corner, and the row
+/// holds the sidebar toggle right of them instead.
+pub(crate) const SHOWS_WORDMARK: bool = !cfg!(target_os = "macos");
+
+/// The sidebar's title bar row, [`theme::TITLEBAR_HEIGHT`] tall so its
+/// contents centre on the window controls' line. On macOS it starts after
+/// the window controls, which the window draws over the sidebar's top-left;
+/// elsewhere it shows the mark and "Lumina". `trailing` (the sidebar toggle)
+/// follows: right of the window controls on macOS, at the row's end
+/// elsewhere. Settings draws it too; `selector` (and `{selector}-icon` for
+/// the mark) tells the two apart, since settings is an overlay above the
+/// library.
+pub(crate) fn render_brand(
+    selector: &'static str,
+    trailing: Option<AnyElement>,
+) -> impl IntoElement {
+    // TRAFFIC_LIGHTS_INSET from the window edge, less the sidebar's 12px padding.
+    let inset = if cfg!(target_os = "macos") {
+        theme::TRAFFIC_LIGHTS_INSET - SIDEBAR_PADDING_X
+    } else {
+        2.0
+    };
     div()
         .debug_selector(move || selector.to_string())
         .flex_none()
+        .h(px(theme::TITLEBAR_HEIGHT))
         // At the 180px minimum the wordmark clips rather than spilling out.
         .min_w_0()
         .overflow_hidden()
@@ -132,20 +158,24 @@ pub(crate) fn render_brand(selector: &'static str) -> impl IntoElement {
         .flex_row()
         .items_center()
         .gap(px(9.0))
-        .child(
-            div()
-                .debug_selector(move || format!("{selector}-icon"))
-                .flex_none()
-                .child(img(crate::assets::BRAND_MARK).size(px(19.0))),
-        )
-        .child(
-            div()
-                .min_w_0()
-                .truncate()
-                .font_family(theme::FONT_DISPLAY)
-                .text_size(px(18.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::t1())
-                .child("Lumina"),
-        )
+        .when(SHOWS_WORDMARK, |row| {
+            row.child(
+                div()
+                    .debug_selector(move || format!("{selector}-icon"))
+                    .flex_none()
+                    .child(img(crate::assets::BRAND_MARK).size(px(19.0))),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .font_family(theme::FONT_DISPLAY)
+                    .text_size(px(18.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme::t1())
+                    .child("Lumina"),
+            )
+        })
+        .children(trailing)
 }

@@ -170,7 +170,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .role(Role::Toolbar)
         .aria_label("Edit photo")
         .w_full()
-        .h(px(52.0))
+        .h(px(theme::TITLEBAR_HEIGHT + 1.0)) // + its bottom border
         .px_4()
         .bg(theme::bg_0())
         .border_b_1()

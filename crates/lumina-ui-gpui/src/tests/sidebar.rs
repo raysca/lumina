@@ -800,3 +800,42 @@ fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
         assert_eq!(app.get_active_count(), 3);
     });
 }
+
+/// The sidebar toggle centres on the title bar band's line with the sidebar
+/// expanded and collapsed, and on macOS it stays right of the window
+/// controls in both states.
+#[core::prelude::v1::test]
+fn sidebar_toggle_sits_on_the_title_bar_line_in_both_states() {
+    let (_dir, engine) = seed_library("sidebar_toggle_line", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let line = crate::theme::TITLEBAR_HEIGHT / 2.0;
+    let mut lefts = Vec::new();
+    for collapsed in [false, true] {
+        if view.update(vcx, |app, _| app.sidebar_collapsed) != collapsed {
+            click(vcx, "sidebar-toggle");
+            render_ui(vcx);
+        }
+        let toggle = vcx
+            .debug_bounds("sidebar-toggle")
+            .expect("the toggle shows");
+        assert!(
+            (f32::from(toggle.center().y) - line).abs() < 0.5,
+            "collapsed={collapsed}: the toggle centres on the title bar line: {toggle:?}"
+        );
+        let header = vcx.debug_bounds("page-header").expect("the page header");
+        assert!(
+            (f32::from(header.center().y) - line).abs() < 1.0,
+            "collapsed={collapsed}: the page header is the title bar band: {header:?}"
+        );
+        lefts.push(f32::from(toggle.left()));
+    }
+    if cfg!(target_os = "macos") {
+        assert!(
+            (lefts[0] - lefts[1]).abs() < 0.5
+                && (lefts[0] - crate::theme::TRAFFIC_LIGHTS_INSET).abs() < 0.5,
+            "the toggle never moves: it starts at the window controls' inset: {lefts:?}"
+        );
+    }
+}

@@ -160,7 +160,10 @@ impl LuminaApp {
             Some(year) => crate::i18n::year_label(year),
             None => view_label.to_string(),
         };
-        let toggle = self.render_sidebar_toggle(cx);
+        // Expanded, the toggle lives in the sidebar's top row.
+        let toggle = self
+            .sidebar_collapsed
+            .then(|| self.render_sidebar_toggle(cx).into_any_element());
         // Review Duplicates: no grid to sort or filter; one merge action.
         if self.duplicates_review_shown() {
             let actions = div()
@@ -331,7 +334,7 @@ impl LuminaApp {
     fn clear_traffic_lights(&self, header: Div) -> Div {
         header.when(
             cfg!(target_os = "macos") && self.sidebar_collapsed,
-            |header| header.pl(px(84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)),
+            |header| header.pl(theme::collapsed_header_inset()),
         )
     }
 }

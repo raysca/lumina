@@ -10,8 +10,9 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::popover_under;
 
-/// Viewer top bar height; the floating immersive info panel starts below it.
-pub(super) const TOP_BAR_HEIGHT: f32 = 60.0;
+/// Viewer top bar height: the title bar band, so Back and the title centre
+/// on the window controls. The floating immersive info panel starts below it.
+pub(super) const TOP_BAR_HEIGHT: f32 = theme::TITLEBAR_HEIGHT;
 /// Below this stage width the Back button drops its label.
 const COMPACT_STAGE_WIDTH: f32 = 760.0;
 const BUTTON: f32 = 30.0;
