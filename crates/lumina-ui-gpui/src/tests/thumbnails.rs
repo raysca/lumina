@@ -258,11 +258,9 @@ fn reupserted_item_is_retried() {
             cx,
         )
     });
-    // Linux: this undecodable fixture fails in process at once (there is no
-    // sips fallback to wait on), so the retry can mark it failed again before
-    // this check. The decode count below still proves the retry there.
-    #[cfg(not(target_os = "linux"))]
-    assert!(!is_failed(&view, vcx, id), "a re-upserted file is retried");
+    // This undecodable fixture fails in process at once (no native tool to
+    // wait on), so the retry can mark it failed again before any check of
+    // the card; the decode count proves the retry.
     render_ui(vcx);
     assert_eq!(requests(), 1, "the retried card is decoded once");
 }

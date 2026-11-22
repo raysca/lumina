@@ -192,8 +192,9 @@ impl LuminaEngine {
 // ponytail: decode bypasses the thumbnail disk cache, so a large export
 // decodes every photo again; reuse the cache if exports prove slow.
 fn write_jpeg(item: &MediaItem, edits: &Edits, destination: &Path) -> Result<()> {
-    // sips scales up to the size asked for, so the original's size must be
-    // known to never ask beyond it. The scanner cannot read every HEIC/RAW.
+    // The original's size must be known to never ask beyond it (the decode
+    // would not grow it, and the size picks the crop's decode size). The
+    // scanner cannot read every HEIC/RAW.
     let original = if item.width > 0 && item.height > 0 {
         (item.width, item.height)
     } else {

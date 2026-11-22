@@ -9,7 +9,7 @@ Regenerate with:
 
     grep -rn ponytail crates --include="*.rs"
 
-Total: 120 notes.
+Total: 119 notes.
 
 
 ## crates/lumina-core/src/cache.rs
@@ -52,8 +52,7 @@ Total: 120 notes.
 
 ## crates/lumina-core/src/decoder.rs
 
-- L316: ponytail: a process that finishes exiting between `spawn` and this
-- L641: ponytail: a sips process plus a PNG round trip costs about 50 ms per
+- L301: ponytail: a process that finishes exiting between `spawn` and this
 
 ## crates/lumina-core/src/engine/sidecars.rs
 
