@@ -89,6 +89,7 @@ fn retired_frames_are_evicted_without_any_window_drawing() {
         ui_tx
             .send_blocking(UiMessage::ViewerLoaded {
                 id: item.id,
+                generation: 0,
                 frame: tiny_decoded_frame(item.id),
             })
             .unwrap();

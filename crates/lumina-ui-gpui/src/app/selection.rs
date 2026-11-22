@@ -205,11 +205,12 @@ impl LuminaApp {
         }
         self.load_selected_item_tags(item.id, cx);
         self.viewer_failed = None;
-        if let Some(state) = self.grid_state.as_ref().filter(|s| !s.is_failed(item.id)) {
-            self.request_viewer_frame(state, item.id);
-        }
 
+        // The full-size frame is for the open viewer only: the grid and the
+        // inspector show the grid thumbnail. A failed grid thumbnail still
+        // asks, since the viewer decode can succeed where it did not.
         if self.is_fullscreen_viewer {
+            self.request_shown_viewer_frame(cx);
             self.prefetch_viewer_neighbours();
             self.sync_viewer_player(cx);
         }

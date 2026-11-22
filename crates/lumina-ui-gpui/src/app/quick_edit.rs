@@ -451,9 +451,7 @@ impl LuminaApp {
     /// Replaces a preview with the catalog's (saved) frame of `id`.
     fn show_saved_frame(&mut self, id: MediaId) {
         self.set_viewer_image(None);
-        if let Some(state) = self.grid_state.as_ref() {
-            self.request_viewer_frame(state, id);
-        }
+        self.request_viewer_frame(id);
     }
 }
 

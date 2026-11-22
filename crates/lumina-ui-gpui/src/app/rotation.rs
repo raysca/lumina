@@ -149,9 +149,7 @@ impl LuminaApp {
             .filter(|id| ids.contains(id))
         {
             self.set_viewer_image(None);
-            if let Some(state) = self.grid_state.as_ref() {
-                self.request_viewer_frame(state, open);
-            }
+            self.request_viewer_frame(open);
         }
     }
 }

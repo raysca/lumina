@@ -122,13 +122,16 @@ pub enum UiMessage {
     /// A thumbnail decode failed for good (already recorded in the grid's
     /// failure set); the handler only repaints.
     ThumbnailFailed,
+    /// The viewer's full-size decode of `id`, asked for at `generation`.
     ViewerLoaded {
         id: MediaId,
+        generation: u64,
         frame: DecodedFrame,
     },
     /// The viewer's full-size decode of `id` failed.
     ViewerFailed {
         id: MediaId,
+        generation: u64,
     },
     // Only the real folder dialog sends this; tests count the request instead.
     #[cfg_attr(test, allow(dead_code))]

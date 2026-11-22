@@ -458,6 +458,7 @@ pub struct LuminaApp {
     /// The selected item whose full-size viewer decode failed, so the stage
     /// says so instead of waiting. Kept apart from the grid's failure set.
     pub viewer_failed: Option<MediaId>,
+    pub(crate) viewer_frame: crate::app::viewer_frame::ViewerFrameRequests,
     /// Images no longer shown (replaced viewer frames, evicted thumbnails)
     /// awaiting GPU atlas eviction. GPUI never evicts a `RenderImage` on its
     /// own, so without this every video frame, opened photo and scrolled-past
@@ -761,6 +762,7 @@ impl LuminaApp {
             grid_zoom: GridZoomGesture::default(),
             viewer_image: None,
             viewer_failed: None,
+            viewer_frame: Default::default(),
             retired_images: Vec::new(),
             has_desktop_pics,
             first_scan: None,
@@ -1145,15 +1147,6 @@ impl LuminaApp {
     /// grid's failure set: a full-size decode can time out on a file whose
     /// small thumbnail decodes fine. The grid's `in_flight` claim is not
     /// touched either (the sizes differ).
-    pub(crate) fn request_viewer_frame(&self, state: &GridState, id: MediaId) {
-        let tx = self.ui_tx.clone();
-        state.engine.request_thumbnail(
-            id,
-            crate::app::viewer_actions::VIEWER_IMAGE_SIZE,
-            move |frame| on_viewer_frame(&tx, id, frame),
-        );
-    }
-
     pub(crate) fn prefetch_rows(&self, range: std::ops::Range<usize>) {
         if range.start < range.end {
             let cols = self.grid_cols();
@@ -1199,19 +1192,6 @@ pub(crate) fn on_thumbnail_result(
             requested_size,
         }),
         None => tx.send_blocking(UiMessage::ThumbnailFailed),
-    };
-}
-
-/// The viewer decode's answer, on the decoder pool.
-pub(crate) fn on_viewer_frame(
-    tx: &async_channel::Sender<UiMessage>,
-    id: MediaId,
-    frame: Option<lumina_core::DecodedFrame>,
-) {
-    // A closed receiver means the app is gone; nothing is left to repaint.
-    let _ = match frame {
-        Some(frame) => tx.send_blocking(UiMessage::ViewerLoaded { id, frame }),
-        None => tx.send_blocking(UiMessage::ViewerFailed { id }),
     };
 }
 

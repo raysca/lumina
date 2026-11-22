@@ -77,7 +77,8 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
 // never queues them) and give the view a fresh failure set after the
 // viewer's own decode is sent (its late `None` marks the old set only).
 
-use crate::app::state::{on_viewer_frame, THUMB_REQUESTS};
+use crate::app::state::THUMB_REQUESTS;
+use crate::app::viewer_frame::on_viewer_frame;
 use crate::views::grid::GridState;
 use crate::LuminaApp;
 use gpui::{Entity, TestAppContext, VisualTestContext};
@@ -261,6 +262,11 @@ fn viewer_on_failed_item_shows_failed_stage() {
     let (_dir, engine) = seed_library("viewer_failed", 2);
     let first = engine.get_item_slice(0..2);
     let failed: Vec<MediaId> = first.iter().map(|i| i.id).collect();
+    // The viewer asks for its own decode even when the grid's failed, so
+    // make the files undecodable for real.
+    for item in &first {
+        std::fs::write(&item.path, b"not an image").unwrap();
+    }
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &failed);
     let path = view.update(vcx, |app, cx| {
@@ -308,10 +314,11 @@ fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
     let (_dir, engine) = seed_library_undecodable("viewer_decode_failed", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
-    let id = view.update(vcx, |app, cx| {
+    let (id, generation) = view.update(vcx, |app, cx| {
         let id = open_at(app, 0, cx);
-        on_viewer_frame(&app.ui_tx, id, None);
-        id
+        let generation = app.viewer_frame.generation;
+        on_viewer_frame(&app.ui_tx, id, generation, None);
+        (id, generation)
     });
     render_ui(vcx);
     assert!(
@@ -325,7 +332,7 @@ fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
         );
         // A late failure for an item no longer shown changes nothing.
         app.navigate_selection(1, cx);
-        on_viewer_frame(&app.ui_tx, id, None);
+        on_viewer_frame(&app.ui_tx, id, generation, None);
     });
     render_ui(vcx);
     view.update(vcx, |app, _| {

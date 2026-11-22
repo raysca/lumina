@@ -71,6 +71,7 @@ pub mod video_load;
 pub mod video_tracks;
 pub mod video_volume;
 pub mod viewer_actions;
+pub mod viewer_frame;
 pub mod windows;
 
 pub use crate::views::sidebar::AlbumSelection;

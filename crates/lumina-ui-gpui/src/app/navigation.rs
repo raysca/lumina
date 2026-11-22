@@ -149,6 +149,7 @@ impl LuminaApp {
                 // `select_item_internal` already started video only when the
                 // viewer was open while selecting; cover the closed -> open jump.
                 if !viewer_was_open {
+                    self.request_shown_viewer_frame(cx);
                     self.sync_viewer_player(cx);
                 }
             } else {
