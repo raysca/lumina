@@ -10,6 +10,7 @@ on:
       - site/**
       - resources/brand/**
       - resources/fonts/**
+      - docs/assets/screenshots/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 

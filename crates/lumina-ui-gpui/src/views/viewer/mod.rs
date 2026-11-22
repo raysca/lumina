@@ -99,7 +99,16 @@ impl MediaViewer {
             .child(if editing {
                 edit_bar::render(this, cx)
             } else if is_immersive && !hud_visible {
-                Empty.into_any_element()
+                match this.hud_fading_out() {
+                    Some(hide) => div()
+                        .w_full()
+                        .child(crate::motion::fade_out(
+                            div().w_full().child(ViewerTopBar::render(this, item, cx)),
+                            ElementId::NamedInteger("viewer-hud-top-out".into(), hide),
+                        ))
+                        .into_any_element(),
+                    None => Empty.into_any_element(),
+                }
             } else if is_immersive {
                 // The HUD fades back in after an idle hide.
                 crate::motion::fade_in(
@@ -156,20 +165,30 @@ impl MediaViewer {
                     ),
             )
             // 3. The transport, docked across the stage under the frame.
-            .child(
-                if presenting || !is_video || !show_chrome || this.video.in_pip {
-                    Empty.into_any_element()
-                } else if is_immersive {
-                    crate::motion::fade_in(
-                        div().w_full().child(ViewerTransport::render(this, cx)),
-                        "viewer-hud-transport-in",
-                        crate::motion::HUD_IN,
-                    )
-                    .into_any_element()
-                } else {
-                    ViewerTransport::render(this, cx).into_any_element()
-                },
-            )
+            .child(if presenting || !is_video || this.video.in_pip {
+                Empty.into_any_element()
+            } else if !show_chrome {
+                // The transport fades out with the HUD after an idle hide.
+                match this.hud_fading_out() {
+                    Some(hide) => div()
+                        .w_full()
+                        .child(crate::motion::fade_out(
+                            div().w_full().child(ViewerTransport::render(this, cx)),
+                            ElementId::NamedInteger("viewer-hud-transport-out".into(), hide),
+                        ))
+                        .into_any_element(),
+                    None => Empty.into_any_element(),
+                }
+            } else if is_immersive {
+                crate::motion::fade_in(
+                    div().w_full().child(ViewerTransport::render(this, cx)),
+                    "viewer-hud-transport-in",
+                    crate::motion::HUD_IN,
+                )
+                .into_any_element()
+            } else {
+                ViewerTransport::render(this, cx).into_any_element()
+            })
             // 4. The filmstrip under the media.
             .children(filmstrip::render(this, cx));
 
