@@ -5,8 +5,8 @@
 <h1 align="center">Lumina</h1>
 
 <p align="center">
-  <strong>Your photo library, on your computer, and nowhere else.</strong><br>
-  A fast, native photo and video manager with no account, no cloud and no telemetry.
+  <strong>Your photos and videos, on your computer, and nowhere else.</strong><br>
+  A fast, native media manager with no account, no cloud and no telemetry.
 </p>
 
 <p align="center">
@@ -27,8 +27,8 @@
 
 ---
 
-Lumina is a photo and video manager for people who want to own their library.
-Your photos stay in ordinary folders on your disk. Your ratings, keywords and
+Lumina is a media manager for people who want to own their photo and video
+library. Your photos and videos stay in ordinary folders on your disk. Your ratings, keywords and
 captions travel with them in standard, Adobe-compatible XMP sidecars that
 Lightroom and other photo tools understand. There is no sign-in, no sync and nothing running in the
 background that talks to the internet. It is built in Rust on
@@ -55,6 +55,17 @@ pixel inspection. Decoding, cataloguing and search run in a headless core, so
 the interface never waits on your disk.
 
 <!-- SCREENSHOT: docs/assets/screenshots/grid.png -->
+
+### 🎬 Video, built in
+
+Videos sit beside your photos in the same timeline, albums and searches.
+Playback is native, with adjustable speed, frame stepping, loop ranges,
+real-frame scrub previews, chapters, alternative audio tracks and
+Picture-in-Picture. Paste a link from YouTube, another video site or an HLS
+stream and Lumina imports it into your library, with a downloads queue. See
+[Import Video from URL](docs/network-import.md).
+
+<!-- SCREENSHOT: docs/assets/screenshots/video.png -->
 
 ### 🎯 Cull a shoot from the keyboard
 
@@ -90,7 +101,6 @@ your copyright and contact details on a whole shoot at once.
 
 ### And a lot more
 
-- **Video** with real-frame scrub previews, chapters, loop ranges, multiple audio tracks and Picture-in-Picture.
 - **Quick edits**: rotate, exposure, auto enhance and crop, stored non-destructively. Or open any photo in your favourite editor with `⌘E`.
 - **Offline map** of everywhere you've been, with keyboard navigation.
 - **Smart and hand-picked albums**, favourites, colour labels and a full Trash.
