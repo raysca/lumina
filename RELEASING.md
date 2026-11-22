@@ -234,14 +234,24 @@ Linux release signing (optional; without it the `.deb` is not published):
 | `LINUX_SIGNING_KEY` | fingerprint of that key (what `gpg --local-user` uses) |
 | `LINUX_GPG_PASSPHRASE` | optional passphrase for the key |
 
-Create a dedicated key, publish its fingerprint with the release, and keep the
-private half only in the secret store:
+Create a dedicated key with `scripts/linux_keygen.sh` (it prints the
+fingerprint and writes the private and public halves), or by hand:
 
 ```bash
-gpg --quick-gen-key "Lumina Releases <releases@example.com>" default default never
-gpg --armor --export-secret-keys <fingerprint> | base64 > key.b64
+gpg --quick-gen-key "Lumina Linux Releases <you@example.com>" ed25519 sign 5y
+gpg --armor --export-secret-keys <fingerprint> > linux-signing-key.asc
 gpg --armor --export <fingerprint> > lumina-linux-signing-key.asc
 ```
+
+Add the secrets, with the private key base64-encoded **on one line**:
+
+```bash
+openssl base64 -A -in linux-signing-key.asc | gh secret set LINUX_GPG_PRIVATE_KEY
+gh secret set LINUX_SIGNING_KEY --body <fingerprint>
+```
+
+The release workflow exports `lumina-linux-signing-key.asc` beside the
+package, so the public half always travels with the checksums it signs.
 
 Without signing secrets the workflow builds an ad-hoc draft and marks it as a
 **pre-release**. Publish it only as the documented ad-hoc preview, with the
