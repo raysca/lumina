@@ -11,13 +11,7 @@ license = "MIT"
 name = "Lumina"
 path = "src/main.rs"
 
-[[bin]]
-name = "generate-icon"
-path = "src/bin/generate_icon.rs"
-required-features = ["generate-icon"]
-
 [features]
-generate-icon = []
 linux-ui-smoke = []
 
 [dependencies]
