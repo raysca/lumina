@@ -463,6 +463,8 @@ pub struct LuminaApp {
     pub grid_drag: GridDragState,
     pub grid_zoom: GridZoomGesture,
     pub viewer_image: Option<Arc<RenderImage>>,
+    /// The thumbnail growing from its tile into the viewer that just opened.
+    pub viewer_zoom: Option<crate::motion::ZoomIn>,
     /// The selected item whose full-size viewer decode failed, so the stage
     /// says so instead of waiting. Kept apart from the grid's failure set.
     pub viewer_failed: Option<MediaId>,
@@ -773,6 +775,7 @@ impl LuminaApp {
             grid_drag: GridDragState::default(),
             grid_zoom: GridZoomGesture::default(),
             viewer_image: None,
+            viewer_zoom: None,
             viewer_failed: None,
             viewer_frame: Default::default(),
             retired_images: Vec::new(),

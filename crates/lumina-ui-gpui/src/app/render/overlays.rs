@@ -181,7 +181,24 @@ impl LuminaApp {
         } else {
             Empty.into_any_element()
         };
-        crate::motion::overlay_in(open, viewer, "viewer-in")
+        let viewer = crate::motion::overlay_in(open, viewer, "viewer-in");
+        match self
+            .viewer_zoom
+            .clone()
+            .filter(|zoom| open && zoom.active())
+        {
+            // Over the fading viewer, at full strength.
+            Some(zoom) => div()
+                .absolute()
+                .inset_0()
+                .child(viewer)
+                .child(crate::motion::zoom_ghost(
+                    zoom,
+                    crate::views::viewer::viewport::PHOTO_RADIUS,
+                ))
+                .into_any_element(),
+            None => viewer,
+        }
     }
 
     /// Smart album builder modal overlay

@@ -77,7 +77,7 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
 }
 
 /// Corner radius of the photo or video frame at Fit (Designs 02 and 06).
-const PHOTO_RADIUS: Pixels = theme::RADIUS_XS;
+pub(crate) const PHOTO_RADIUS: Pixels = theme::RADIUS_XS;
 
 /// The drop shadow (0 16 48) under the contain-fitted photo or video frame. The
 /// media element fills the letterboxed canvas, so a box shadow on it would
@@ -211,6 +211,10 @@ impl ViewerViewport {
                 div()
                     .id("media-canvas-fit")
                     .relative()
+                    // The thumbnail growing out of the grid lands here;
+                    // the picture waits under it until it has.
+                    .child(crate::motion::zoom_target())
+                    .when(this.viewer_zooming(), |canvas| canvas.opacity(0.0))
                     .flex_1()
                     // Without these the flex item grows to the image's
                     // intrinsic size instead of fitting it to the window.

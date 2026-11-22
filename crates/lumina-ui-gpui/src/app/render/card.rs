@@ -236,6 +236,10 @@ impl LuminaApp {
                     .rounded(well_radius)
                     .overflow_hidden()
                     .relative()
+                    // The viewer grows out of a selected tile when it opens.
+                    .when(is_selected, |well| {
+                        well.child(crate::motion::tile_mark(item_id_num as u64))
+                    })
                     .child(if let Some(render_img) = tex {
                         #[cfg(test)]
                         crate::views::grid::CARD_CONTAIN.with(|m| {
