@@ -213,8 +213,18 @@ impl LuminaApp {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// `refresh_duplicates` calls on this test thread: the path that reads
+    /// the cached groups and hashes in the background.
+    pub(crate) static DUPLICATE_REFRESHES: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 impl LuminaApp {
     pub fn refresh_duplicates(&mut self) {
+        #[cfg(test)]
+        DUPLICATE_REFRESHES.with(|n| n.set(n.get() + 1));
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };

@@ -625,10 +625,6 @@ impl LuminaApp {
 
     pub(crate) fn refresh_after_history(&mut self, cx: &mut Context<Self>) {
         if let Some(state) = self.grid_state.as_ref() {
-            self.item_ratings = state.engine.get_ratings_map();
-            self.item_color_labels = state.engine.get_color_labels_map();
-            self.item_flags = state.engine.get_flags_map();
-            self.item_captions = state.engine.get_captions_map();
             let updated_selected = self
                 .selected_item
                 .as_ref()
@@ -637,13 +633,13 @@ impl LuminaApp {
                 self.set_selected_from_catalog(item);
             }
         }
+        // Reloads the metadata maps too; undoing a merge also drops the
+        // alias it added, which this reloads with the counts.
+        self.refresh_album_counts();
         // Covers both a single item and a multi-selection (per-tag counts).
         self.refresh_selected_tags();
         // Batch labels and mixed-value summaries read the refreshed maps.
         self.update_batch_summary();
-        self.refresh_album_counts();
-        // Undoing a merge removes the alias it added.
-        self.refresh_keyword_aliases();
         cx.notify();
     }
 }

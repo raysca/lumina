@@ -85,13 +85,6 @@ impl LuminaApp {
         }
     }
 
-    /// Reloads the album list and counts; part of `refresh_album_counts`.
-    pub(crate) fn refresh_albums(&mut self, engine: &LuminaEngine) {
-        let rows = engine.list_albums_with_counts();
-        self.albums.counts = rows.iter().map(|(album, n)| (album.id, *n)).collect();
-        self.albums.list = rows.into_iter().map(|(album, _)| album).collect();
-    }
-
     pub(crate) fn album_title(&self, id: i64) -> Option<&str> {
         self.albums
             .list

@@ -798,6 +798,13 @@ impl LuminaEngine {
         self.catalog.restore_all_trash()
     }
 
+    /// Reports the rows one operation removed as a single event.
+    fn send_removed(&self, ids: Vec<MediaId>) {
+        if !ids.is_empty() {
+            let _ = self.event_tx.send(EngineEvent::ItemsRemoved(ids));
+        }
+    }
+
     pub fn permanently_delete_items(
         &self,
         ids: &[MediaId],
@@ -823,9 +830,7 @@ impl LuminaEngine {
                 .iter()
                 .map(|item| (item.path.as_path(), item.file_size, item.mtime_epoch_ms)),
         );
-        for item in &outcome.deleted {
-            let _ = self.event_tx.send(EngineEvent::ItemRemoved(item.id));
-        }
+        self.send_removed(outcome.deleted.iter().map(|item| item.id).collect());
 
         if !outcome.failed.is_empty() {
             // The lazy count is fine here: the UI shows the banner, the
@@ -851,9 +856,7 @@ impl LuminaEngine {
                 .iter()
                 .map(|item| (item.path.as_path(), item.file_size, item.mtime_epoch_ms)),
         );
-        for item in &outcome.deleted {
-            let _ = self.event_tx.send(EngineEvent::ItemRemoved(item.id));
-        }
+        self.send_removed(outcome.deleted.iter().map(|item| item.id).collect());
 
         if !outcome.failed.is_empty() {
             anyhow::bail!(
@@ -1057,6 +1060,57 @@ pub(crate) mod tests {
         assert!(engine
             .permanently_delete_items(&[], DeletionTarget::CatalogOnly)
             .is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A delete reports every removed row in one event, so the UI refreshes
+    /// once per delete, not once per item (a big Empty Trash froze it).
+    #[test]
+    fn a_delete_reports_its_removals_in_one_event() {
+        let dir = temp_library("delete_one_event");
+        let root = dir.join("lib");
+        fs::create_dir_all(&root).expect("library folder");
+        let (engine, rx) = LuminaEngine::open_with_paths(
+            root.clone(),
+            dir.join("catalog.db"),
+            Some(dir.join("cache")),
+        )
+        .expect("open engine");
+        let items: Vec<MediaItem> = (0..3)
+            .map(|n| {
+                let path = root.join(format!("{n}.jpg"));
+                fs::write(&path, b"x").expect("file");
+                crate::catalog::files::tests::item_at(&path)
+            })
+            .collect();
+        let ids: Vec<MediaId> = engine
+            .catalog
+            .insert_or_update_batch(&items)
+            .expect("insert")
+            .iter()
+            .map(|item| item.id)
+            .collect();
+        while rx.try_recv().is_ok() {}
+
+        let deleted = engine
+            .permanently_delete_items(&ids, DeletionTarget::CatalogOnly)
+            .expect("delete");
+        assert_eq!(deleted, 3);
+        let removals: Vec<Vec<MediaId>> = rx
+            .try_iter()
+            .filter_map(|event| match event {
+                EngineEvent::ItemsRemoved(ids) => Some(ids),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            removals.len(),
+            1,
+            "one delete must send one removal event, not one per item"
+        );
+        let mut removed = removals[0].clone();
+        removed.sort_by_key(|id| id.0);
+        assert_eq!(removed, ids, "the event names every deleted row");
         let _ = fs::remove_dir_all(&dir);
     }
 

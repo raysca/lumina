@@ -51,6 +51,7 @@ pub mod scrub_preview;
 pub mod search;
 mod selection;
 pub mod selection_by_id;
+pub(crate) mod sidebar_counts;
 pub mod slideshow;
 pub mod smart_album_share;
 pub(crate) mod smart_cards;

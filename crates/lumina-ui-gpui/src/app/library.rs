@@ -1,6 +1,5 @@
 use gpui::*;
 use lumina_core::{EngineEvent, ExportPreset, LuminaEngine, MediaItem, SystemAlbum};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -521,72 +520,6 @@ impl LuminaApp {
         self.search_focused = false;
         self.clear_selection(cx);
         self.record_navigation_change(departing);
-    }
-
-    pub fn refresh_album_counts(&mut self) {
-        if let Some(ref state) = self.grid_state {
-            let engine = &state.engine;
-            self.total_library_count = engine.total_count();
-            let mut sys = HashMap::new();
-            for album in lumina_core::SystemAlbum::all() {
-                sys.insert(*album, engine.query_system_album_count(*album));
-            }
-            self.system_album_counts = sys;
-
-            let albums = engine.list_smart_albums();
-            let mut usr = HashMap::new();
-            for a in &albums {
-                usr.insert(a.id, engine.query_smart_album_count(a));
-            }
-            self.user_album_counts = usr;
-            self.user_smart_albums = albums;
-            let engine = engine.clone();
-            self.refresh_albums(&engine);
-            self.library_tag_counts = engine.query_tag_counts();
-            self.untagged_count = engine.query_untagged_count();
-            self.duplicate_items_count = engine.query_duplicate_count();
-            if self.selection == AlbumSelection::Duplicates {
-                self.set_duplicate_groups(engine.scan_duplicate_groups());
-            }
-            self.item_ratings = engine.get_ratings_map();
-            self.item_color_labels = engine.get_color_labels_map();
-            self.item_flags = engine.get_flags_map();
-            self.item_captions = engine.get_captions_map();
-            self.missing_items = engine.get_missing_ids();
-            self.sync_missing_card();
-            let months = engine.get_timeline_buckets("month");
-            self.month_header.counts = months
-                .iter()
-                .filter_map(|b| {
-                    let (year, month) = b.bucket_key.split_once('-')?;
-                    Some(((year.parse().ok()?, month.parse().ok()?), b.item_count))
-                })
-                .collect();
-            self.rail.set_counts(&self.month_header.counts);
-            let buckets = engine.get_timeline_buckets("year");
-            self.levels.set_covers(&buckets, &months);
-            self.timeline_year_buckets = buckets
-                .iter()
-                .filter_map(|b| {
-                    let yr = b.bucket_key.parse::<i32>().ok()?;
-                    Some((yr, b.item_count))
-                })
-                .collect();
-        }
-        // Aliases change with tag renames, so they reload with the counts.
-        self.refresh_keyword_aliases();
-
-        // Tag mutations, scan removals, and undo/redo all refresh counts here.
-        // If the active tag view lost its last item, drop the stale
-        // position-based selection instead of leaving it pointing nowhere.
-        if matches!(
-            self.selection,
-            AlbumSelection::Tag(_) | AlbumSelection::Untagged
-        ) && self.get_active_count() == 0
-            && (self.selected_item.is_some() || !self.selected_indices.is_empty())
-        {
-            self.clear_selection_fields();
-        }
     }
 }
 

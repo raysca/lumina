@@ -16,6 +16,7 @@ mod browser;
 mod compare;
 mod compare_guards;
 mod core_controls;
+mod count_refresh;
 mod culling;
 mod culling_delete;
 mod culling_filtered;

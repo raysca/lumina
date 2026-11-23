@@ -163,7 +163,10 @@ pub enum EngineEvent {
         /// The file the scan has most recently reached.
         current_file: Option<PathBuf>,
     },
-    ItemRemoved(MediaId),
+    /// Rows gone from the catalog, all ids of one operation in one event
+    /// (a delete, an emptied Trash, a watcher fold), so the UI refreshes
+    /// once per operation instead of once per item.
+    ItemsRemoved(Vec<MediaId>),
     /// Files gone from disk. The rows and their metadata are kept, marked
     /// missing; the order of the library is unchanged.
     ItemsMissing(Vec<MediaId>),
