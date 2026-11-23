@@ -557,6 +557,9 @@ pub struct GridState {
     pub scan_progress: usize,
     pub texture_cache: Arc<Mutex<LruCache<MediaId, CachedThumb>>>,
     pub in_flight: Arc<Mutex<HashSet<MediaId>>>,
+    /// Ids the grid drew or prefetched on its last pass. A queued tile
+    /// decode that is no longer among them is skipped (scrolled past).
+    pub wanted: Arc<Mutex<HashSet<MediaId>>>,
     /// When each thumbnail finished decoding, so only fresh ones fade in;
     /// a card scrolled back into view shows its cached image at once.
     pub fresh_thumbs: Arc<Mutex<HashMap<MediaId, Instant>>>,
@@ -649,6 +652,7 @@ impl GridState {
             scan_progress: 0,
             texture_cache: Arc::new(Mutex::new(LruCache::new(cache_capacity))),
             in_flight: Arc::new(Mutex::new(HashSet::new())),
+            wanted: Arc::new(Mutex::new(HashSet::new())),
             fresh_thumbs: Arc::new(Mutex::new(HashMap::new())),
             thumb_failures: Arc::new(Mutex::new(HashSet::new())),
             scroll_handle: UniformListScrollHandle::new(),

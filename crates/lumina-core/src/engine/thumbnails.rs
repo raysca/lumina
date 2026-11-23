@@ -44,6 +44,54 @@ impl LuminaEngine {
         });
     }
 
+    /// A grid tile's decode: runs before tiles asked for earlier, and only
+    /// while `wanted()` still says the tile is on (or near) the screen. A
+    /// tile scrolled past calls `skipped` instead and decodes nothing, so
+    /// the asker can release its claim and ask again if it comes back.
+    pub fn request_grid_thumbnail<W, S, F>(
+        &self,
+        item: MediaItem,
+        target_size: u32,
+        wanted: W,
+        skipped: S,
+        callback: F,
+    ) where
+        W: FnOnce() -> bool + Send + 'static,
+        S: FnOnce() + Send + 'static,
+        F: FnOnce(Option<DecodedFrame>) + Send + 'static,
+    {
+        let catalog = self.catalog.clone();
+        let cache = self.cache.clone();
+        self.decoder.spawn_newest_first(move || {
+            if wanted() {
+                Self::process_thumbnail_request(catalog, cache, item, target_size, callback);
+            } else {
+                skipped();
+            }
+        });
+    }
+
+    /// The open item's frame (viewer, compare), on the viewer's own pool so
+    /// it never queues behind grid tiles. Otherwise as [`Self::request_thumbnail`].
+    pub fn request_viewer_frame<F>(&self, id: MediaId, target_size: u32, callback: F)
+    where
+        F: FnOnce(Option<DecodedFrame>) + Send + 'static,
+    {
+        let catalog = self.catalog.clone();
+        let cache = self.cache.clone();
+        self.decoder
+            .spawn_viewer(move || match catalog.get_item_by_id(id) {
+                Ok(Some(item)) => {
+                    Self::process_thumbnail_request(catalog, cache, item, target_size, callback)
+                }
+                Ok(None) => callback(None),
+                Err(err) => {
+                    log::warn!("failed to read item {id:?} for the viewer: {err:?}");
+                    callback(None);
+                }
+            });
+    }
+
     /// Decodes `id` at `target_size` with no edits and no rotation: the
     /// source frame for edit mode's live preview.
     pub fn request_unedited_frame<F>(&self, id: MediaId, target_size: u32, callback: F)
@@ -52,8 +100,9 @@ impl LuminaEngine {
     {
         let catalog = self.catalog.clone();
         let cache = self.cache.clone();
+        // The edit preview's source: shown now, so the viewer's lane.
         self.decoder
-            .spawn(move || match catalog.get_item_by_id(id) {
+            .spawn_viewer(move || match catalog.get_item_by_id(id) {
                 Ok(Some(item)) => {
                     callback(Self::decode_through_cache(&cache, &item, target_size, true))
                 }
