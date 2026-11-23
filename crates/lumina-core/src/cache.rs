@@ -37,8 +37,10 @@ pub struct DiskCache {
 /// v6: entries are compressed (`codec`) and named `.thumb`.
 const CACHE_FORMAT_VERSION: u32 = 6;
 
-/// A read marks an entry used only when its mark is at least this old.
-const TOUCH_AFTER: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+/// A read marks an entry used only when its mark is at least this old:
+/// coarse enough that scrolling writes no metadata, fine enough that a trim
+/// in the same session still keeps what was just looked at.
+const TOUCH_AFTER: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Default disk budget for thumbnails (1.5 GB).
 pub const DEFAULT_MAX_CACHE_BYTES: u64 = 1_500_000_000;
@@ -164,9 +166,9 @@ impl DiskCache {
         std::io::Read::read_to_end(&mut file, &mut bytes).ok()?;
         let frame = codec::decode(id, &bytes)?;
         // Eviction removes the least recently modified entries first, so a
-        // read marks the entry as used. Only once a day: rewriting the
-        // timestamp on every read cost a metadata write per tile per frame
-        // of scrolling, and eviction only needs to tell days apart.
+        // read marks the entry as used. At most every TOUCH_AFTER: rewriting
+        // the timestamp on every read cost a metadata write per tile per
+        // frame of scrolling. A future-dated mark (clock skew) is reset.
         // Best-effort: a failed touch only makes the entry look older.
         let last_used = file.metadata().and_then(|meta| meta.modified()).ok();
         let now = std::time::SystemTime::now();
@@ -262,19 +264,31 @@ impl DiskCache {
     }
 
     fn trim_now(&self) {
+        /// Clears the flag however the trim ends, a panic included, so one
+        /// bad trim never turns trimming off for the session.
+        struct Done<'a>(&'a AtomicBool);
+        impl Drop for Done<'_> {
+            fn drop(&mut self) {
+                self.0.store(false, Ordering::Release);
+            }
+        }
+        let _done = Done(&self.trimming);
         #[cfg(test)]
-        tests::note_trim_thread();
+        tests::note_trim_thread(&self.cache_dir);
         if let Err(err) = self.cleanup(self.max_bytes, DEFAULT_MAX_CACHE_AGE) {
             log::warn!("thumbnail cache trim failed: {err:?}");
         }
-        self.trimming.store(false, Ordering::Release);
     }
 
     /// Waits for a running trim to finish.
     #[cfg(test)]
     fn settle(&self) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while self.trimming.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
+        while self.trimming.load(Ordering::Acquire) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the cache trim did not finish within 10 s"
+            );
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
     }
@@ -445,13 +459,14 @@ mod tests {
     use super::*;
     use crate::PixelFormat;
 
-    static TRIM_THREADS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    static TRIM_THREADS: std::sync::Mutex<Vec<(PathBuf, String)>> =
+        std::sync::Mutex::new(Vec::new());
 
-    /// Records which thread ran a trim.
-    pub(super) fn note_trim_thread() {
+    /// Records which thread ran a trim of the cache at `dir`.
+    pub(super) fn note_trim_thread(dir: &Path) {
         let name = std::thread::current().name().unwrap_or("").to_string();
         if let Ok(mut names) = TRIM_THREADS.lock() {
-            names.push(name);
+            names.push((dir.to_path_buf(), name));
         }
     }
 
@@ -746,7 +761,7 @@ mod tests {
             std::path::Path::new("/photos/second.jpg"),
         );
         let frame = photo_frame(64, 64);
-        for (path, days) in [(first, 3), (second, 2)] {
+        for (path, hours) in [(first, 3), (second, 2)] {
             cache.put_cached(path, 10, 1000, 256, &frame).unwrap();
             let file = cache.cache_file_path(&DiskCache::compute_key(path, 10, 1000, 256));
             std::fs::File::options()
@@ -754,7 +769,7 @@ mod tests {
                 .open(&file)
                 .unwrap()
                 .set_modified(
-                    std::time::SystemTime::now() - std::time::Duration::from_secs(days * 86_400),
+                    std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600),
                 )
                 .unwrap();
         }
@@ -837,32 +852,46 @@ mod tests {
     }
 
     /// Every read rewrote the entry's timestamp: a metadata write per tile
-    /// per frame while scrolling. Eviction only needs to tell days apart.
+    /// per frame while scrolling.
     #[test]
-    fn a_read_marks_an_entry_used_at_most_once_a_day() {
-        let cache = temp_cache("touch_daily");
-        let (recent, old) = (
+    fn a_read_marks_an_entry_used_only_when_its_mark_is_old() {
+        let cache = temp_cache("touch_rarely");
+        let (recent, old, future) = (
             std::path::Path::new("/photos/recent.jpg"),
             std::path::Path::new("/photos/old.jpg"),
+            std::path::Path::new("/photos/future.jpg"),
         );
         let frame = photo_frame(32, 32);
-        cache.put_cached(recent, 10, 1000, 256, &frame).unwrap();
-        cache.put_cached(old, 10, 1000, 256, &frame).unwrap();
-        let hour = std::time::Duration::from_secs(3600);
-        let recent_file = mark_age(&cache, recent, hour);
+        for path in [recent, old, future] {
+            cache.put_cached(path, 10, 1000, 256, &frame).unwrap();
+        }
+        let minute = std::time::Duration::from_secs(60);
+        let recent_file = mark_age(&cache, recent, TOUCH_AFTER / 2);
         let old_file = mark_age(&cache, old, 2 * TOUCH_AFTER);
+        // Clock skew: marked a day ahead of now.
+        let future_file = cache.cache_file_path(&DiskCache::compute_key(future, 10, 1000, 256));
+        std::fs::File::options()
+            .write(true)
+            .open(&future_file)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(86_400))
+            .unwrap();
 
-        assert!(cache
-            .get_cached(MediaId(1), recent, 10, 1000, 256)
-            .is_some());
-        assert!(cache.get_cached(MediaId(2), old, 10, 1000, 256).is_some());
+        for (id, path) in [(1, recent), (2, old), (3, future)] {
+            assert!(cache.get_cached(MediaId(id), path, 10, 1000, 256).is_some());
+        }
         assert!(
-            age_of(&recent_file) >= hour - std::time::Duration::from_secs(60),
-            "an entry marked within the day is not written again on read"
+            age_of(&recent_file) >= TOUCH_AFTER / 2 - minute,
+            "an entry marked recently is not written again on read"
         );
         assert!(
-            age_of(&old_file) < hour,
-            "an entry last marked days ago is marked used now"
+            age_of(&old_file) < minute,
+            "an entry last marked long ago is marked used now"
+        );
+        let future_mark = std::fs::metadata(&future_file).unwrap().modified().unwrap();
+        assert!(
+            future_mark <= std::time::SystemTime::now(),
+            "a future-dated mark is reset, or it would never be evicted"
         );
         let _ = std::fs::remove_dir_all(cache.root_dir());
     }
@@ -882,7 +911,13 @@ mod tests {
             )
             .unwrap();
         cache.settle();
-        let names = TRIM_THREADS.lock().unwrap().clone();
+        let names: Vec<String> = TRIM_THREADS
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(dir, _)| dir == cache.cache_dir())
+            .map(|(_, name)| name.clone())
+            .collect();
         assert!(
             !names.is_empty(),
             "the write crossed the budget and trimmed"
