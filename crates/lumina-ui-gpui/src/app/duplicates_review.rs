@@ -215,16 +215,22 @@ impl LuminaApp {
 
 #[cfg(test)]
 thread_local! {
-    /// `refresh_duplicates` calls on this test thread: the path that reads
-    /// the cached groups and hashes in the background.
-    pub(crate) static DUPLICATE_REFRESHES: std::cell::Cell<usize> =
+    /// Hashing scans started on this test thread (the app runs them on
+    /// their own thread; tests run them inline).
+    pub(crate) static DUPLICATE_SCANS: std::cell::Cell<usize> =
         const { std::cell::Cell::new(0) };
+}
+
+/// The background duplicate scan: at most one runs.
+#[cfg_attr(test, allow(dead_code))] // tests scan inline
+#[derive(Default)]
+pub(crate) struct DuplicateScan {
+    pub(crate) running: bool,
+    pub(crate) again: bool,
 }
 
 impl LuminaApp {
     pub fn refresh_duplicates(&mut self) {
-        #[cfg(test)]
-        DUPLICATE_REFRESHES.with(|n| n.set(n.get() + 1));
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
@@ -232,6 +238,19 @@ impl LuminaApp {
         // Instant, non-blocking read of already-computed duplicate groups from SQLite cache.
         self.set_duplicate_groups(engine.get_cached_duplicate_groups());
         self.duplicate_items_count = engine.query_duplicate_count();
+        self.start_duplicate_scan();
+    }
+
+    /// Hashes unhashed same-size candidates and reloads the groups, never on
+    /// the UI thread. One scan runs at a time; asks made while it runs get
+    /// one more scan after it, so a burst of count refreshes during an
+    /// import does not stack scans whose answers land out of order.
+    pub(crate) fn start_duplicate_scan(&mut self) {
+        #[cfg(test)]
+        DUPLICATE_SCANS.with(|n| n.set(n.get() + 1));
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
+            return;
+        };
 
         #[cfg(test)]
         {
@@ -242,6 +261,12 @@ impl LuminaApp {
 
         #[cfg(not(test))]
         {
+            if self.duplicate_scan.running {
+                self.duplicate_scan.again = true;
+                return;
+            }
+            self.duplicate_scan.running = true;
+            self.duplicate_scan.again = false;
             let tx = self.ui_tx.clone();
             let generation = self.library_generation;
             if let Err(err) = std::thread::Builder::new()
@@ -256,6 +281,7 @@ impl LuminaApp {
                     });
                 })
             {
+                self.duplicate_scan.running = false;
                 log::warn!("failed to spawn lumina-duplicates-scan thread: {err:#}");
             }
         }

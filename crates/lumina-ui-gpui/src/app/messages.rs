@@ -466,10 +466,16 @@ impl LuminaApp {
                 groups,
                 items_count,
             } => {
+                self.duplicate_scan.running = false;
                 if generation == self.library_generation {
                     self.set_duplicate_groups(groups);
                     self.duplicate_items_count = items_count;
                     cx.notify();
+                }
+                if std::mem::take(&mut self.duplicate_scan.again)
+                    && self.selection == crate::views::sidebar::AlbumSelection::Duplicates
+                {
+                    self.start_duplicate_scan();
                 }
             }
             UiMessage::OpenFloatingInspector | UiMessage::OpenFloatingPip => {}

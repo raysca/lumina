@@ -4,9 +4,10 @@
 //! thread when it can be, and applied on it in one step.
 
 use gpui::*;
-use lumina_core::{Album, Flag, LuminaEngine, MediaId, SmartAlbum, SystemAlbum, TimelineBucket};
+use lumina_core::{
+    Album, DuplicateGroup, Flag, LuminaEngine, MediaId, SmartAlbum, SystemAlbum, TimelineBucket,
+};
 use std::collections::{HashMap, HashSet};
-#[cfg(not(test))]
 use std::sync::Arc;
 
 use crate::app::LuminaApp;
@@ -35,12 +36,15 @@ pub(crate) struct SidebarCounts {
     missing: HashSet<MediaId>,
     months: Vec<TimelineBucket>,
     years: Vec<TimelineBucket>,
+    aliases: anyhow::Result<Vec<(String, String)>>,
+    /// The cached duplicate groups, read only while Duplicates is shown.
+    duplicate_groups: Option<Vec<DuplicateGroup>>,
 }
 
 impl SidebarCounts {
     /// Reads every count and map. Blocking: run it off the UI thread
     /// unless the caller must see the result at once.
-    pub(crate) fn fetch(engine: &LuminaEngine) -> Self {
+    pub(crate) fn fetch(engine: &LuminaEngine, duplicates_shown: bool) -> Self {
         #[cfg(test)]
         COUNT_FETCHES.with(|n| n.set(n.get() + 1));
         let system = SystemAlbum::all()
@@ -68,19 +72,21 @@ impl SidebarCounts {
             missing: engine.get_missing_ids(),
             months: engine.get_timeline_buckets("month"),
             years: engine.get_timeline_buckets("year"),
+            aliases: engine.aliases(),
+            // Never the hashing scan here: that runs on its own thread.
+            duplicate_groups: duplicates_shown.then(|| engine.get_cached_duplicate_groups()),
         }
     }
 }
 
 /// The background count refresh: at most one fetch runs, and requests made
 /// while it runs fold into one more fetch after it.
-// Tests fetch inline (see `refresh_album_counts_soon`), so only the app
-// build reads these.
-#[cfg_attr(test, allow(dead_code))]
 #[derive(Default)]
 pub(crate) struct CountRefresh {
     in_flight: bool,
     again: bool,
+    /// The catalog revision when the running fetch started.
+    started_at: u64,
 }
 
 impl LuminaApp {
@@ -88,7 +94,7 @@ impl LuminaApp {
     /// actions use this so the sidebar matches the action at once.
     pub fn refresh_album_counts(&mut self) {
         if let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) {
-            let counts = SidebarCounts::fetch(&engine);
+            let counts = SidebarCounts::fetch(&engine, self.duplicates_shown());
             self.apply_sidebar_counts(counts);
         } else {
             self.after_count_refresh();
@@ -106,41 +112,52 @@ impl LuminaApp {
             self.refresh_album_counts();
         }
         #[cfg(not(test))]
-        {
-            if self.count_refresh.in_flight {
-                self.count_refresh.again = true;
-                return;
-            }
-            let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
-                return;
-            };
-            self.start_count_fetch(engine, cx);
-        }
+        self.refresh_album_counts_in_background(cx);
     }
 
-    #[cfg(not(test))]
+    /// The background half of [`Self::refresh_album_counts_soon`]: at most
+    /// one fetch in flight, later requests folded into one more.
+    pub(crate) fn refresh_album_counts_in_background(&mut self, cx: &mut Context<Self>) {
+        if self.count_refresh.in_flight {
+            self.count_refresh.again = true;
+            return;
+        }
+        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
+            return;
+        };
+        self.start_count_fetch(engine, cx);
+    }
+
     fn start_count_fetch(&mut self, engine: Arc<LuminaEngine>, cx: &mut Context<Self>) {
         self.count_refresh.in_flight = true;
         self.count_refresh.again = false;
+        self.count_refresh.started_at = engine.data_revision();
         let library = self.library_generation;
+        let duplicates_shown = self.duplicates_shown();
         let task = cx
             .background_executor()
-            .spawn(async move { SidebarCounts::fetch(&engine) });
+            .spawn(async move { SidebarCounts::fetch(&engine, duplicates_shown) });
         cx.spawn(async move |this, cx| {
             let counts = task.await;
             let _ = this.update(cx, |app, cx| {
                 app.count_refresh.in_flight = false;
-                // A library switch resets the counts itself; these are the
-                // old library's.
-                if app.library_generation != library {
+                let Some(engine) = app.grid_state.as_ref().map(|s| s.engine.clone()) else {
                     app.count_refresh.again = false;
                     return;
+                };
+                // Another library's counts (a switch resets its own), or
+                // read before a write this thread made meanwhile (a flag,
+                // a caption): applying them would undo what the user sees.
+                // Fetch again instead.
+                let stale = app.library_generation != library
+                    || engine.revision_written_here() > app.count_refresh.started_at;
+                if !stale {
+                    app.apply_sidebar_counts(counts);
                 }
-                app.apply_sidebar_counts(counts);
-                if std::mem::take(&mut app.count_refresh.again) {
-                    if let Some(engine) = app.grid_state.as_ref().map(|s| s.engine.clone()) {
-                        app.start_count_fetch(engine, cx);
-                    }
+                // Requests made while this ran, including the new
+                // library's, get one more fetch.
+                if stale || std::mem::take(&mut app.count_refresh.again) {
+                    app.start_count_fetch(engine, cx);
                 }
                 cx.notify();
             });
@@ -166,6 +183,8 @@ impl LuminaApp {
             missing,
             months,
             years,
+            aliases,
+            duplicate_groups,
         } = counts;
         self.total_library_count = total;
         self.system_album_counts = system;
@@ -176,10 +195,16 @@ impl LuminaApp {
         self.library_tag_counts = tag_counts;
         self.untagged_count = untagged;
         self.duplicate_items_count = duplicates;
-        // The cached groups now, the hashing scan in the background: never
+        // The cached groups now, the hashing scan on its own thread: never
         // hash files on the UI thread.
-        if self.selection == AlbumSelection::Duplicates {
-            self.refresh_duplicates();
+        if let Some(groups) = duplicate_groups.filter(|_| self.duplicates_shown()) {
+            self.set_duplicate_groups(groups);
+            self.start_duplicate_scan();
+        }
+        // Aliases change with tag renames, so they reload with the counts.
+        match aliases {
+            Ok(aliases) => self.keywords.aliases = aliases,
+            Err(err) => log::warn!("could not load keyword aliases: {err:#}"),
         }
         self.item_ratings = ratings;
         self.item_color_labels = color_labels;
@@ -203,10 +228,11 @@ impl LuminaApp {
         self.after_count_refresh();
     }
 
-    fn after_count_refresh(&mut self) {
-        // Aliases change with tag renames, so they reload with the counts.
-        self.refresh_keyword_aliases();
+    fn duplicates_shown(&self) -> bool {
+        self.selection == AlbumSelection::Duplicates
+    }
 
+    fn after_count_refresh(&mut self) {
         // Tag mutations, scan removals, and undo/redo all refresh counts here.
         // If the active tag view lost its last item, drop the stale
         // position-based selection instead of leaving it pointing nowhere.
