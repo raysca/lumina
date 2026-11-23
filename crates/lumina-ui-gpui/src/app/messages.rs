@@ -143,19 +143,29 @@ impl LuminaApp {
                             should_restore_session = self.pending_restore.is_some();
                             cx.notify();
                         }
-                        EngineEvent::ItemRemoved(id) => {
+                        EngineEvent::ItemsRemoved(ids) => {
                             state.total_count = state.engine.total_count();
-                            if let Some(old) = state.texture_cache.lock().pop(&id) {
-                                removed_textures.push(old.image);
+                            {
+                                let mut textures = state.texture_cache.lock();
+                                let mut in_flight = state.in_flight.lock();
+                                for id in &ids {
+                                    if let Some(old) = textures.pop(id) {
+                                        removed_textures.push(old.image);
+                                    }
+                                    in_flight.remove(id);
+                                }
                             }
-                            state.in_flight.lock().remove(&id);
-                            state.clear_failed(id);
-                            // The media is gone; its resume point can never load.
-                            state.video_resume.positions.remove(id);
+                            for &id in &ids {
+                                state.clear_failed(id);
+                                // The media is gone; its resume point can never load.
+                                state.video_resume.positions.remove(id);
+                            }
                             should_refresh_counts = true;
                             // Removals shift every following index; clear rather than
                             // risk batch actions targeting different files.
-                            if had_multi_selection || selected_item_id == Some(id) {
+                            if had_multi_selection
+                                || selected_item_id.is_some_and(|selected| ids.contains(&selected))
+                            {
                                 should_clear_selection = true;
                             }
                             cx.notify();
@@ -199,7 +209,7 @@ impl LuminaApp {
                     self.clear_selection(cx);
                 }
                 if should_refresh_counts {
-                    self.refresh_album_counts();
+                    self.refresh_album_counts_soon(cx);
                     // The item on screen may have just gone offline.
                     self.watch_missing_drive(cx);
                     cx.notify();
@@ -456,10 +466,16 @@ impl LuminaApp {
                 groups,
                 items_count,
             } => {
+                self.duplicate_scan.running = false;
                 if generation == self.library_generation {
                     self.set_duplicate_groups(groups);
                     self.duplicate_items_count = items_count;
                     cx.notify();
+                }
+                if std::mem::take(&mut self.duplicate_scan.again)
+                    && self.selection == crate::views::sidebar::AlbumSelection::Duplicates
+                {
+                    self.start_duplicate_scan();
                 }
             }
             UiMessage::OpenFloatingInspector | UiMessage::OpenFloatingPip => {}

@@ -282,20 +282,29 @@ pub(crate) fn handle_batch(
     }
 
     let mut missing = Vec::new();
+    let mut removed_ids = Vec::new();
+    let mut moved = Vec::new();
     for path in &gone {
         match catalog.mark_missing_under(path) {
             Ok(change) => {
                 missing.extend(change.missing);
                 for (kept, removed) in change.folded {
-                    let _ = event_tx.send(EngineEvent::ItemRemoved(removed));
+                    removed_ids.push(removed);
                     // The kept row has a new path.
                     if let Ok(Some(item)) = catalog.get_item_by_id(kept) {
-                        let _ = event_tx.send(EngineEvent::BatchDiscovered { items: vec![item] });
+                        moved.push(item);
                     }
                 }
             }
             Err(err) => log::warn!("watcher failed to mark {path:?} missing: {err:?}"),
         }
+    }
+    // One event each, so a folder of folds refreshes the UI once.
+    if !removed_ids.is_empty() {
+        let _ = event_tx.send(EngineEvent::ItemsRemoved(removed_ids));
+    }
+    if !moved.is_empty() {
+        let _ = event_tx.send(EngineEvent::BatchDiscovered { items: moved });
     }
     if !missing.is_empty() {
         let _ = event_tx.send(EngineEvent::ItemsMissing(missing));

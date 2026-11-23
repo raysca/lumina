@@ -662,6 +662,11 @@ pub struct LuminaApp {
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
     /// Bumped per opened library; see `UiMessage::LibraryEvent`.
     pub(crate) library_generation: u64,
+    /// The sidebar count refresh that engine events run off the UI thread.
+    pub(crate) count_refresh: crate::app::sidebar_counts::CountRefresh,
+    /// The background hashing scan for Duplicates; tests scan inline.
+    #[cfg_attr(test, allow(dead_code))]
+    pub(crate) duplicate_scan: crate::app::duplicates_review::DuplicateScan,
     /// The grid's count and rows, fetched off the UI thread.
     pub(crate) active_view: crate::app::active_view::ActiveView,
     /// The Mosaic body's layout, built off the UI thread.
@@ -898,6 +903,8 @@ impl LuminaApp {
             slideshow: None,
             event_receiver_thread: None,
             library_generation: 0,
+            count_refresh: Default::default(),
+            duplicate_scan: Default::default(),
             map: Default::default(),
             active_view: Default::default(),
             mosaic: Default::default(),
