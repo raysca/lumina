@@ -160,7 +160,7 @@ fn watch_loop(
         library_root,
         catalog,
         event_tx,
-        stop.clone(),
+        stop,
         on_error,
     ) {
         Ok(debouncer) => debouncer,

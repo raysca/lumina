@@ -390,7 +390,7 @@ mod tests {
             0,
             "an undeletable file must not count as deleted"
         );
-        assert_eq!(outcome.failed, vec![media.clone()]);
+        assert_eq!(outcome.failed, vec![media]);
         assert!(
             catalog.get_item_by_id(id).unwrap().is_some(),
             "the catalog row and its metadata must survive a failed disk delete"
@@ -423,7 +423,7 @@ mod tests {
             0,
             "an undeletable file must not count as deleted"
         );
-        assert_eq!(outcome.failed, vec![media.clone()]);
+        assert_eq!(outcome.failed, vec![media]);
         let kept = catalog
             .get_item_by_id(id)
             .unwrap()

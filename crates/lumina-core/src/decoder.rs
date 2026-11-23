@@ -8,6 +8,7 @@ use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use zune_jpeg::zune_core::bytestream::ZCursor;
 use zune_jpeg::JpegDecoder;
 
 use crate::{DecodedFrame, MediaId, MediaType, PixelFormat};
@@ -578,7 +579,11 @@ impl DecoderPipeline {
         bytes: &[u8],
         target_size: u32,
     ) -> Result<DecodedFrame> {
-        let mut decoder = JpegDecoder::new(bytes);
+        // Strict, as zune 0.4 was by default: a damaged file fails over to the
+        // image crate (or "No preview") instead of decoding half grey.
+        let options =
+            zune_jpeg::zune_core::options::DecoderOptions::default().set_strict_mode(true);
+        let mut decoder = JpegDecoder::new_with_options(ZCursor::new(bytes), options);
         decoder.decode_headers()?;
         let info = decoder
             .info()

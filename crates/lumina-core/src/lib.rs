@@ -222,7 +222,6 @@ impl LuminaEngine {
         let rescan_debounce = Arc::new(RescanDebounce::new(WATCHER_ERROR_RESCAN_DEBOUNCE_MS));
         let on_error = {
             let rescan_target = rescan_target.clone();
-            let rescan_debounce = rescan_debounce.clone();
             Box::new(move || {
                 if !rescan_debounce.allow(now_ms()) {
                     return;
@@ -246,11 +245,11 @@ impl LuminaEngine {
         };
 
         let engine = Arc::new(Self {
-            library_root: library_root.clone(),
+            library_root,
             catalog,
             cache,
             decoder,
-            event_tx: event_tx.clone(),
+            event_tx,
             active_scan_cancel,
             read_error_reported: Arc::new(AtomicBool::new(false)),
             sidecar_writes: Arc::new(Mutex::new(())),

@@ -4377,7 +4377,7 @@ dependencies = [
  "trash",
  "walkdir",
  "xxhash-rust",
- "zune-jpeg 0.4.21",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]

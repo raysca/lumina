@@ -16,7 +16,7 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 dirs = "5.0"
 
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff"] }
-zune-jpeg = "0.4"
+zune-jpeg = "0.5"
 
 notify-debouncer-mini = "0.4"
 rusqlite = { version = "0.31", features = ["bundled", "functions"] }
