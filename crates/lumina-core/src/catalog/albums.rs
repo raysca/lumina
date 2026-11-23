@@ -417,14 +417,14 @@ impl Catalog {
         offset: usize,
         sort: SortSpec,
     ) -> Result<Vec<MediaItem>> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&Self::album_slice_sql(sort))?;
         Self::map_query_rows(&mut stmt, params![id, limit as i64, offset as i64])
     }
 
     /// How many active members an album has.
     pub fn query_album_count(&self, id: i64) -> Result<usize> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let count: i64 = conn.query_row(
             r#"
             SELECT COUNT(*) FROM album_items ai

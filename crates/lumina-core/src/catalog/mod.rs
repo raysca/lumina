@@ -76,16 +76,33 @@ pub enum DeletionTarget {
 
 /// The catalog connection plus a revision that moves whenever a write lands,
 /// readable without taking the lock (the UI checks it every frame).
+///
+/// Pure reads go through [`Db::read`]: a small pool of extra connections to
+/// the same file. In WAL mode each reads its own committed snapshot, so a
+/// page fetch does not wait behind a long write batch on the one writer.
 pub(crate) struct Db {
+    /// Idle read connections, at most [`MAX_IDLE_READERS`]. Declared before
+    /// the writer so they close first and the writer does the final WAL
+    /// checkpoint.
+    readers: Mutex<Vec<Connection>>,
     conn: Mutex<Connection>,
     revision: AtomicU64,
+    /// The catalog file readers open; `None` for an in-memory catalog, whose
+    /// reads share the writer (another connection would see another database).
+    path: Option<PathBuf>,
 }
 
+/// Read connections kept open between reads. More may be open at once under
+/// load; those close when returned.
+const MAX_IDLE_READERS: usize = 4;
+
 impl Db {
-    fn new(conn: Connection) -> Self {
+    fn new(conn: Connection, path: Option<PathBuf>) -> Self {
         Self {
+            readers: Mutex::new(Vec::new()),
             conn: Mutex::new(conn),
             revision: AtomicU64::new(0),
+            path,
         }
     }
 
@@ -95,6 +112,74 @@ impl Db {
         DbGuard {
             conn: self.conn.lock(),
             revision: &self.revision,
+        }
+    }
+
+    /// A connection for a pure read (never a write, never a read whose result
+    /// a write then depends on: that belongs in one writer transaction). It
+    /// sees every write committed before it starts. Falls back to the writer
+    /// for an in-memory catalog, or if a read connection cannot be opened.
+    pub(crate) fn read(&self) -> ReadGuard<'_> {
+        let Some(path) = &self.path else {
+            return ReadGuard::Writer(self.lock());
+        };
+        #[cfg(feature = "test-support")]
+        LOCKS_HERE.with(|locks| locks.set(locks.get() + 1));
+        let idle = self.readers.lock().pop();
+        let conn = match idle {
+            Some(conn) => conn,
+            None => match schema::open_reader(path) {
+                Ok(conn) => conn,
+                Err(err) => {
+                    log::warn!("catalog read connection unavailable, using the writer: {err:#}");
+                    return ReadGuard::Writer(self.lock_uncounted());
+                }
+            },
+        };
+        ReadGuard::Pooled {
+            conn: Some(conn),
+            pool: &self.readers,
+        }
+    }
+
+    /// [`Self::lock`] without counting it again (the caller already did).
+    fn lock_uncounted(&self) -> DbGuard<'_> {
+        DbGuard {
+            conn: self.conn.lock(),
+            revision: &self.revision,
+        }
+    }
+}
+
+/// A connection for a pure read; see [`Db::read`].
+pub(crate) enum ReadGuard<'a> {
+    Pooled {
+        /// Always `Some` until dropped.
+        conn: Option<Connection>,
+        pool: &'a Mutex<Vec<Connection>>,
+    },
+    Writer(DbGuard<'a>),
+}
+
+impl Deref for ReadGuard<'_> {
+    type Target = Connection;
+    fn deref(&self) -> &Connection {
+        match self {
+            ReadGuard::Pooled { conn, .. } => conn.as_ref().expect("held until drop"),
+            ReadGuard::Writer(guard) => guard,
+        }
+    }
+}
+
+impl Drop for ReadGuard<'_> {
+    fn drop(&mut self) {
+        if let ReadGuard::Pooled { conn, pool } = self {
+            if let Some(conn) = conn.take() {
+                let mut idle = pool.lock();
+                if idle.len() < MAX_IDLE_READERS {
+                    idle.push(conn);
+                }
+            }
         }
     }
 }
@@ -173,7 +258,7 @@ impl Catalog {
         }
         let conn = Connection::open(db_path)?;
         let catalog = Self {
-            conn: Arc::new(Db::new(conn)),
+            conn: Arc::new(Db::new(conn, Some(db_path.to_path_buf()))),
             db_path: Some(db_path.to_path_buf()),
             root: Arc::new(Mutex::new(None)),
         };
@@ -184,7 +269,7 @@ impl Catalog {
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         let catalog = Self {
-            conn: Arc::new(Db::new(conn)),
+            conn: Arc::new(Db::new(conn, None)),
             db_path: None,
             root: Arc::new(Mutex::new(None)),
         };

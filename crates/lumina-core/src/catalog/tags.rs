@@ -226,7 +226,7 @@ impl Catalog {
 
     /// Returns all tags along with their active (non-trashed, non-hidden) item counts.
     pub fn query_tag_counts(&self) -> Result<Vec<(String, usize)>> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(
             r#"
             SELECT mt.tag, COUNT(mt.media_id) as cnt
@@ -251,7 +251,7 @@ impl Catalog {
     /// The correlated `NOT EXISTS` uses `sqlite_autoindex_media_tags_1`, so this is
     /// one aggregate query and never a full scan of the tag table.
     pub fn query_untagged_count(&self) -> Result<usize> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let count: i64 = conn.query_row(
             r#"
             SELECT COUNT(*)
@@ -279,7 +279,7 @@ impl Catalog {
         offset: usize,
         sort: SortSpec,
     ) -> Result<Vec<MediaItem>> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let sql = format!(
             r#"
             SELECT {columns}

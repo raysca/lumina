@@ -185,7 +185,7 @@ impl Catalog {
     /// Every item of the view as a layout cell, in the view's sort order.
     pub fn view_layout(&self, scope: &ViewScope, sort: SortSpec) -> Result<Vec<LayoutCell>> {
         let (sql, params) = layout_sql(scope, sort)?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
             Ok(LayoutCell {
@@ -205,7 +205,7 @@ impl Catalog {
     /// (capture time 0), are absent.
     pub fn day_places(&self, scope: &ViewScope) -> Result<HashMap<u32, DayPlace>> {
         let (sql, params) = day_places_sql(scope)?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
             Ok((
@@ -240,7 +240,7 @@ impl Catalog {
     /// The view's count, summed duration and size, and items per month.
     pub fn view_totals(&self, scope: &ViewScope) -> Result<ViewTotals> {
         let (sql, params) = totals_sql(scope)?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
             Ok((
@@ -268,7 +268,7 @@ impl Catalog {
     /// it has no dated items (empty, or every capture time is 0).
     pub fn view_date_span(&self, scope: &ViewScope) -> Result<Option<DateSpan>> {
         let (sql, params) = date_span_sql(scope)?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let (first, last): (Option<i64>, Option<i64>) = conn
             .prepare_cached(&sql)?
             .query_row(rusqlite::params_from_iter(params.iter()), |row| {
