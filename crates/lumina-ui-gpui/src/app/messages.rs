@@ -262,7 +262,7 @@ impl LuminaApp {
                 cx.notify();
             }
             // Already recorded in the failure set by the decode callback.
-            UiMessage::ThumbnailFailed => cx.notify(),
+            UiMessage::ThumbnailFailed | UiMessage::ThumbnailSkipped => cx.notify(),
             // An answer for an earlier request is dropped: the user moved
             // on, or a newer decode of the same item is coming.
             UiMessage::ViewerLoaded { generation, .. }
