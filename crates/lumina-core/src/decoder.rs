@@ -398,10 +398,29 @@ fn icc_description(icc: &[u8]) -> Option<String> {
     }
 }
 
+type Job = Box<dyn FnOnce() + Send>;
+
+/// The decode pools. Three lanes share them:
+///
+/// - `spawn`: first in, first out, for one-off decodes (album covers,
+///   batch thumbnails, cards of other surfaces).
+/// - `spawn_newest_first`: grid tiles. A fast scroll queues hundreds of
+///   tiles; the rows on screen now were asked for last, so they run first
+///   instead of waiting behind every row scrolled past.
+/// - `spawn_viewer`: the open item's full-size frame on a pool of its own,
+///   so it never waits behind a screenful of grid decodes.
 #[derive(Clone)]
 pub struct DecoderPipeline {
     pool: Arc<ThreadPool>,
+    viewer: Arc<ThreadPool>,
+    /// Grid jobs, newest last. Each `spawn_newest_first` puts one runner on
+    /// the pool, and each runner takes the newest job, so every job runs.
+    newest: Arc<parking_lot::Mutex<Vec<Job>>>,
 }
+
+/// Threads for the viewer lane: one frame is shown at a time, a second
+/// covers a compare pair or the frame after a step.
+const VIEWER_THREADS: usize = 2;
 
 impl DecoderPipeline {
     pub fn new(num_threads: usize) -> Result<Self> {
@@ -418,9 +437,15 @@ impl DecoderPipeline {
             .num_threads(threads)
             .thread_name(|i| format!("lumina-decode-{}", i))
             .build()?;
+        let viewer = ThreadPoolBuilder::new()
+            .num_threads(VIEWER_THREADS)
+            .thread_name(|i| format!("lumina-viewer-decode-{}", i))
+            .build()?;
 
         Ok(Self {
             pool: Arc::new(pool),
+            viewer: Arc::new(viewer),
+            newest: Arc::default(),
         })
     }
 
@@ -429,6 +454,30 @@ impl DecoderPipeline {
         F: FnOnce() + Send + 'static,
     {
         self.pool.spawn(task);
+    }
+
+    /// Queues `task` ahead of every grid job still waiting.
+    pub fn spawn_newest_first<F>(&self, task: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.newest.lock().push(Box::new(task));
+        let newest = self.newest.clone();
+        self.pool.spawn(move || {
+            // Bind first: the lock must be released before the job runs.
+            let job = newest.lock().pop();
+            if let Some(job) = job {
+                job();
+            }
+        });
+    }
+
+    /// Runs `task` on the viewer's own pool.
+    pub fn spawn_viewer<F>(&self, task: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.viewer.spawn(task);
     }
 
     #[cfg(target_os = "linux")]

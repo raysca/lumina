@@ -20,6 +20,7 @@ mod count_refresh;
 mod culling;
 mod culling_delete;
 mod culling_filtered;
+mod decode_priority;
 mod delete_dialog;
 mod design_system;
 mod downloads;

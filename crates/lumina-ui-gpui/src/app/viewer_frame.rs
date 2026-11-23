@@ -74,7 +74,7 @@ impl LuminaApp {
         #[cfg(test)]
         VIEWER_FRAME_REQUESTS.with(|n| n.set(n.get() + 1));
         let tx = self.ui_tx.clone();
-        engine.request_thumbnail(
+        engine.request_viewer_frame(
             id,
             crate::app::viewer_actions::VIEWER_IMAGE_SIZE,
             move |frame| on_viewer_frame(&tx, id, generation, frame),
