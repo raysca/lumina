@@ -5,7 +5,7 @@
 use crate::app::types::UiMessage;
 use crate::tests::helpers::{app_with_library, keystrokes, render_ui};
 use crate::tests::quick_edit::{edit_library, editing, open_viewer_on};
-use lumina_core::{EngineEvent, LuminaEngine, MediaItem};
+use lumina_core::{EngineEvent, LuminaEngine, MediaItem, MediaType};
 
 /// Catalogues a copy of `like` as a new file dated after every other item,
 /// so it sorts first and moves every row down by one.
@@ -28,8 +28,17 @@ fn a_new_file_keeps_the_viewer_and_the_edit_draft_on_the_same_photo() {
     let (_dir, engine, _photos, _) = edit_library("additions_keep_viewer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
-    let first = view.update(vcx, |app, _| app.get_active_slice(0..1).remove(0));
+    // Rows sort by file date, so the clip may come first; only a photo has
+    // an edit draft.
+    let (row, first) = view.update(vcx, |app, _| {
+        app.get_active_slice(0..4)
+            .into_iter()
+            .enumerate()
+            .find(|(_, item)| item.media_type != MediaType::Video)
+            .expect("a photo is listed")
+    });
     open_viewer_on(&view, vcx, &engine, first.id);
+    view.update(vcx, |app, cx| app.select_item_at(first.clone(), row, cx));
     keystrokes(vcx, "e =");
     assert!(editing(&view, vcx), "the draft is open");
 
@@ -58,11 +67,13 @@ fn a_new_file_keeps_the_viewer_and_the_edit_draft_on_the_same_photo() {
         );
         assert_eq!(
             app.selected_index,
-            Some(1),
+            Some(row + 1),
             "the position follows the photo, which moved down one row"
         );
         assert_eq!(
-            app.get_active_slice(1..2).first().map(|item| item.id),
+            app.get_active_slice(row + 1..row + 2)
+                .first()
+                .map(|item| item.id),
             Some(first.id),
             "so the next arrow key starts from the right row"
         );
