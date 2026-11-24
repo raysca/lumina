@@ -71,6 +71,11 @@ impl LuminaApp {
         }
         // Rows stay Running/Waiting on disk; the next open shows them paused.
         self.downloads.reset(None);
+        // Release the video player while the app still runs: exiting with
+        // AVFoundation mid-decode into frames the GPU shares can hang the
+        // GPU (the whole screen freezes). Stopping also records the resume
+        // point the save below writes.
+        self.stop_video_player();
         // State changed since the last debounced session save would be lost.
         self.save_config();
         // Last: a failed Restart to Update stops here with the banner.
