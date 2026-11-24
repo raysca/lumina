@@ -18,12 +18,15 @@ static CGImageSourceRef open_source(const char *path) {
     return source;
 }
 
+// Asks the caller for a zeroed buffer of `len` bytes; NULL when it cannot.
+typedef uint8_t *(*lumina_alloc_fn)(void *ctx, size_t len);
+
 // The first image of `path` fitted inside `max_size` (never enlarged),
 // turned by its EXIF orientation and drawn into sRGB as BGRA8 with straight
-// alpha. Returns 1 and a malloc'd width * height * 4 buffer, else 0.
+// alpha, into a width * height * 4 buffer from `alloc(ctx, len)` (the
+// caller owns it, so the pixels are never copied). Returns 1, else 0.
 int lumina_image_decode(const char *path, int max_size, int *out_width, int *out_height,
-                        uint8_t **out_data) {
-    *out_data = NULL;
+                        lumina_alloc_fn alloc, void *ctx) {
     if (max_size <= 0) return 0;
     @autoreleasepool {
         CGImageSourceRef source = open_source(path);
@@ -44,7 +47,7 @@ int lumina_image_decode(const char *path, int max_size, int *out_width, int *out
 
         size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image);
         uint8_t *data = (width && height && width <= SIZE_MAX / 4 / height)
-                            ? calloc(width * height, 4)
+                            ? alloc(ctx, width * height * 4)
                             : NULL;
         CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
         CGContextRef context =
@@ -53,8 +56,8 @@ int lumina_image_decode(const char *path, int max_size, int *out_width, int *out
                  : NULL;
         CGColorSpaceRelease(space);
         if (!context) {
+            // The caller frees its buffer.
             CGImageRelease(image);
-            free(data);
             return 0;
         }
         // Drawing into an sRGB context colour matches from the source profile.
@@ -74,12 +77,9 @@ int lumina_image_decode(const char *path, int max_size, int *out_width, int *out
         }
         *out_width = (int)width;
         *out_height = (int)height;
-        *out_data = data;
         return 1;
     }
 }
-
-void lumina_image_free(uint8_t *data) { free(data); }
 
 // The stored pixel size of the first image of `path` (before orientation).
 // Returns 1 when ImageIO reports both, else 0.

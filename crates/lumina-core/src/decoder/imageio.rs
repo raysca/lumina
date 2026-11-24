@@ -3,7 +3,7 @@
 
 use anyhow::{anyhow, Result};
 use std::ffi::CString;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
@@ -15,9 +15,9 @@ extern "C" {
         max_size: c_int,
         out_width: *mut c_int,
         out_height: *mut c_int,
-        out_data: *mut *mut u8,
+        alloc: extern "C" fn(ctx: *mut c_void, len: usize) -> *mut u8,
+        ctx: *mut c_void,
     ) -> c_int;
-    fn lumina_image_free(data: *mut u8);
     fn lumina_image_pixel_size(
         path: *const c_char,
         out_width: *mut c_int,
@@ -25,34 +25,44 @@ extern "C" {
     ) -> c_int;
 }
 
+/// Gives the bridge the frame's buffer: `ctx` is the decode's `Vec<u8>`,
+/// replaced by `len` zeroed bytes (the bridge draws over transparent black).
+extern "C" fn alloc_frame(ctx: *mut c_void, len: usize) -> *mut u8 {
+    // SAFETY: `decode` passes a pointer to its own live `Vec<u8>`, used by
+    // nothing else during the call.
+    let buffer = unsafe { &mut *ctx.cast::<Vec<u8>>() };
+    // An impossible size is refused rather than aborting the process.
+    if image::Limits::default().reserve(len as u64).is_err() {
+        return std::ptr::null_mut();
+    }
+    *buffer = vec![0u8; len];
+    buffer.as_mut_ptr()
+}
+
 /// `path` fitted inside `target_size` (never enlarged), turned by its EXIF
-/// orientation and colour matched to sRGB, as straight-alpha BGRA8.
+/// orientation and colour matched to sRGB, as straight-alpha BGRA8. The
+/// bridge draws straight into the frame's buffer: no copy.
 pub(crate) fn decode(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
     let c_path = CString::new(path.as_os_str().as_bytes())?;
     let max_size = c_int::try_from(target_size)?;
-    let (mut width, mut height, mut data) = (0, 0, std::ptr::null_mut());
-    // SAFETY: the path is a valid C string; the out-pointers live for the call.
+    let (mut width, mut height) = (0, 0);
+    let mut data: Vec<u8> = Vec::new();
+    // SAFETY: the path is a valid C string; the out-pointers and `data`
+    // live for the call, and `alloc_frame` only touches `data`.
     let ok = unsafe {
         lumina_image_decode(
             c_path.as_ptr(),
             max_size,
             &mut width,
             &mut height,
-            &mut data,
+            alloc_frame,
+            (&mut data as *mut Vec<u8>).cast::<c_void>(),
         )
     };
-    if ok == 0 || data.is_null() {
+    let (width, height) = (width as u32, height as u32);
+    if ok == 0 || data.len() != width as usize * height as usize * 4 || data.is_empty() {
         return Err(anyhow!("ImageIO could not decode {}", path.display()));
     }
-    let (width, height) = (width as u32, height as u32);
-    let len = width as usize * height as usize * 4;
-    // SAFETY: on success the bridge returns a malloc'd buffer of exactly
-    // width * height * 4 bytes, copied here and then freed once.
-    let data = unsafe {
-        let bytes = std::slice::from_raw_parts(data, len).to_vec();
-        lumina_image_free(data);
-        bytes
-    };
     Ok(DecodedFrame {
         id,
         width,

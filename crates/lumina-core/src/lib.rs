@@ -266,6 +266,11 @@ impl LuminaEngine {
                 engine_clone.run_scan(cancel_flag);
             })?;
 
+        // In-process decodes report to this library's crash record, once
+        // it has opened.
+        crate::decoder::guard::install(crate::decoder::guard::DecodeGuard::open(
+            engine.cache_dir().join("decode-guard"),
+        ));
         Ok((engine, event_rx))
     }
 
