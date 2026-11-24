@@ -6,6 +6,7 @@
 
 use anyhow::{anyhow, bail, Result};
 use image::ImageEncoder;
+use zune_jpeg::zune_core::bytestream::ZCursor;
 use zune_jpeg::zune_core::colorspace::ColorSpace;
 use zune_jpeg::zune_core::options::DecoderOptions;
 use zune_jpeg::JpegDecoder;
@@ -99,8 +100,11 @@ fn decode_jpeg(body: &[u8], format: PixelFormat) -> Result<Vec<u8>> {
         PixelFormat::Rgba8 => ColorSpace::RGBA,
         PixelFormat::Bgra8 => ColorSpace::BGRA,
     };
-    let options = DecoderOptions::default().jpeg_set_out_colorspace(colorspace);
-    Ok(JpegDecoder::new_with_options(body, options).decode()?)
+    // Strict: a damaged entry is a miss, never a padded-out picture.
+    let options = DecoderOptions::default()
+        .set_strict_mode(true)
+        .jpeg_set_out_colorspace(colorspace);
+    Ok(JpegDecoder::new_with_options(ZCursor::new(body), options).decode()?)
 }
 
 fn decode_png(body: &[u8], format: PixelFormat) -> Result<Vec<u8>> {
