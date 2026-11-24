@@ -1112,9 +1112,13 @@ pub(crate) mod tests {
             1,
             "one delete must send one removal event, not one per item"
         );
+        // The watcher may catalogue the same files meanwhile, so the batch
+        // can return its rows in any order: compare as sets.
         let mut removed = removals[0].clone();
         removed.sort_by_key(|id| id.0);
-        assert_eq!(removed, ids, "the event names every deleted row");
+        let mut expected = ids.clone();
+        expected.sort_by_key(|id| id.0);
+        assert_eq!(removed, expected, "the event names every deleted row");
         let _ = fs::remove_dir_all(&dir);
     }
 

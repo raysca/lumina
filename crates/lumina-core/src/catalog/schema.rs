@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use rusqlite::functions::FunctionFlags;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
+use std::path::Path;
 
 use super::{Catalog, SCHEMA_VERSION};
 use crate::{MediaId, TimelineBucket};
@@ -67,35 +68,66 @@ fn add_column_if_missing(conn: &Connection, table: &str, column: &str, ddl: &str
     Ok(())
 }
 
+/// Settings every catalog connection (the writer and each reader) uses.
+const SHARED_PRAGMAS: &str = "
+    PRAGMA busy_timeout = 5000;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA cache_size = -64000;
+    PRAGMA mmap_size = 268435456;
+";
+
+/// SQL functions every catalog connection needs: queries call them.
+fn register_functions(conn: &Connection) -> Result<()> {
+    // Accent- and case-insensitive place matching (`text::fold`). LIKE
+    // folds ASCII case only, so "sao" missed "São Paulo".
+    conn.create_scalar_function(
+        "lumina_fold",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        // Borrows the argument: no copy per row before folding.
+        |ctx| {
+            let text = ctx
+                .get_raw(0)
+                .as_str_or_null()
+                .map_err(|err| rusqlite::Error::UserFunctionError(err.into()))?;
+            Ok(text.map(crate::text::fold))
+        },
+    )
+    .context("registering lumina_fold")
+}
+
+/// A read connection to the catalog at `path`, set up like the writer and
+/// refused any write (`query_only`). The writer has already created the
+/// schema and switched the file to WAL.
+pub(super) fn open_reader(path: &Path) -> Result<Connection> {
+    let conn = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .context("opening a catalog read connection")?;
+    // Only WAL lets a reader run beside a write; in another journal mode it
+    // would wait out `busy_timeout` and fail, so the caller uses the writer.
+    let mode: String = conn.pragma_query_value(None, "journal_mode", |row| row.get(0))?;
+    if !mode.eq_ignore_ascii_case("wal") {
+        anyhow::bail!("catalog is in {mode} mode, not WAL");
+    }
+    register_functions(&conn)?;
+    conn.execute_batch(SHARED_PRAGMAS)?;
+    conn.execute_batch("PRAGMA query_only = ON;")?;
+    Ok(conn)
+}
+
 impl Catalog {
     pub(crate) fn init_schema(&self) -> Result<()> {
         let conn = self.conn.lock();
 
-        // Accent- and case-insensitive place matching (`text::fold`). LIKE
-        // folds ASCII case only, so "sao" missed "São Paulo".
-        conn.create_scalar_function(
-            "lumina_fold",
-            1,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
-            // Borrows the argument: no copy per row before folding.
-            |ctx| {
-                let text = ctx
-                    .get_raw(0)
-                    .as_str_or_null()
-                    .map_err(|err| rusqlite::Error::UserFunctionError(err.into()))?;
-                Ok(text.map(crate::text::fold))
-            },
-        )
-        .context("registering lumina_fold")?;
+        register_functions(&conn)?;
+        conn.execute_batch(SHARED_PRAGMAS)?;
 
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
-            PRAGMA busy_timeout = 5000;
             PRAGMA synchronous = NORMAL;
-            PRAGMA temp_store = MEMORY;
-            PRAGMA cache_size = -64000;
-            PRAGMA mmap_size = 268435456;
             PRAGMA foreign_keys = ON;
 
             CREATE TABLE IF NOT EXISTS library_roots (
