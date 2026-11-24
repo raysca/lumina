@@ -20,6 +20,7 @@ mod count_refresh;
 mod culling;
 mod culling_delete;
 mod culling_filtered;
+mod decode_priority;
 mod delete_dialog;
 mod design_system;
 mod downloads;
@@ -86,6 +87,7 @@ mod regressions;
 mod rotate;
 mod search_field;
 mod search_header;
+mod selection_on_additions;
 mod session_restore;
 mod settings_downloads_layout;
 #[cfg(target_os = "macos")]

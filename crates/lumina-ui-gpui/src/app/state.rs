@@ -1166,24 +1166,72 @@ impl LuminaApp {
         })
     }
 
-    /// The viewer's full-size decode of `id`. Its failure stays out of the
-    /// grid's failure set: a full-size decode can time out on a file whose
-    /// small thumbnail decodes fine. The grid's `in_flight` claim is not
-    /// touched either (the sizes differ).
-    pub(crate) fn prefetch_rows(&self, range: std::ops::Range<usize>) {
-        if range.start < range.end {
-            let cols = self.grid_cols();
-            let start = range.start * cols;
-            let end = range.end * cols;
-            let items = self.displayed_rows(start..end);
-            if let Some(ref state) = self.grid_state {
-                for item in items {
-                    let is_cached = state.texture_cache.lock().contains(&item.id);
-                    if !is_cached {
-                        self.queue_thumbnail_request(item.id);
-                    }
-                }
+    /// A grid tile's decode: queued ahead of tiles asked for earlier, and
+    /// skipped (its claim released, no failure recorded) if the tile has
+    /// left the grid's wanted set by the time a decode thread reaches it.
+    pub(crate) fn queue_grid_thumbnail(&self, item: &lumina_core::MediaItem) {
+        let Some(state) = self.grid_state.as_ref() else {
+            return;
+        };
+        let size = self.thumbnail_request_size();
+        let Some(callback) = self.begin_thumbnail_request(state, item.id, size) else {
+            return;
+        };
+        #[cfg(test)]
+        THUMB_REQUEST_ITEMS.with(|items| items.borrow_mut().push((item.id, item.mtime_epoch_ms)));
+        #[cfg(test)]
+        THUMB_DECODE_SIZES.with(|sizes| sizes.borrow_mut().push((item.id, size)));
+        let id = item.id;
+        let wanted = state.wanted.clone();
+        let in_flight = state.in_flight.clone();
+        let tx = self.ui_tx.clone();
+        state.engine.request_grid_thumbnail(
+            item.clone(),
+            size,
+            move || wanted.lock().contains(&id),
+            move || {
+                in_flight.lock().remove(&id);
+                // Repaint: a render that saw the claim (another surface, or
+                // a grid pass that wants the tile again) asks once more.
+                // A closed receiver means the app is gone.
+                let _ = tx.send_blocking(UiMessage::ThumbnailSkipped);
+            },
+            callback,
+        );
+    }
+
+    /// Decodes for the rows just below the viewport, from the cached rows
+    /// (no catalog read per tile). Returns the ids it covers, which the
+    /// grid adds to its wanted set before queuing.
+    pub(crate) fn prefetch_items(
+        &self,
+        range: std::ops::Range<usize>,
+    ) -> Vec<lumina_core::MediaItem> {
+        if range.start >= range.end {
+            return Vec::new();
+        }
+        let cols = self.grid_cols();
+        let Some(state) = self.grid_state.as_ref() else {
+            return Vec::new();
+        };
+        let items = self.displayed_rows(range.start * cols..range.end * cols);
+        let cache = state.texture_cache.lock();
+        items
+            .into_iter()
+            .filter(|item| !cache.contains(&item.id))
+            .collect()
+    }
+
+    /// Sets the grid's wanted set to `ids` (what this pass draws and
+    /// prefetches), or only adds them when not `replace`. Called before the
+    /// pass queues, so its own decodes are never skipped.
+    pub(crate) fn set_grid_wanted(&self, ids: impl IntoIterator<Item = MediaId>, replace: bool) {
+        if let Some(state) = self.grid_state.as_ref() {
+            let mut wanted = state.wanted.lock();
+            if replace {
+                wanted.clear();
             }
+            wanted.extend(ids);
         }
     }
 }
