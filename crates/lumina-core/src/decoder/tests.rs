@@ -1021,6 +1021,32 @@ fn imageio_rejects_a_file_that_is_not_an_image() {
     );
 }
 
+/// zune-jpeg 0.5 tolerates damaged data by default and pads it out; the
+/// fast path must still reject a truncated file so it fails over.
+#[test]
+fn a_truncated_jpeg_fails_the_fast_path() {
+    let photo = image::RgbImage::from_fn(256, 256, |x, y| {
+        image::Rgb([x as u8, y as u8, (x ^ y) as u8])
+    });
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgb8(photo)
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Jpeg,
+        )
+        .expect("encode the fixture");
+    let path = Path::new("/unused/truncated.jpg");
+    assert!(
+        DecoderPipeline::decode_jpeg_simd(MediaId(1), path, &bytes, 256).is_ok(),
+        "control: the whole file decodes"
+    );
+    let half = &bytes[..bytes.len() / 2];
+    assert!(
+        DecoderPipeline::decode_jpeg_simd(MediaId(1), path, half, 256).is_err(),
+        "a truncated file is an error, not a padded picture"
+    );
+}
+
 /// A one-thread pipeline whose decode thread is held until the returned
 /// sender is dropped or sent to.
 fn held_pipeline() -> (DecoderPipeline, std::sync::mpsc::Sender<()>) {

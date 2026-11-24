@@ -296,3 +296,43 @@ fn the_viewer_grows_out_of_the_tile_it_opens_from() {
         assert!(!app.viewer_zooming());
     });
 }
+
+/// The grid's tile marks outlived the grid: on a page without one, the
+/// viewer zoomed from where a grid tile used to be.
+#[core::prelude::v1::test]
+fn a_page_without_a_grid_does_not_zoom_from_an_old_tile() {
+    crate::motion::REDUCE_MOTION.with(|on| on.set(false));
+    let (_dir, engine) = seed_library("motion_stale_tile", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        for id in [lumina_core::MediaId(1), lumina_core::MediaId(2)] {
+            app.handle_ui_message(
+                crate::UiMessage::ThumbnailLoaded {
+                    id,
+                    frame: super::helpers::tiny_decoded_frame(id),
+                    requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
+                },
+                cx,
+            );
+        }
+    });
+    keystrokes(vcx, "home");
+    render_ui(vcx);
+    let item = view.update(vcx, |app, _| {
+        app.selected_item.clone().expect("home selects")
+    });
+
+    view.update(vcx, |app, cx| {
+        app.select_album(crate::views::sidebar::AlbumSelection::Tags, cx)
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        app.open_viewer(item.clone(), cx);
+        assert!(
+            app.viewer_zoom.is_none(),
+            "no grid tile is on screen, so the viewer only fades in"
+        );
+    });
+    crate::motion::REDUCE_MOTION.with(|on| on.set(true));
+}

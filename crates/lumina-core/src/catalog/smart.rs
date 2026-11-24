@@ -98,7 +98,7 @@ impl Catalog {
 
         Ok(SmartAlbum {
             id,
-            title: title.to_string(),
+            title,
             icon_name: icon_name.to_string(),
             match_mode,
             rules: rules.to_vec(),

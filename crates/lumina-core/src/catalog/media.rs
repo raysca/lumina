@@ -1004,7 +1004,7 @@ mod tests {
 
         // A rescan re-inserts the same rows through ON CONFLICT; the update path
         // must not reset the user's rotation.
-        let mut rescanned = inserted.clone();
+        let mut rescanned = inserted;
         for item in &mut rescanned {
             item.file_size += 1;
         }

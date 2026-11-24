@@ -80,6 +80,10 @@ impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let root = self.focus_handle.clone();
         self.sync_field_input(window, &root, false, cx);
+        // Tiles mark themselves again only where a grid paints this frame;
+        // a page without one (Albums, Tags, Downloads) must not leave the
+        // viewer zooming from where a grid tile used to be.
+        crate::motion::forget_tiles();
         // Thumbnails decode for this display's pixels, so the grid never
         // stretches a 1x source over a Retina tile. The texture cache's depth
         // follows the resulting image size to keep its footprint steady; the
