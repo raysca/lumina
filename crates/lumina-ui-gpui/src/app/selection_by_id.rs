@@ -21,6 +21,10 @@ use lumina_core::MediaId;
 
 use crate::app::LuminaApp;
 
+/// Most rows [`LuminaApp::keep_selection_after_additions`] reads on the UI
+/// thread to find the selected item again.
+const MAX_REMAP_READ: usize = 1024;
+
 /// The selection by identity, taken before a write.
 pub(crate) struct HeldSelection {
     ids: Vec<MediaId>,
@@ -152,6 +156,83 @@ impl LuminaApp {
         }
         self.update_batch_summary();
         self.reveal_grid_selection();
+        cx.notify();
+    }
+
+    /// Puts the selection back on its item after `added` rows appeared in
+    /// the library (an import batch, a download, a file dropped into the
+    /// folder) in a batch of `batch` items. New rows move every row by at
+    /// most `added`; the batch's other items (re-saved or renamed files) can
+    /// each move a row by one more. So one bounded, fresh read around the
+    /// old position finds the item again. Clearing instead closed the viewer
+    /// and discarded an unsaved edit whenever an unrelated file arrived.
+    ///
+    /// A multi-selection is still cleared: its ids would have to be read
+    /// from rows that may already be the new ones, so a batch action could
+    /// reach the wrong items (AGENTS 5.3).
+    /// ponytail: the read is synchronous and can wait on an import's
+    /// catalog lock; above [`MAX_REMAP_READ`] rows it clears as before.
+    pub(crate) fn keep_selection_after_additions(
+        &mut self,
+        added: usize,
+        batch: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let index = self.selected_index;
+        // Rows marked other than the focused one: a multi-selection, or a
+        // mark left at another position. Their items are unknown now.
+        let others = self
+            .selected_indices
+            .iter()
+            .any(|&marked| Some(marked) != index);
+        if others {
+            self.clear_selection(cx);
+            return;
+        }
+        let (Some(id), Some(index)) = (self.selected_item.as_ref().map(|item| item.id), index)
+        else {
+            // Nothing selected, or an item shown from outside the view: no
+            // position to move.
+            return;
+        };
+        let lo = index.saturating_sub(batch);
+        let hi = index + added + batch;
+        if hi - lo >= MAX_REMAP_READ {
+            self.clear_selection(cx);
+            return;
+        }
+        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
+            return;
+        };
+        // Read the revision first: the rows read next are at least this new.
+        let revision = engine.data_revision();
+        let found = self
+            .get_active_slice(lo..hi + 1)
+            .iter()
+            .position(|item| item.id == id)
+            .map(|offset| lo + offset);
+        let Some(position) = found else {
+            // Not where it can be (the view changed some other way): the
+            // old behaviour, never a selection on the wrong item.
+            self.clear_selection(cx);
+            return;
+        };
+        // The cache still has the old order: navigation must read fresh
+        // rows until a fetch at least this new lands.
+        self.active_view
+            .positions_moved_at(self.library_generation, revision);
+        if position == index {
+            return;
+        }
+        if self.selected_indices.remove(&index) {
+            self.selected_indices.insert(position);
+        }
+        self.selected_index = Some(position);
+        self.selection_anchor = self
+            .selection_anchor
+            .map(|anchor| (anchor + position).saturating_sub(index));
+        self.reveal_grid_selection();
+        self.refresh_active_view(cx);
         cx.notify();
     }
 
