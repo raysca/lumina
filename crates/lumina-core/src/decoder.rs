@@ -8,10 +8,12 @@ use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use zune_jpeg::zune_core::bytestream::ZCursor;
 use zune_jpeg::JpegDecoder;
 
 use crate::{DecodedFrame, MediaId, MediaType, PixelFormat};
 
+pub(crate) mod guard;
 #[cfg(target_os = "macos")]
 mod imageio;
 
@@ -129,6 +131,11 @@ fn temp_path(prefix: &str) -> std::path::PathBuf {
 
 /// Native helpers (QuickLook, AVFoundation, ffmpeg) must never hang a decode worker.
 pub(crate) const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long an in-process ImageIO decode is waited for. Longer than the
+/// tool timeout: a large PSB or TIFF, or a file still downloading from
+/// iCloud, can take a while and still be fine.
+#[cfg(target_os = "macos")]
+const IMAGEIO_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
     command.stdout(Stdio::null()).stderr(Stdio::null());
@@ -627,7 +634,11 @@ impl DecoderPipeline {
         bytes: &[u8],
         target_size: u32,
     ) -> Result<DecodedFrame> {
-        let mut decoder = JpegDecoder::new(bytes);
+        // Strict, as zune 0.4 was by default: a damaged file fails over to the
+        // image crate (or "No preview") instead of decoding half grey.
+        let options =
+            zune_jpeg::zune_core::options::DecoderOptions::default().set_strict_mode(true);
+        let mut decoder = JpegDecoder::new_with_options(ZCursor::new(bytes), options);
         decoder.decode_headers()?;
         let info = decoder
             .info()
@@ -702,9 +713,16 @@ impl DecoderPipeline {
     /// (never enlarged), turned by the EXIF orientation and color matched to
     /// sRGB (frames and the cache hold sRGB; untagged and sRGB sources come
     /// back unchanged).
+    ///
+    /// Guarded (see [`guard`]): a file that stopped Lumina twice in a row
+    /// is refused, and a decode past [`IMAGEIO_TIMEOUT`] is reported as
+    /// failed (and not retried this session) while its thread finishes.
     #[cfg(target_os = "macos")]
     pub fn decode_via_imageio(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        imageio::decode(id, path, target_size)
+        let owned = path.to_path_buf();
+        guard::guarded_decode(guard::current(), id, path, IMAGEIO_TIMEOUT, move || {
+            imageio::decode(id, &owned, target_size)
+        })
     }
 
     /// A video's thumbnail: a frame decoded in process by AVFoundation.

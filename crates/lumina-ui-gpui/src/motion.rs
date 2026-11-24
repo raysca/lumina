@@ -499,8 +499,9 @@ thread_local! {
         const { std::cell::Cell::new(None) };
 }
 
-/// Forgets last frame's tiles; the grid calls it as it renders, so a
-/// tile scrolled away is not zoomed from.
+/// Forgets last frame's tiles; the app calls it at the start of every
+/// render, so a tile scrolled away, or a grid no longer shown, is not
+/// zoomed from.
 pub fn forget_tiles() {
     TILES.with(|tiles| tiles.borrow_mut().clear());
 }

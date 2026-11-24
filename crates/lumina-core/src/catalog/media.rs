@@ -331,7 +331,7 @@ impl Catalog {
     }
 
     pub fn total_count(&self) -> Result<usize> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM media_items WHERE is_trashed = 0 AND is_hidden = 0;",
             [],
@@ -343,7 +343,7 @@ impl Catalog {
     /// Every active (not trashed, not hidden) item with a latitude and a
     /// longitude, in id order.
     pub fn geo_points(&self) -> Result<Vec<GeoPoint>> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(
             "SELECT id, latitude, longitude FROM media_items \
              WHERE latitude IS NOT NULL AND longitude IS NOT NULL \
@@ -369,7 +369,7 @@ impl Catalog {
         limit: usize,
         sort: SortSpec,
     ) -> Result<Vec<MediaItem>> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let sql = format!(
             "SELECT {columns} FROM media_items \
              WHERE is_trashed = 0 AND is_hidden = 0 \
@@ -383,7 +383,7 @@ impl Catalog {
     }
 
     pub fn get_item_by_id(&self, id: MediaId) -> Result<Option<MediaItem>> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&format!(
             "SELECT {columns} FROM media_items WHERE id = ?1;",
             columns = crate::sql::media_columns("")
@@ -398,7 +398,7 @@ impl Catalog {
     /// hidden rows are returned too: callers check the flags.
     pub fn get_items_by_ids(&self, ids: &[MediaId]) -> Result<Vec<MediaItem>> {
         let mut found: HashMap<MediaId, MediaItem> = HashMap::with_capacity(ids.len());
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         for chunk in ids.chunks(500) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
@@ -1004,7 +1004,7 @@ mod tests {
 
         // A rescan re-inserts the same rows through ON CONFLICT; the update path
         // must not reset the user's rotation.
-        let mut rescanned = inserted.clone();
+        let mut rescanned = inserted;
         for item in &mut rescanned {
             item.file_size += 1;
         }
@@ -1043,5 +1043,65 @@ mod tests {
 
         drop(catalog);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_page_read_does_not_wait_for_a_write_in_progress() {
+        let (dir, db) = temp_catalog("read_during_write");
+        let catalog = Catalog::open(&db).unwrap();
+        catalog.insert_or_update_batch(&[sample_item(0)]).unwrap();
+        let (held, wait_held) = std::sync::mpsc::channel();
+        let (done, wait_done) = std::sync::mpsc::channel::<()>();
+        let writer = {
+            let catalog = catalog.clone();
+            std::thread::spawn(move || {
+                // A long import batch: the writer holds the lock with an
+                // uncommitted row until told to finish.
+                let mut conn = catalog.conn.lock();
+                let tx = conn.transaction().unwrap();
+                tx.execute("UPDATE media_items SET file_size = file_size + 1;", [])
+                    .unwrap();
+                held.send(()).unwrap();
+                let _ = wait_done.recv();
+                tx.commit().unwrap();
+            })
+        };
+        wait_held.recv().unwrap();
+        let (read, wait_read) = std::sync::mpsc::channel();
+        {
+            let catalog = catalog.clone();
+            std::thread::spawn(move || {
+                let _ = read.send((
+                    catalog.get_item_slice(0, 10).map(|rows| rows.len()),
+                    catalog.total_count(),
+                ));
+            });
+        }
+        let page = wait_read.recv_timeout(std::time::Duration::from_secs(5));
+        done.send(()).unwrap();
+        writer.join().unwrap();
+        let (rows, total) = page.expect("the page read finishes while the write is open");
+        assert_eq!(rows.unwrap(), 1);
+        assert_eq!(total.unwrap(), 1);
+        let stored = catalog.get_item_slice(0, 1).unwrap().remove(0);
+        assert_eq!(
+            stored.file_size,
+            sample_item(0).file_size + 1,
+            "once committed, the write is visible to the next read"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_read_connection_refuses_writes() {
+        let (dir, db) = temp_catalog("reader_query_only");
+        let catalog = Catalog::open(&db).unwrap();
+        let reader = catalog.conn.read();
+        assert!(
+            reader.execute("DELETE FROM media_items;", []).is_err(),
+            "a read connection is query-only"
+        );
+        drop(reader);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

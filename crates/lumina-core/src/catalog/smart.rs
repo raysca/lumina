@@ -28,14 +28,14 @@ impl Catalog {
         sort: SortSpec,
     ) -> Result<Vec<MediaItem>> {
         let (sql, params) = album.synthesize_query_sorted(limit, offset, sort);
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
     }
 
     pub fn query_system_album_count(&self, album: SystemAlbum) -> Result<usize> {
         let (sql, params) = album.synthesize_count_query();
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let count: i64 =
             conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
                 row.get(0)
@@ -98,7 +98,7 @@ impl Catalog {
 
         Ok(SmartAlbum {
             id,
-            title: title.to_string(),
+            title,
             icon_name: icon_name.to_string(),
             match_mode,
             rules: rules.to_vec(),
@@ -248,14 +248,14 @@ impl Catalog {
         sort: SortSpec,
     ) -> Result<Vec<MediaItem>> {
         let (sql, params) = album.synthesize_query_sorted(limit, offset, sort)?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
     }
 
     pub fn query_smart_album_count(&self, album: &SmartAlbum) -> Result<usize> {
         let (sql, params) = album.synthesize_count_query()?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let count: i64 =
             conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
                 row.get(0)

@@ -119,8 +119,10 @@ docs/             accessibility, search, network import, updates, Linux
 
 ### 5.3 State, concurrency, database
 
-- SQLite access is serialized through the catalog connection. Do not hold the
-  lock across UI awaits or long computations.
+- Writes go through the one writer connection (`Db::lock`). Pure reads may use
+  the read-only pool (`Db::read`), which sees every committed write; never write
+  through it, and keep a read whose result a write depends on in the writer's
+  transaction. Do not hold either across UI awaits or long computations.
 - Use transactions for multi-row mutations. Keep FTS rows and triggers in sync
   when adding metadata tables or columns.
 - Schema changes require: an idempotent migration for existing databases, a
