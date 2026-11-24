@@ -491,6 +491,9 @@ impl LuminaApp {
             self.stop_video_ticker();
             self.video.resume_after_scrub = true;
         }
+        // A press on a full-screen transport that is fading out brings the
+        // HUD back; the scrub then keeps it up until release.
+        self.wake_immersive_hud(cx);
         self.video.is_scrubbing = true;
         self.video.scrub_time = Some(target);
         self.video.last_scrub_seek = Some(Instant::now());
