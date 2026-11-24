@@ -122,6 +122,9 @@ pub enum UiMessage {
     /// A thumbnail decode failed for good (already recorded in the grid's
     /// failure set); the handler only repaints.
     ThumbnailFailed,
+    /// A grid tile's queued decode was skipped (scrolled past) and its claim
+    /// released; the handler only repaints, so a tile still shown asks again.
+    ThumbnailSkipped,
     /// The viewer's full-size decode of `id`, asked for at `generation`.
     ViewerLoaded {
         id: MediaId,

@@ -23,6 +23,8 @@ impl LuminaApp {
             UiMessage::Engine(evt) => {
                 let mut should_refresh_counts = false;
                 let mut should_clear_selection = false;
+                let mut rows_added = 0;
+                let mut batch_len = 0;
                 let mut should_restore_session = false;
                 let scan_completed = matches!(evt, EngineEvent::ScanComplete { .. });
                 let had_multi_selection = !self.selected_indices.is_empty();
@@ -55,7 +57,8 @@ impl LuminaApp {
                                 selected_refresh = state.engine.get_item_by_id(id);
                             }
                             let new_total = state.engine.total_count();
-                            let structural_change = new_total != state.total_count;
+                            let old_total = state.total_count;
+                            let structural_change = new_total != old_total;
                             state.total_count = new_total;
                             // Initial scan batches are followed by ScanComplete; only
                             // refresh sidebar counts for post-scan (watcher) changes.
@@ -100,8 +103,17 @@ impl LuminaApp {
                                 );
                                 drop(textures);
                                 should_refresh_counts = true;
-                                // Added/removed items shift position-based selection.
-                                if structural_change {
+                                // A batch only adds rows (removals have their
+                                // own events). They shift positions, so the
+                                // selection is put back on its item by id.
+                                // A total that fell means a removal raced in:
+                                // positions are unknown, so clear as removals do.
+                                // `added` is library-wide, so in a filtered
+                                // view it only over-estimates the shift.
+                                if new_total > old_total {
+                                    rows_added = new_total - old_total;
+                                    batch_len = items.len();
+                                } else if structural_change {
                                     should_clear_selection = true;
                                 }
                             }
@@ -207,6 +219,8 @@ impl LuminaApp {
                 }
                 if should_clear_selection {
                     self.clear_selection(cx);
+                } else if rows_added > 0 {
+                    self.keep_selection_after_additions(rows_added, batch_len, cx);
                 }
                 if should_refresh_counts {
                     self.refresh_album_counts_soon(cx);
@@ -262,7 +276,7 @@ impl LuminaApp {
                 cx.notify();
             }
             // Already recorded in the failure set by the decode callback.
-            UiMessage::ThumbnailFailed => cx.notify(),
+            UiMessage::ThumbnailFailed | UiMessage::ThumbnailSkipped => cx.notify(),
             // An answer for an earlier request is dropped: the user moved
             // on, or a newer decode of the same item is coming.
             UiMessage::ViewerLoaded { generation, .. }

@@ -352,3 +352,49 @@ fn grid_size_decodes_are_cached_and_viewer_size_decodes_are_not() {
     drop(engine);
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_grid_tile_no_longer_wanted_is_skipped_not_decoded() {
+    let dir = temp_library("grid_tile_skipped");
+    let (engine, item) = engine_with_image(&dir, "a.png", 64, 48);
+    let cached_before = cache_file_count(&dir);
+    let (tx, rx) = mpsc::channel();
+    let skipped_tx = tx.clone();
+    engine.request_grid_thumbnail(
+        item.clone(),
+        128,
+        || false,
+        move || {
+            let _ = skipped_tx.send("skipped");
+        },
+        move |_frame| {
+            let _ = tx.send("decoded");
+        },
+    );
+    assert_eq!(rx.recv_timeout(TEST_WAIT).ok(), Some("skipped"));
+    assert!(rx
+        .recv_timeout(std::time::Duration::from_millis(200))
+        .is_err());
+    assert_eq!(
+        cache_file_count(&dir),
+        cached_before,
+        "a skipped tile writes nothing to the cache"
+    );
+
+    let (tx, rx) = mpsc::channel();
+    engine.request_grid_thumbnail(
+        item,
+        128,
+        || true,
+        || {},
+        move |frame| {
+            let _ = tx.send(frame.is_some());
+        },
+    );
+    assert_eq!(
+        rx.recv_timeout(TEST_WAIT).ok(),
+        Some(true),
+        "a wanted tile decodes"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
