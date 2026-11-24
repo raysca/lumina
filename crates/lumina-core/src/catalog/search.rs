@@ -25,7 +25,7 @@ impl Catalog {
         sort: SortSpec,
     ) -> Result<Vec<MediaItem>> {
         let (sql, params) = self.search_sql_sorted(query, limit, offset, sort)?;
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
     }
@@ -67,7 +67,7 @@ impl Catalog {
         offset: usize,
         sort: SortSpec,
     ) -> Result<GeoIndex> {
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         // ponytail: max(rowid) stands in for the row count (O(1)); it
         // overcounts after deletes, which only raises the cap. Ceiling: the
         // walk probe reads `cap` rows of the sort index (~2.2k for page 0 at
@@ -112,7 +112,7 @@ impl Catalog {
 
     pub fn search_structured_count(&self, query: &StructuredQuery) -> Result<usize> {
         let (sql, params) = query.synthesize_count_query();
-        let conn = self.conn.lock();
+        let conn = self.conn.read();
         let count: i64 =
             conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
                 row.get(0)

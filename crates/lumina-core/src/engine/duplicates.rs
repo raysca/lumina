@@ -162,7 +162,7 @@ impl LuminaEngine {
                     anyhow::bail!("That file is already in your library as another item. Delete one of them, or merge them from Duplicates.");
                 }
                 self.catalog.fold_into(id, twin)?;
-                let _ = self.event_tx.send(EngineEvent::ItemRemoved(twin));
+                let _ = self.event_tx.send(EngineEvent::ItemsRemoved(vec![twin]));
                 RelinkOutcome::Folded(twin)
             }
             Some(_) => RelinkOutcome::Relinked,

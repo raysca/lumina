@@ -61,11 +61,6 @@ impl LuminaApp {
                     cx.processor(move |this, range: std::ops::Range<usize>, _window, cx| {
                         let mut rows = Vec::with_capacity(range.len());
 
-                        // Prefetch 2 rows ahead for smooth 120 FPS scrolling
-                        let prefetch_start = range.end;
-                        let prefetch_end = cmp::min(prefetch_start + 2, total_rows);
-                        this.prefetch_rows(prefetch_start..prefetch_end);
-
                         // uniform_list also calls this with row 0 on every
                         // layout, only to measure a row. That call must not move
                         // the fetch window or the month band, or a deep scroll
@@ -89,6 +84,29 @@ impl LuminaApp {
                                 }
                                 this.displayed_rows(visible_start..visible_end)
                             };
+                        // What this pass draws and prefetches (2 rows ahead
+                        // for smooth scrolling) is the wanted set: a decode
+                        // queued for a tile scrolled past is skipped. A
+                        // measuring pass queues nothing and keeps the set. A
+                        // 0..1 pass at the top may be uniform_list measuring
+                        // too, so it only adds to the set; the real pass of
+                        // the same frame replaces it.
+                        if !measuring {
+                            let prefetch_start = range.end;
+                            let prefetch_end = cmp::min(prefetch_start + 2, total_rows);
+                            let prefetch = this.prefetch_items(prefetch_start..prefetch_end);
+                            this.set_grid_wanted(
+                                visible_items
+                                    .iter()
+                                    .chain(prefetch.iter())
+                                    .map(|item| item.id),
+                                range != (0..1),
+                            );
+                            for item in &prefetch {
+                                this.queue_grid_thumbnail(item);
+                            }
+                        }
+
                         // The month band reads the top row from this fetch, so
                         // it costs no extra query.
                         let top = visible_items.first().map(|i| (i.year, i.month));
@@ -102,6 +120,7 @@ impl LuminaApp {
                             .detach();
                         }
 
+                        let mut to_decode = Vec::new();
                         for row_ix in range {
                             let start = row_ix * cols;
                             let end = cmp::min(start + cols, effective_count);
@@ -139,8 +158,8 @@ impl LuminaApp {
                                     (vec![None; items.len()], Vec::new())
                                 };
 
-                            for item in decode_needed {
-                                this.queue_thumbnail_request_item(item);
+                            if !measuring {
+                                to_decode.extend(decode_needed.into_iter().cloned());
                             }
 
                             let mut row_cards = Vec::with_capacity(cols);
@@ -181,6 +200,11 @@ impl LuminaApp {
                                     .children(row_cards),
                             );
                         }
+                        // Grid decodes run newest first: queued bottom-right
+                        // to top-left, the screen fills in reading order.
+                        for item in to_decode.iter().rev() {
+                            this.queue_grid_thumbnail(item);
+                        }
 
                         rows
                     }),
@@ -203,8 +227,6 @@ impl LuminaApp {
     /// press/move/release, ⌘-wheel and pinch zoom, and a column for its
     /// children.
     pub(crate) fn grid_surface(&self, cx: &mut Context<Self>) -> Stateful<Div> {
-        // The selected tiles mark themselves again as this grid paints.
-        crate::motion::forget_tiles();
         div()
             .id("media-grid-surface")
             .debug_selector(|| "media-grid-surface".to_string())

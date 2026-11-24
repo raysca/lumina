@@ -1020,3 +1020,79 @@ fn imageio_rejects_a_file_that_is_not_an_image() {
         "control: a PNG's size"
     );
 }
+
+/// zune-jpeg 0.5 tolerates damaged data by default and pads it out; the
+/// fast path must still reject a truncated file so it fails over.
+#[test]
+fn a_truncated_jpeg_fails_the_fast_path() {
+    let photo = image::RgbImage::from_fn(256, 256, |x, y| {
+        image::Rgb([x as u8, y as u8, (x ^ y) as u8])
+    });
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgb8(photo)
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Jpeg,
+        )
+        .expect("encode the fixture");
+    let path = Path::new("/unused/truncated.jpg");
+    assert!(
+        DecoderPipeline::decode_jpeg_simd(MediaId(1), path, &bytes, 256).is_ok(),
+        "control: the whole file decodes"
+    );
+    let half = &bytes[..bytes.len() / 2];
+    assert!(
+        DecoderPipeline::decode_jpeg_simd(MediaId(1), path, half, 256).is_err(),
+        "a truncated file is an error, not a padded picture"
+    );
+}
+
+/// A one-thread pipeline whose decode thread is held until the returned
+/// sender is dropped or sent to.
+fn held_pipeline() -> (DecoderPipeline, std::sync::mpsc::Sender<()>) {
+    let pipeline = DecoderPipeline::new(1).expect("pool must build");
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    let (started_tx, started) = std::sync::mpsc::channel();
+    pipeline.spawn(move || {
+        let _ = started_tx.send(());
+        let _ = held.recv();
+    });
+    started
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the holding job must start");
+    (pipeline, release)
+}
+
+#[test]
+fn grid_jobs_run_newest_first() {
+    let (pipeline, release) = held_pipeline();
+    let (done_tx, done) = std::sync::mpsc::channel();
+    for n in 0..4 {
+        let done_tx = done_tx.clone();
+        pipeline.spawn_newest_first(move || {
+            let _ = done_tx.send(n);
+        });
+    }
+    drop(release);
+    let order: Vec<i32> = (0..4)
+        .map(|_| {
+            done.recv_timeout(Duration::from_secs(10))
+                .expect("every queued job runs")
+        })
+        .collect();
+    assert_eq!(order, vec![3, 2, 1, 0], "the rows asked for last run first");
+}
+
+#[test]
+fn the_viewer_lane_does_not_wait_for_the_grid() {
+    let (pipeline, release) = held_pipeline();
+    let (done_tx, done) = std::sync::mpsc::channel();
+    pipeline.spawn_viewer(move || {
+        let _ = done_tx.send(());
+    });
+    assert!(
+        done.recv_timeout(Duration::from_secs(10)).is_ok(),
+        "the viewer frame runs while every grid thread is busy"
+    );
+    drop(release);
+}

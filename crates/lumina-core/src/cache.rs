@@ -37,6 +37,11 @@ pub struct DiskCache {
 /// v6: entries are compressed (`codec`) and named `.thumb`.
 const CACHE_FORMAT_VERSION: u32 = 6;
 
+/// A read marks an entry used only when its mark is at least this old:
+/// coarse enough that scrolling writes no metadata, fine enough that a trim
+/// in the same session still keeps what was just looked at.
+const TOUCH_AFTER: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 /// Default disk budget for thumbnails (1.5 GB).
 pub const DEFAULT_MAX_CACHE_BYTES: u64 = 1_500_000_000;
 /// Thumbnails older than this are removed on startup (30 days).
@@ -156,17 +161,28 @@ impl DiskCache {
         let key = Self::compute_key(path, file_size, mtime_epoch_ms, target_size);
         let file_path = self.cache_file_path(&key);
 
-        let bytes = fs::read(&file_path).ok()?;
+        let mut file = fs::File::open(&file_path).ok()?;
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut bytes).ok()?;
         let frame = codec::decode(id, &bytes)?;
         // Eviction removes the least recently modified entries first, so a
-        // read marks the entry as used. Best-effort: a failed touch only
-        // makes the entry look older.
-        if let Err(err) = fs::File::options()
-            .write(true)
-            .open(&file_path)
-            .and_then(|file| file.set_modified(std::time::SystemTime::now()))
-        {
-            log::debug!("could not mark {} as used: {err}", file_path.display());
+        // read marks the entry as used. At most every TOUCH_AFTER: rewriting
+        // the timestamp on every read cost a metadata write per tile per
+        // frame of scrolling. A future-dated mark (clock skew) is reset.
+        // Best-effort: a failed touch only makes the entry look older.
+        let last_used = file.metadata().and_then(|meta| meta.modified()).ok();
+        let now = std::time::SystemTime::now();
+        let stale = last_used
+            .and_then(|at| now.duration_since(at).ok())
+            .is_none_or(|age| age >= TOUCH_AFTER);
+        if stale {
+            if let Err(err) = fs::File::options()
+                .write(true)
+                .open(&file_path)
+                .and_then(|file| file.set_modified(now))
+            {
+                log::debug!("could not mark {} as used: {err}", file_path.display());
+            }
         }
         Some(frame)
     }
@@ -214,9 +230,10 @@ impl DiskCache {
     }
 
     /// Startup cleanup alone let the cache grow without bound during a long
-    /// session (each 2048px viewer frame is ~12 MB). Once an eighth of the
-    /// budget has been written, trim back under it on the writing (decode)
-    /// thread. Exactly one writer wins the reset and runs the trim.
+    /// session. Once an eighth of the budget has been written, trim back
+    /// under it. Exactly one writer wins the reset and starts the trim, on a
+    /// thread of its own: the trim stats the whole cache, which must not hold
+    /// up the decode thread (and the tile waiting on it).
     // ponytail: each trim stats the whole cache dir (~every 190 MB written);
     // keep a running size index if that shows up in profiles.
     fn trim_if_due(&self, written: u64) {
@@ -236,10 +253,44 @@ impl DiskCache {
         if self.trimming.swap(true, Ordering::Acquire) {
             return;
         }
+        let cache = self.clone();
+        let spawned = std::thread::Builder::new()
+            .name("lumina-cache-trim".into())
+            .spawn(move || cache.trim_now());
+        if let Err(err) = spawned {
+            log::warn!("could not start the thumbnail cache trim: {err}");
+            self.trimming.store(false, Ordering::Release);
+        }
+    }
+
+    fn trim_now(&self) {
+        /// Clears the flag however the trim ends, a panic included, so one
+        /// bad trim never turns trimming off for the session.
+        struct Done<'a>(&'a AtomicBool);
+        impl Drop for Done<'_> {
+            fn drop(&mut self) {
+                self.0.store(false, Ordering::Release);
+            }
+        }
+        let _done = Done(&self.trimming);
+        #[cfg(test)]
+        tests::note_trim_thread(&self.cache_dir);
         if let Err(err) = self.cleanup(self.max_bytes, DEFAULT_MAX_CACHE_AGE) {
             log::warn!("thumbnail cache trim failed: {err:?}");
         }
-        self.trimming.store(false, Ordering::Release);
+    }
+
+    /// Waits for a running trim to finish.
+    #[cfg(test)]
+    fn settle(&self) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while self.trimming.load(Ordering::Acquire) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the cache trim did not finish within 10 s"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
     }
 
     /// Removes every cached decode of each item in `items` in one directory
@@ -408,6 +459,17 @@ mod tests {
     use super::*;
     use crate::PixelFormat;
 
+    static TRIM_THREADS: std::sync::Mutex<Vec<(PathBuf, String)>> =
+        std::sync::Mutex::new(Vec::new());
+
+    /// Records which thread ran a trim of the cache at `dir`.
+    pub(super) fn note_trim_thread(dir: &Path) {
+        let name = std::thread::current().name().unwrap_or("").to_string();
+        if let Ok(mut names) = TRIM_THREADS.lock() {
+            names.push((dir.to_path_buf(), name));
+        }
+    }
+
     fn temp_cache(name: &str) -> DiskCache {
         let dir = std::env::temp_dir().join(format!(
             "lumina_cache_test_{}_{}",
@@ -464,6 +526,7 @@ mod tests {
                     &big,
                 )
                 .unwrap();
+            cache.settle();
         }
         let on_disk: u64 = std::fs::read_dir(&dir)
             .unwrap()
@@ -769,5 +832,100 @@ mod tests {
         assert!(cache.get_cached(MediaId(1), path, 10, 1000, 256).is_none());
         std::fs::write(&file, &bytes[..10]).unwrap();
         assert!(cache.get_cached(MediaId(1), path, 10, 1000, 256).is_none());
+    }
+
+    fn mark_age(cache: &DiskCache, path: &std::path::Path, age: std::time::Duration) -> PathBuf {
+        let file = cache.cache_file_path(&DiskCache::compute_key(path, 10, 1000, 256));
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - age)
+            .unwrap();
+        file
+    }
+
+    fn age_of(file: &Path) -> std::time::Duration {
+        std::time::SystemTime::now()
+            .duration_since(std::fs::metadata(file).unwrap().modified().unwrap())
+            .unwrap_or_default()
+    }
+
+    /// Every read rewrote the entry's timestamp: a metadata write per tile
+    /// per frame while scrolling.
+    #[test]
+    fn a_read_marks_an_entry_used_only_when_its_mark_is_old() {
+        let cache = temp_cache("touch_rarely");
+        let (recent, old, future) = (
+            std::path::Path::new("/photos/recent.jpg"),
+            std::path::Path::new("/photos/old.jpg"),
+            std::path::Path::new("/photos/future.jpg"),
+        );
+        let frame = photo_frame(32, 32);
+        for path in [recent, old, future] {
+            cache.put_cached(path, 10, 1000, 256, &frame).unwrap();
+        }
+        let minute = std::time::Duration::from_secs(60);
+        let recent_file = mark_age(&cache, recent, TOUCH_AFTER / 2);
+        let old_file = mark_age(&cache, old, 2 * TOUCH_AFTER);
+        // Clock skew: marked a day ahead of now.
+        let future_file = cache.cache_file_path(&DiskCache::compute_key(future, 10, 1000, 256));
+        std::fs::File::options()
+            .write(true)
+            .open(&future_file)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(86_400))
+            .unwrap();
+
+        for (id, path) in [(1, recent), (2, old), (3, future)] {
+            assert!(cache.get_cached(MediaId(id), path, 10, 1000, 256).is_some());
+        }
+        assert!(
+            age_of(&recent_file) >= TOUCH_AFTER / 2 - minute,
+            "an entry marked recently is not written again on read"
+        );
+        assert!(
+            age_of(&old_file) < minute,
+            "an entry last marked long ago is marked used now"
+        );
+        let future_mark = std::fs::metadata(&future_file).unwrap().modified().unwrap();
+        assert!(
+            future_mark <= std::time::SystemTime::now(),
+            "a future-dated mark is reset, or it would never be evicted"
+        );
+        let _ = std::fs::remove_dir_all(cache.root_dir());
+    }
+
+    /// The trim stats every cached file; it ran on the decode thread that
+    /// crossed the threshold, holding back the tile being decoded.
+    #[test]
+    fn the_budget_trim_runs_off_the_writing_thread() {
+        let cache = DiskCache::with_budget(temp_cache("trim_thread").cache_dir(), 1).unwrap();
+        cache
+            .put_cached(
+                Path::new("/photos/a.jpg"),
+                10,
+                1000,
+                256,
+                &photo_frame(16, 16),
+            )
+            .unwrap();
+        cache.settle();
+        let names: Vec<String> = TRIM_THREADS
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(dir, _)| dir == cache.cache_dir())
+            .map(|(_, name)| name.clone())
+            .collect();
+        assert!(
+            !names.is_empty(),
+            "the write crossed the budget and trimmed"
+        );
+        assert!(
+            names.iter().all(|name| name == "lumina-cache-trim"),
+            "trims run on their own thread: {names:?}"
+        );
+        let _ = std::fs::remove_dir_all(cache.root_dir());
     }
 }

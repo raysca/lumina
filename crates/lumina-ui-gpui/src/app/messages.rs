@@ -23,6 +23,8 @@ impl LuminaApp {
             UiMessage::Engine(evt) => {
                 let mut should_refresh_counts = false;
                 let mut should_clear_selection = false;
+                let mut rows_added = 0;
+                let mut batch_len = 0;
                 let mut should_restore_session = false;
                 let scan_completed = matches!(evt, EngineEvent::ScanComplete { .. });
                 let had_multi_selection = !self.selected_indices.is_empty();
@@ -55,7 +57,8 @@ impl LuminaApp {
                                 selected_refresh = state.engine.get_item_by_id(id);
                             }
                             let new_total = state.engine.total_count();
-                            let structural_change = new_total != state.total_count;
+                            let old_total = state.total_count;
+                            let structural_change = new_total != old_total;
                             state.total_count = new_total;
                             // Initial scan batches are followed by ScanComplete; only
                             // refresh sidebar counts for post-scan (watcher) changes.
@@ -100,8 +103,17 @@ impl LuminaApp {
                                 );
                                 drop(textures);
                                 should_refresh_counts = true;
-                                // Added/removed items shift position-based selection.
-                                if structural_change {
+                                // A batch only adds rows (removals have their
+                                // own events). They shift positions, so the
+                                // selection is put back on its item by id.
+                                // A total that fell means a removal raced in:
+                                // positions are unknown, so clear as removals do.
+                                // `added` is library-wide, so in a filtered
+                                // view it only over-estimates the shift.
+                                if new_total > old_total {
+                                    rows_added = new_total - old_total;
+                                    batch_len = items.len();
+                                } else if structural_change {
                                     should_clear_selection = true;
                                 }
                             }
@@ -143,19 +155,29 @@ impl LuminaApp {
                             should_restore_session = self.pending_restore.is_some();
                             cx.notify();
                         }
-                        EngineEvent::ItemRemoved(id) => {
+                        EngineEvent::ItemsRemoved(ids) => {
                             state.total_count = state.engine.total_count();
-                            if let Some(old) = state.texture_cache.lock().pop(&id) {
-                                removed_textures.push(old.image);
+                            {
+                                let mut textures = state.texture_cache.lock();
+                                let mut in_flight = state.in_flight.lock();
+                                for id in &ids {
+                                    if let Some(old) = textures.pop(id) {
+                                        removed_textures.push(old.image);
+                                    }
+                                    in_flight.remove(id);
+                                }
                             }
-                            state.in_flight.lock().remove(&id);
-                            state.clear_failed(id);
-                            // The media is gone; its resume point can never load.
-                            state.video_resume.positions.remove(id);
+                            for &id in &ids {
+                                state.clear_failed(id);
+                                // The media is gone; its resume point can never load.
+                                state.video_resume.positions.remove(id);
+                            }
                             should_refresh_counts = true;
                             // Removals shift every following index; clear rather than
                             // risk batch actions targeting different files.
-                            if had_multi_selection || selected_item_id == Some(id) {
+                            if had_multi_selection
+                                || selected_item_id.is_some_and(|selected| ids.contains(&selected))
+                            {
                                 should_clear_selection = true;
                             }
                             cx.notify();
@@ -197,9 +219,11 @@ impl LuminaApp {
                 }
                 if should_clear_selection {
                     self.clear_selection(cx);
+                } else if rows_added > 0 {
+                    self.keep_selection_after_additions(rows_added, batch_len, cx);
                 }
                 if should_refresh_counts {
-                    self.refresh_album_counts();
+                    self.refresh_album_counts_soon(cx);
                     // The item on screen may have just gone offline.
                     self.watch_missing_drive(cx);
                     cx.notify();
@@ -252,7 +276,7 @@ impl LuminaApp {
                 cx.notify();
             }
             // Already recorded in the failure set by the decode callback.
-            UiMessage::ThumbnailFailed => cx.notify(),
+            UiMessage::ThumbnailFailed | UiMessage::ThumbnailSkipped => cx.notify(),
             // An answer for an earlier request is dropped: the user moved
             // on, or a newer decode of the same item is coming.
             UiMessage::ViewerLoaded { generation, .. }
@@ -456,10 +480,16 @@ impl LuminaApp {
                 groups,
                 items_count,
             } => {
+                self.duplicate_scan.running = false;
                 if generation == self.library_generation {
                     self.set_duplicate_groups(groups);
                     self.duplicate_items_count = items_count;
                     cx.notify();
+                }
+                if std::mem::take(&mut self.duplicate_scan.again)
+                    && self.selection == crate::views::sidebar::AlbumSelection::Duplicates
+                {
+                    self.start_duplicate_scan();
                 }
             }
             UiMessage::OpenFloatingInspector | UiMessage::OpenFloatingPip => {}

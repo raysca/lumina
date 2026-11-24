@@ -8,10 +8,12 @@ use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use zune_jpeg::zune_core::bytestream::ZCursor;
 use zune_jpeg::JpegDecoder;
 
 use crate::{DecodedFrame, MediaId, MediaType, PixelFormat};
 
+pub(crate) mod guard;
 #[cfg(target_os = "macos")]
 mod imageio;
 
@@ -129,6 +131,11 @@ fn temp_path(prefix: &str) -> std::path::PathBuf {
 
 /// Native helpers (QuickLook, AVFoundation, ffmpeg) must never hang a decode worker.
 pub(crate) const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long an in-process ImageIO decode is waited for. Longer than the
+/// tool timeout: a large PSB or TIFF, or a file still downloading from
+/// iCloud, can take a while and still be fine.
+#[cfg(target_os = "macos")]
+const IMAGEIO_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
     command.stdout(Stdio::null()).stderr(Stdio::null());
@@ -397,10 +404,29 @@ fn icc_description(icc: &[u8]) -> Option<String> {
     }
 }
 
+type Job = Box<dyn FnOnce() + Send>;
+
+/// The decode pools. Three lanes share them:
+///
+/// - `spawn`: first in, first out, for one-off decodes (album covers,
+///   batch thumbnails, cards of other surfaces).
+/// - `spawn_newest_first`: grid tiles. A fast scroll queues hundreds of
+///   tiles; the rows on screen now were asked for last, so they run first
+///   instead of waiting behind every row scrolled past.
+/// - `spawn_viewer`: the open item's full-size frame on a pool of its own,
+///   so it never waits behind a screenful of grid decodes.
 #[derive(Clone)]
 pub struct DecoderPipeline {
     pool: Arc<ThreadPool>,
+    viewer: Arc<ThreadPool>,
+    /// Grid jobs, newest last. Each `spawn_newest_first` puts one runner on
+    /// the pool, and each runner takes the newest job, so every job runs.
+    newest: Arc<parking_lot::Mutex<Vec<Job>>>,
 }
+
+/// Threads for the viewer lane: one frame is shown at a time, a second
+/// covers a compare pair or the frame after a step.
+const VIEWER_THREADS: usize = 2;
 
 impl DecoderPipeline {
     pub fn new(num_threads: usize) -> Result<Self> {
@@ -417,9 +443,15 @@ impl DecoderPipeline {
             .num_threads(threads)
             .thread_name(|i| format!("lumina-decode-{}", i))
             .build()?;
+        let viewer = ThreadPoolBuilder::new()
+            .num_threads(VIEWER_THREADS)
+            .thread_name(|i| format!("lumina-viewer-decode-{}", i))
+            .build()?;
 
         Ok(Self {
             pool: Arc::new(pool),
+            viewer: Arc::new(viewer),
+            newest: Arc::default(),
         })
     }
 
@@ -428,6 +460,30 @@ impl DecoderPipeline {
         F: FnOnce() + Send + 'static,
     {
         self.pool.spawn(task);
+    }
+
+    /// Queues `task` ahead of every grid job still waiting.
+    pub fn spawn_newest_first<F>(&self, task: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.newest.lock().push(Box::new(task));
+        let newest = self.newest.clone();
+        self.pool.spawn(move || {
+            // Bind first: the lock must be released before the job runs.
+            let job = newest.lock().pop();
+            if let Some(job) = job {
+                job();
+            }
+        });
+    }
+
+    /// Runs `task` on the viewer's own pool.
+    pub fn spawn_viewer<F>(&self, task: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.viewer.spawn(task);
     }
 
     #[cfg(target_os = "linux")]
@@ -578,7 +634,11 @@ impl DecoderPipeline {
         bytes: &[u8],
         target_size: u32,
     ) -> Result<DecodedFrame> {
-        let mut decoder = JpegDecoder::new(bytes);
+        // Strict, as zune 0.4 was by default: a damaged file fails over to the
+        // image crate (or "No preview") instead of decoding half grey.
+        let options =
+            zune_jpeg::zune_core::options::DecoderOptions::default().set_strict_mode(true);
+        let mut decoder = JpegDecoder::new_with_options(ZCursor::new(bytes), options);
         decoder.decode_headers()?;
         let info = decoder
             .info()
@@ -653,9 +713,16 @@ impl DecoderPipeline {
     /// (never enlarged), turned by the EXIF orientation and color matched to
     /// sRGB (frames and the cache hold sRGB; untagged and sRGB sources come
     /// back unchanged).
+    ///
+    /// Guarded (see [`guard`]): a file that stopped Lumina twice in a row
+    /// is refused, and a decode past [`IMAGEIO_TIMEOUT`] is reported as
+    /// failed (and not retried this session) while its thread finishes.
     #[cfg(target_os = "macos")]
     pub fn decode_via_imageio(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        imageio::decode(id, path, target_size)
+        let owned = path.to_path_buf();
+        guard::guarded_decode(guard::current(), id, path, IMAGEIO_TIMEOUT, move || {
+            imageio::decode(id, &owned, target_size)
+        })
     }
 
     /// A video's thumbnail: a frame decoded in process by AVFoundation.

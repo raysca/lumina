@@ -137,9 +137,9 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             "the thumbnail pushed out of the LRU must be queued for GPU eviction"
         );
         app.handle_ui_message(
-            UiMessage::Engine(lumina_core::EngineEvent::ItemRemoved(lumina_core::MediaId(
-                3,
-            ))),
+            UiMessage::Engine(lumina_core::EngineEvent::ItemsRemoved(vec![
+                lumina_core::MediaId(3),
+            ])),
             cx,
         );
         assert_eq!(

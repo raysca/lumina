@@ -229,6 +229,11 @@ pub(crate) struct ActiveView {
     in_flight: bool,
     /// Item range the grid (or the viewer) last needed.
     wanted: Range<usize>,
+    /// Library and catalog revision at which the selection was moved to
+    /// positions read fresh (rows added by another thread). Cached rows of
+    /// that library older than this hold the old order, so navigation must
+    /// not index them.
+    positions_from: (u64, u64),
     /// Tab focus on this view's empty-state buttons.
     pub(crate) empty_focus: Option<crate::app::render::empty_state::EmptyFocus>,
 }
@@ -238,6 +243,26 @@ pub(crate) struct ActiveView {
 const WINDOW_PAD: usize = 64;
 
 impl ActiveView {
+    /// Positions in use now come from the catalog at `revision`: cached rows
+    /// read before it are not used for navigation.
+    pub(crate) fn positions_moved_at(&mut self, library: u64, revision: u64) {
+        let (at, from) = self.positions_from;
+        self.positions_from = (
+            library,
+            if at == library {
+                from.max(revision)
+            } else {
+                revision
+            },
+        );
+    }
+
+    /// Whether `data`'s positions are the ones the selection uses.
+    fn positions_current(&self, data: &Fetched) -> bool {
+        let (library, from) = self.positions_from;
+        data.key.library != library || data.revision >= from
+    }
+
     /// Holds off refetches, as a slow fetch would: the cached rows go stale
     /// while the app keeps working.
     #[cfg(test)]
@@ -453,6 +478,7 @@ impl LuminaApp {
         let key = self.view_key();
         self.active_view.data.as_ref().filter(|data| {
             data.key == key
+                && self.active_view.positions_current(data)
                 && (data.revision == engine.data_revision()
                     || data.revision >= engine.revision_written_here())
         })

@@ -433,8 +433,10 @@ fn prior_download_prompts_and_download_again_skips_check() {
     assert!(vcx.debug_bounds("net-import-download-again").is_some());
 
     super::helpers::click(vcx, "net-import-download-again");
+    // The row turns Running when its job is spawned, a moment before the
+    // job (on its own thread) records the request.
     settle(vcx, &view, "the job runs", |app| {
-        count(app, DownloadState::Running) == 1
+        count(app, DownloadState::Running) == 1 && !fake.requests().is_empty()
     });
     let requests = fake.requests();
     assert!(
@@ -452,7 +454,7 @@ fn trashed_prior_download_downloads_normally() {
     install(&view, vcx, &fake);
     submit(&view, vcx, URL);
     settle(vcx, &view, "the job runs", |app| {
-        count(app, DownloadState::Running) == 1
+        count(app, DownloadState::Running) == 1 && !fake.requests().is_empty()
     });
     assert!(!fake.requests()[0].skip_prior_check);
 }
