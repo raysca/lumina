@@ -282,7 +282,7 @@ impl Catalog {
             .iter()
             .map(|(_, tag)| format!("{new}{}", &tag[old.len()..]))
             .collect();
-        for path in moved.iter().collect::<HashSet<_>>() {
+        for path in moved.iter() {
             refuse_alias_path(&tx, path)?;
             if path.chars().count() > MAX_NAME_CHARS {
                 bail!("\"{path}\" would be longer than {MAX_NAME_CHARS} characters");
