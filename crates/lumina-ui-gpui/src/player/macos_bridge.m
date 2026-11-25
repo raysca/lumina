@@ -81,7 +81,13 @@
     _statusErrorTaken = NO;
     if (_player) {
         [_player pause];
+        // Detach the item so decoding stops now, not whenever the player is
+        // finally released (which can be after the process starts exiting).
+        [_player replaceCurrentItemWithPlayerItem:nil];
         _player = nil;
+    }
+    for (AVPlayerItemOutput *output in [_playerItem.outputs copy]) {
+        [_playerItem removeOutput:output];
     }
     _playerItem = nil;
     _isPlayingState = NO;

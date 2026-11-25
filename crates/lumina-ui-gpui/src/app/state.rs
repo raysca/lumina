@@ -930,6 +930,8 @@ impl LuminaApp {
         // and shutdown reach GPUI's quit observers (applicationWillTerminate).
         // After `request_quit` already installed it, this is a no-op.
         cx.on_app_quit(|app: &mut Self, _cx| {
+            // As in `request_quit`: no player may outlive the app.
+            app.stop_video_player();
             app.install_update_on_quit();
             async {}
         })

@@ -1637,3 +1637,27 @@ fn a_scrub_started_as_the_hud_fades_brings_it_back() {
         assert!(app.immersive_hud_visible, "and shows the HUD it runs on");
     });
 }
+
+/// Quitting (the close button, ⌘Q) releases the player and its frames before
+/// the app exits: exiting with AVFoundation mid-decode can hang the GPU.
+#[core::prelude::v1::test]
+fn closing_the_main_window_releases_the_video_player() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
+        app.video.item = app.selected_item.clone();
+        app.video.is_playing = true;
+        #[cfg(target_os = "macos")]
+        {
+            app.video.surface = Some(crate::tests::helpers::test_surface());
+        }
+        assert!(
+            !app.should_close_main_window(cx),
+            "the platform close is cancelled; quitting closes the app"
+        );
+        assert!(app.video.player.is_none(), "quit must release the player");
+        assert!(app.video.surface.is_none(), "quit must drop the live frame");
+        assert!(!app.video.is_playing, "nothing plays after quit");
+    });
+}
