@@ -1582,6 +1582,62 @@ fn the_live_surface_paints_over_the_viewer_frame_until_pip_or_close() {
     assert!(vcx.debug_bounds("video-surface").is_none());
 }
 
+/// Full screen floats the HUD over the video: hiding it on idle and bringing
+/// it back must not resize the picture or move the scrubber.
+#[core::prelude::v1::test]
+fn the_full_screen_hud_never_resizes_the_video() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
+    render_ui(vcx);
+    let shown = bounds(vcx, "viewer-viewport");
+    let scrubber = bounds(vcx, "video-scrubber");
+    // The pointer rests on the picture, off the HUD.
+    vcx.simulate_mouse_move(shown.center(), None, gpui::Modifiers::none());
+    render_ui(vcx);
+
+    vcx.executor()
+        .advance_clock(crate::app::viewer_actions::HUD_IDLE * 2);
+    vcx.run_until_parked();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.immersive_hud_visible, "the HUD hides after idle")
+    });
+    assert!(
+        vcx.debug_bounds("video-scrubber").is_none(),
+        "the hidden HUD paints no scrubber"
+    );
+    assert_eq!(
+        bounds(vcx, "viewer-viewport"),
+        shown,
+        "hiding the HUD must not resize the video"
+    );
+
+    vcx.simulate_mouse_move(shown.center(), None, gpui::Modifiers::none());
+    render_ui(vcx);
+    assert_eq!(
+        bounds(vcx, "video-scrubber"),
+        scrubber,
+        "the scrubber comes back where it was, not under a moved pointer"
+    );
+    assert_eq!(bounds(vcx, "viewer-viewport"), shown);
+}
+
+/// A press on the full-screen transport while it fades out brings the HUD
+/// back, so the scrub never runs on a track that is about to vanish.
+#[core::prelude::v1::test]
+fn a_scrub_started_as_the_hud_fades_brings_it_back() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.enter_immersive_fullscreen(None, cx);
+        app.immersive_hud_visible = false;
+        app.begin_video_scrub(0.5, cx);
+        assert!(app.video.is_scrubbing, "the press starts a scrub");
+        assert!(app.immersive_hud_visible, "and shows the HUD it runs on");
+    });
+}
+
 /// Quitting (the close button, ⌘Q) releases the player and its frames before
 /// the app exits: exiting with AVFoundation mid-decode can hang the GPU.
 #[core::prelude::v1::test]

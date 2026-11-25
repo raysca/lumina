@@ -86,8 +86,67 @@ impl MediaViewer {
             .flex_row()
             .overflow_hidden();
 
+        let top_bar = if editing {
+            edit_bar::render(this, cx)
+        } else if is_immersive && !hud_visible {
+            match this.hud_fading_out() {
+                Some(hide) => div()
+                    .w_full()
+                    .child(crate::motion::fade_out(
+                        div().w_full().child(ViewerTopBar::render(this, item, cx)),
+                        ElementId::NamedInteger("viewer-hud-top-out".into(), hide),
+                    ))
+                    .into_any_element(),
+                None => Empty.into_any_element(),
+            }
+        } else if is_immersive {
+            // The HUD fades back in after an idle hide.
+            crate::motion::fade_in(
+                div().w_full().child(ViewerTopBar::render(this, item, cx)),
+                "viewer-hud-top-in",
+                crate::motion::HUD_IN,
+            )
+            .into_any_element()
+        } else {
+            ViewerTopBar::render(this, item, cx).into_any_element()
+        };
+        let transport = if presenting || !is_video || this.video.in_pip {
+            Empty.into_any_element()
+        } else if !show_chrome {
+            // The transport fades out with the HUD after an idle hide.
+            match this.hud_fading_out() {
+                Some(hide) => div()
+                    .w_full()
+                    .child(crate::motion::fade_out(
+                        div().w_full().child(ViewerTransport::render(this, cx)),
+                        ElementId::NamedInteger("viewer-hud-transport-out".into(), hide),
+                    ))
+                    .into_any_element(),
+                None => Empty.into_any_element(),
+            }
+        } else if is_immersive {
+            crate::motion::fade_in(
+                div().w_full().child(ViewerTransport::render(this, cx)),
+                "viewer-hud-transport-in",
+                crate::motion::HUD_IN,
+            )
+            .into_any_element()
+        } else {
+            ViewerTransport::render(this, cx).into_any_element()
+        };
+        // Full screen floats the HUD over the media: hiding it on idle must
+        // not resize the video (and slide the scrubber under the pointer).
+        let overlay_hud = is_immersive && !editing;
+        let (docked_hud, floating_hud) = if overlay_hud {
+            (None, Some((top_bar, transport)))
+        } else {
+            (Some((top_bar, transport)), None)
+        };
+        let (docked_top, docked_transport) = docked_hud.unzip();
+
         // Stage column: top bar, then the media with its controls.
         let stage = div()
+            .relative()
             .flex_1()
             .min_w_0()
             .h_full()
@@ -96,30 +155,7 @@ impl MediaViewer {
             .items_center()
             .overflow_hidden()
             // 1. Top Bar
-            .child(if editing {
-                edit_bar::render(this, cx)
-            } else if is_immersive && !hud_visible {
-                match this.hud_fading_out() {
-                    Some(hide) => div()
-                        .w_full()
-                        .child(crate::motion::fade_out(
-                            div().w_full().child(ViewerTopBar::render(this, item, cx)),
-                            ElementId::NamedInteger("viewer-hud-top-out".into(), hide),
-                        ))
-                        .into_any_element(),
-                    None => Empty.into_any_element(),
-                }
-            } else if is_immersive {
-                // The HUD fades back in after an idle hide.
-                crate::motion::fade_in(
-                    div().w_full().child(ViewerTopBar::render(this, item, cx)),
-                    "viewer-hud-top-in",
-                    crate::motion::HUD_IN,
-                )
-                .into_any_element()
-            } else {
-                ViewerTopBar::render(this, item, cx).into_any_element()
-            })
+            .children(docked_top)
             // 2. Center Viewport
             .child(
                 div()
@@ -165,32 +201,32 @@ impl MediaViewer {
                     ),
             )
             // 3. The transport, docked across the stage under the frame.
-            .child(if presenting || !is_video || this.video.in_pip {
-                Empty.into_any_element()
-            } else if !show_chrome {
-                // The transport fades out with the HUD after an idle hide.
-                match this.hud_fading_out() {
-                    Some(hide) => div()
-                        .w_full()
-                        .child(crate::motion::fade_out(
-                            div().w_full().child(ViewerTransport::render(this, cx)),
-                            ElementId::NamedInteger("viewer-hud-transport-out".into(), hide),
-                        ))
-                        .into_any_element(),
-                    None => Empty.into_any_element(),
-                }
-            } else if is_immersive {
-                crate::motion::fade_in(
-                    div().w_full().child(ViewerTransport::render(this, cx)),
-                    "viewer-hud-transport-in",
-                    crate::motion::HUD_IN,
-                )
-                .into_any_element()
-            } else {
-                ViewerTransport::render(this, cx).into_any_element()
-            })
+            .children(docked_transport)
             // 4. The filmstrip under the media.
-            .children(filmstrip::render(this, cx));
+            .children(filmstrip::render(this, cx))
+            .when_some(floating_hud, |stage, (top_bar, transport)| {
+                stage
+                    .child(
+                        div()
+                            .id("viewer-hud-top")
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .child(top_bar),
+                    )
+                    .child(
+                        div()
+                            .id("viewer-hud-transport")
+                            .debug_selector(|| "viewer-hud-transport".to_string())
+                            .absolute()
+                            .bottom_0()
+                            .left_0()
+                            .right_0()
+                            .bg(theme::bg_media())
+                            .child(transport),
+                    )
+            });
 
         backdrop
             .on_mouse_move(cx.listener(|this, _e: &MouseMoveEvent, _w, cx| {

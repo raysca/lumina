@@ -180,6 +180,31 @@ fn viewer_filmstrip_centres_current_and_navigates() {
 }
 
 #[core::prelude::v1::test]
+fn viewer_filmstrip_stays_visible_while_a_video_plays() {
+    let (_dir, engine) = seed_library_undecodable("viewer_filmstrip_playing", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
+    view.update(vcx, |app, cx| {
+        open_at(app, 1, cx);
+        detach_decoder_answers(app);
+        // The strip used to fade to zero while a video played and only
+        // reappear on hover. It is part of the viewer, not an overlay.
+        app.video.item = app.selected_item.clone();
+        app.video.is_playing = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-filmstrip").is_some(),
+        "the strip stays in the viewer during playback"
+    );
+    assert!(
+        vcx.debug_bounds("viewer-filmstrip-current").is_some(),
+        "the current thumb is painted too"
+    );
+}
+
+#[core::prelude::v1::test]
 fn viewer_filmstrip_hides_in_immersive_slideshow_and_edit_mode() {
     let (_dir, engine) = seed_library_undecodable("viewer_filmstrip_modes", 3);
     let mut cx = crate::tests::TestApp::single();

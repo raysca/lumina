@@ -190,9 +190,9 @@ impl ViewerTransport {
             .filter(|strip| this.video.item.as_ref().map(|i| i.id) == Some(strip.item))
             .map(|strip| strip.frames.clone())
             .unwrap_or_default();
-        // The frames show only while the pointer is on the track or a scrub
-        // runs; while watching, the track is a plain progress bar.
-        let has_frames = !frames.is_empty() && (is_scrubbing || hover_pct.is_some());
+        // The frames show as soon as the strip is ready; the track is a plain
+        // progress bar only until then.
+        let has_frames = !frames.is_empty();
         // The track spans the stage less the 28px side padding; labels are
         // laid out against it before layout measures it.
         let track_width = super::stage_width(this).unwrap_or(1280.0) - 56.0;
