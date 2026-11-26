@@ -555,6 +555,8 @@ pub struct GridState {
     pub total_count: usize,
     pub is_scanning: bool,
     pub scan_progress: usize,
+    pub scan_total: usize,
+    pub scan_counting: usize,
     pub texture_cache: Arc<Mutex<LruCache<MediaId, CachedThumb>>>,
     pub in_flight: Arc<Mutex<HashSet<MediaId>>>,
     /// Ids the grid drew or prefetched on its last pass. A queued tile
@@ -650,6 +652,8 @@ impl GridState {
             total_count,
             is_scanning: true,
             scan_progress: 0,
+            scan_total: 0,
+            scan_counting: 0,
             texture_cache: Arc::new(Mutex::new(LruCache::new(cache_capacity))),
             in_flight: Arc::new(Mutex::new(HashSet::new())),
             wanted: Arc::new(Mutex::new(HashSet::new())),

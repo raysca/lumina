@@ -114,6 +114,9 @@ impl LuminaEngine {
                             }
                         }
                     }
+                    counting @ EngineEvent::ScanCounting { .. } => {
+                        let _ = event_tx.send(counting);
+                    }
                     progress @ EngineEvent::ScanProgress { .. } => {
                         let _ = event_tx.send(progress);
                     }
@@ -140,6 +143,9 @@ impl LuminaEngine {
             if let Err(e) = self.catalog.compute_timeline_buckets() {
                 log::warn!("timeline bucket refresh failed: {e:#}");
             }
+            // Use the catalog's authoritative count: a cancelled rescan stops
+            // the walk early and returns only the partial count reached so far.
+            let total_items = self.catalog.total_count().unwrap_or(total_items);
             let _ = self
                 .event_tx
                 .send(EngineEvent::ScanComplete { total_items });
@@ -309,6 +315,43 @@ mod tests {
             second.load(Ordering::SeqCst),
             "cancel_scan must set the flag the newest scan polls, or Retry cannot stop it"
         );
+        drop(engine);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cancelled_rescan_reports_catalog_total_count() {
+        let dir = temp_library("cancelled_rescan_total");
+        let img = image::RgbImage::from_pixel(4, 4, image::Rgb([10, 20, 30]));
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut jpeg)
+            .encode_image(&img)
+            .expect("encode fixture");
+        for i in 0..3 {
+            fs::write(dir.join(format!("p_{i}.jpg")), &jpeg).expect("write fixture");
+        }
+        let (engine, rx) = LuminaEngine::open_with_paths(dir.clone(), dir.join("catalog.db"), None)
+            .expect("engine opens");
+        next_scan_complete(&rx);
+        assert_eq!(engine.total_count(), 3);
+
+        // Run a pre-cancelled scan: walk stops before visiting all 3 files,
+        // yet ScanComplete must report the catalog's 3 items, not 0.
+        let cancelled = Arc::new(AtomicBool::new(true));
+        engine.run_scan(cancelled);
+        loop {
+            match rx.recv_timeout(TEST_WAIT) {
+                Ok(EngineEvent::ScanComplete { total_items }) => {
+                    assert_eq!(
+                        total_items, 3,
+                        "cancelled rescan must keep the catalog's true total_count"
+                    );
+                    break;
+                }
+                Ok(_) => {}
+                Err(err) => panic!("expected ScanComplete after cancelled scan: {err}"),
+            }
+        }
         drop(engine);
         let _ = fs::remove_dir_all(&dir);
     }

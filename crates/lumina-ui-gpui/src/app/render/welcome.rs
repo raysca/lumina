@@ -79,10 +79,42 @@ impl LuminaApp {
                                     // A small window scrolls the welcome.
                                     .overflow_y_scroll()
                                     .track_scroll(&self.welcome.body_scroll)
-                                    // Empty while a library opens, so the
-                                    // welcome does not flash up at launch.
-                                    .when(!self.welcome.opening(), |body| {
-                                        body.child(OnboardingView::render(self.welcome_props(cx)))
+                                    // While a library opens, show what folder is opening instead
+                                    // of flashing OnboardingView or leaving the body blank.
+                                    .child(match self.welcome.opening_path() {
+                                        Some(path) => crate::views::onboarding::welcome_column()
+                                            .child(
+                                                div()
+                                                    .id("welcome-opening")
+                                                    .debug_selector(|| {
+                                                        "welcome-opening".to_string()
+                                                    })
+                                                    .w(px(520.0))
+                                                    .flex()
+                                                    .flex_col()
+                                                    .items_start()
+                                                    .gap_3()
+                                                    .child(crate::views::onboarding::logo())
+                                                    .child(
+                                                        div()
+                                                            .text_size(theme::TEXT_DISPLAY)
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                            .child(format!(
+                                                                "Opening {}…",
+                                                                crate::app::recents::library_name(
+                                                                    path
+                                                                )
+                                                            )),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(theme::TEXT_BODY)
+                                                            .text_color(theme::t2())
+                                                            .child(path.display().to_string()),
+                                                    ),
+                                            )
+                                            .into_any_element(),
+                                        None => OnboardingView::render(self.welcome_props(cx)),
                                     }),
                             ),
                     ),

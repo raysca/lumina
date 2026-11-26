@@ -61,6 +61,10 @@ pub fn is_supported_media(path: &Path) -> bool {
 const BATCH_SIZE: usize = 256;
 /// Files between progress events inside a batch.
 const PROGRESS_EVERY: usize = 32;
+/// Entries between counting/fast-skip progress events on large folders.
+const WALK_PROGRESS_EVERY: usize = 256;
+/// Minimum interval between time-throttled walk progress events.
+const WALK_PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 pub struct Scanner {
     library_root: PathBuf,
@@ -103,17 +107,42 @@ impl Scanner {
         walk_entries(&self.library_root)
     }
 
-    /// Counts media files by name only, for "X of Y" progress.
+    /// Counts media files by name only, for "X of Y" progress, reporting
+    /// `ScanCounting` periodically so large folders stay responsive.
     // ponytail: a second directory walk (no file reads); drop it if a huge
     // library shows the pre-count in profiles.
     fn count_media_files(&self) -> usize {
-        self.walk()
-            .filter_map(|e| e.ok())
-            .take_while(|_| !self.cancel_flag.load(Ordering::Relaxed))
-            .filter(|e| {
-                e.file_type().is_file() && Self::classify_media_extension(e.path()).is_some()
-            })
-            .count()
+        let mut count = 0usize;
+        let mut last_emit = std::time::Instant::now();
+        let _ = self
+            .event_tx
+            .send(EngineEvent::ScanCounting { files_found: 0 });
+        for entry in self.walk() {
+            if self.cancel_flag.load(Ordering::Relaxed) {
+                break;
+            }
+            let Ok(entry) = entry else {
+                continue;
+            };
+            if entry.file_type().is_file() && Self::classify_media_extension(entry.path()).is_some()
+            {
+                count += 1;
+                if count.is_multiple_of(WALK_PROGRESS_EVERY)
+                    || last_emit.elapsed() >= WALK_PROGRESS_INTERVAL
+                {
+                    let _ = self
+                        .event_tx
+                        .send(EngineEvent::ScanCounting { files_found: count });
+                    last_emit = std::time::Instant::now();
+                }
+            } else if last_emit.elapsed() >= WALK_PROGRESS_INTERVAL {
+                let _ = self
+                    .event_tx
+                    .send(EngineEvent::ScanCounting { files_found: count });
+                last_emit = std::time::Instant::now();
+            }
+        }
+        count
     }
 
     pub fn scan_files(&self) -> Result<usize> {
@@ -137,6 +166,7 @@ impl Scanner {
             });
         };
         progress(0, 0, false, None);
+        let mut last_fast_progress = std::time::Instant::now();
 
         for entry in self.walk() {
             if self.cancel_flag.load(Ordering::Relaxed) {
@@ -155,6 +185,10 @@ impl Scanner {
 
             let path = entry.path();
             if Self::classify_media_extension(path).is_none() {
+                if last_fast_progress.elapsed() >= WALK_PROGRESS_INTERVAL {
+                    progress(total_found, skipped, false, None);
+                    last_fast_progress = std::time::Instant::now();
+                }
                 continue;
             }
 
@@ -163,11 +197,18 @@ impl Scanner {
                 if let Some(signature) = file_signature(path) {
                     if self.known_signatures.get(path) == Some(&signature) {
                         total_found += 1;
+                        if total_found.is_multiple_of(WALK_PROGRESS_EVERY)
+                            || last_fast_progress.elapsed() >= WALK_PROGRESS_INTERVAL
+                        {
+                            progress(total_found, skipped, false, Some(path.to_path_buf()));
+                            last_fast_progress = std::time::Instant::now();
+                        }
                         continue;
                     }
                 }
             }
 
+            let mut flushed_batch = false;
             if let Some(media_item) = self.inspect_media_file(path) {
                 batch.push(media_item);
                 total_found += 1;
@@ -179,14 +220,19 @@ impl Scanner {
                         items: items_to_send,
                     });
                     progress(total_found, skipped, false, Some(path.to_path_buf()));
+                    last_fast_progress = std::time::Instant::now();
+                    flushed_batch = true;
                 }
             } else {
                 skipped += 1;
             }
-            // A heartbeat between batches keeps the current file moving.
-            // (An empty batch was just flushed with its own progress event.)
-            if (total_found + skipped).is_multiple_of(PROGRESS_EVERY) && !batch.is_empty() {
+            // A heartbeat between batches keeps the current file and counts moving.
+            if !flushed_batch
+                && ((total_found + skipped).is_multiple_of(PROGRESS_EVERY)
+                    || last_fast_progress.elapsed() >= WALK_PROGRESS_INTERVAL)
+            {
                 progress(total_found, skipped, false, Some(path.to_path_buf()));
+                last_fast_progress = std::time::Instant::now();
             }
         }
 

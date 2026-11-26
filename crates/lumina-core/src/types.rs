@@ -153,6 +153,11 @@ pub enum EngineEvent {
     BatchDiscovered {
         items: Vec<MediaItem>,
     },
+    /// Media files counted so far during the initial pre-scan walk, before
+    /// `ScanProgress` can report a `total`.
+    ScanCounting {
+        files_found: usize,
+    },
     ScanProgress {
         items_found: usize,
         is_complete: bool,

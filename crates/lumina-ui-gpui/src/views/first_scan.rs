@@ -26,7 +26,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let fraction = scan.fraction();
-    let counted = scan.total > 0 || scan.processed > 0;
+    let counted = scan.total > 0 || scan.processed > 0 || scan.finishing;
     let thumbs: Vec<Option<std::sync::Arc<RenderImage>>> = match &app.grid_state {
         Some(grid) => {
             let cache = grid.texture_cache.lock();
@@ -165,8 +165,12 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                         .flex_col()
                         .gap_1p5()
                         .child(phase("Counting photos and videos", counted, !counted))
-                        .child(phase("Reading dates, cameras and places", false, counted))
-                        .child(phase("Ready to browse", false, false)),
+                        .child(phase(
+                            "Reading dates, cameras and places",
+                            scan.finishing,
+                            counted && !scan.finishing,
+                        ))
+                        .child(phase("Finishing catalog", false, scan.finishing)),
                 )
                 .child(
                     div()
