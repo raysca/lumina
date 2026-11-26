@@ -2124,3 +2124,73 @@ fn reset_to_defaults_from_welcome_resets_ui_preferences_only() {
         "the View menu follows the reset (sidebar shown): {view_menu:?}"
     );
 }
+
+#[core::prelude::v1::test]
+fn large_folder_open_reports_counting_opening_and_status_progress() {
+    // 1. Opening a folder from the welcome screen renders an opening indicator,
+    //    not a blank void.
+    {
+        let mut cx = crate::tests::TestApp::single();
+        let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+        view.update(vcx, |app, cx| {
+            app.welcome.retry_generation = 1;
+            app.welcome.opening = Some((1, PathBuf::from("/tmp/Big Photos")));
+            cx.notify();
+        });
+        render_ui(vcx);
+        assert!(
+            vcx.debug_bounds("welcome-opening").is_some(),
+            "welcome screen must show what folder is opening while open_engine runs"
+        );
+    }
+
+    // 2. First scan: ScanCounting updates the counting readout, reading_started
+    //    anchors ETA after counting, and is_complete shows Finishing catalog.
+    let (_dir, engine) = seed_library("welcome_large_scan", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.first_scan = Some(FirstScanState::new());
+        app.grid_state.as_mut().unwrap().is_scanning = true;
+        cx.notify();
+    });
+    feed(&view, vcx, EngineEvent::ScanCounting { files_found: 1200 });
+    view.update(vcx, |app, _| {
+        let scan = app.first_scan.as_ref().unwrap();
+        assert_eq!(scan.counting_found, 1200);
+        assert_eq!(
+            scan.progress_line(scan.started),
+            "Counting files… 1,200 found"
+        );
+    });
+    feed(&view, vcx, progress(0, 1200, 0, "/x/a.jpg", false));
+    view.update(vcx, |app, _| {
+        let scan = app.first_scan.as_ref().unwrap();
+        assert!(
+            scan.reading_started.is_some(),
+            "reading_started records when reading begins"
+        );
+    });
+    feed(&view, vcx, progress(1200, 1200, 0, "/x/z.jpg", true));
+    view.update(vcx, |app, _| {
+        let scan = app.first_scan.as_ref().unwrap();
+        assert!(scan.finishing);
+        assert_eq!(scan.progress_line(scan.started), "Finishing catalog…");
+        assert!(
+            app.grid_state.as_ref().unwrap().is_scanning,
+            "is_scanning stays true until ScanComplete finishes catalog work"
+        );
+    });
+
+    // 3. Dismissing first_scan keeps total + progress bar + Stop in status bar.
+    view.update(vcx, |app, cx| app.dismiss_first_scan(cx));
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("scan-progress").is_some());
+    assert!(vcx.debug_bounds("scan-stop-running").is_some());
+    view.update(vcx, |app, _| {
+        assert_eq!(app.status_right_text(), "Scanning… 1,200 of 1,200");
+        app.welcome.retry_generation = 2;
+        app.welcome.opening = Some((2, PathBuf::from("/tmp/Other Large Folder")));
+        assert_eq!(app.status_right_text(), "Opening Other Large Folder…");
+    });
+}

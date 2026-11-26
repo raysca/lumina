@@ -337,6 +337,27 @@ fn checking_and_copying_report_progress() {
     assert_eq!(report.copied, 3);
 
     let events: Vec<EngineEvent> = fx.events.try_iter().collect();
+    let walked: Vec<(usize, usize, usize)> = events
+        .iter()
+        .filter_map(|event| match event {
+            EngineEvent::ImportWalk {
+                roots_done,
+                roots_total,
+                files_found,
+            } => Some((*roots_done, *roots_total, *files_found)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        walked.first(),
+        Some(&(0, 1, 0)),
+        "the dialog learns about the walk before any file is read"
+    );
+    assert_eq!(
+        walked.last(),
+        Some(&(1, 1, 3)),
+        "the walk reports every file found under the source"
+    );
     let checking: Vec<(usize, usize)> = events
         .iter()
         .filter_map(|event| match event {

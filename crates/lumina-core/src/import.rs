@@ -77,17 +77,37 @@ impl LuminaEngine {
         let mut plan = ImportPlan::default();
 
         // 1. Expand folders; drop unsupported files and files in the library.
+        // The walk itself can take a while on a large folder, so report the
+        // files found even before a file total exists.
+        let roots_total = paths.len();
+        let mut files_found = 0usize;
+        let mut walk_reported = Instant::now();
+        let send_walk = |roots_done: usize, files_found: usize| {
+            let _ = self.event_tx.send(EngineEvent::ImportWalk {
+                roots_done,
+                roots_total,
+                files_found,
+            });
+        };
+        send_walk(0, 0);
         let mut seen = HashSet::new();
         let mut sources = Vec::new();
-        for path in paths {
-            let files: Vec<PathBuf> = if path.is_dir() {
-                walk_files(path).collect()
+        for (index, path) in paths.iter().enumerate() {
+            // Walk lazily: collecting the folder first would leave a large
+            // library with no feedback until the whole tree had been read.
+            let files: Box<dyn Iterator<Item = PathBuf> + '_> = if path.is_dir() {
+                Box::new(walk_files(path))
             } else {
-                vec![path.clone()]
+                Box::new(std::iter::once(path.clone()))
             };
             for file in files {
                 if cancel.load(Ordering::Relaxed) {
                     return Ok(plan);
+                }
+                files_found += 1;
+                if walk_reported.elapsed() >= PROGRESS_EVERY {
+                    walk_reported = Instant::now();
+                    send_walk(index, files_found);
                 }
                 if !is_supported_media(&file) {
                     plan.unsupported += 1;
@@ -100,6 +120,7 @@ impl LuminaEngine {
                     sources.push(file);
                 }
             }
+            send_walk(index + 1, files_found);
         }
 
         // 2. Read each file once: date taken and the item to catalogue.

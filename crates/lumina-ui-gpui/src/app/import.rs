@@ -16,13 +16,65 @@ use crate::LuminaApp;
 #[derive(Clone)]
 pub(crate) enum ImportDialog {
     /// Walking, reading and duplicate-checking `count` dropped or picked
-    /// paths; `checked` is (files read, files found) once the walk is done.
+    /// paths; `walk` is (sources done, sources total, files found) once the
+    /// walk starts, and `checked` is (files read, files found) once it ends.
     Planning {
         count: usize,
+        walk: Option<(usize, usize, usize)>,
         checked: Option<(usize, usize)>,
     },
     /// Ready to copy; an empty plan offers only OK.
     Ready(ImportPlan),
+}
+
+/// A short ETA for the banner, from the remaining seconds.
+fn eta(seconds: f64) -> String {
+    if seconds < 60.0 {
+        "less than a minute left".to_string()
+    } else {
+        let minutes = (seconds / 60.0).ceil() as u64;
+        format!("about {minutes} min left")
+    }
+}
+
+/// What an import plan will skip, kept for the completion summary.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ImportSkips {
+    pub(crate) duplicates: usize,
+    pub(crate) in_library: usize,
+    pub(crate) unsupported: usize,
+    pub(crate) unreadable: usize,
+}
+
+impl ImportSkips {
+    fn subtitle(self) -> Option<String> {
+        let mut parts = Vec::new();
+        let already = self.duplicates + self.in_library;
+        if already > 0 {
+            parts.push(format!("{already} already in the library"));
+        }
+        if self.unsupported > 0 {
+            parts.push(format!(
+                "{} unsupported",
+                crate::i18n::count(self.unsupported)
+            ));
+        }
+        if self.unreadable > 0 {
+            parts.push(format!(
+                "{} unreadable",
+                crate::i18n::count(self.unreadable)
+            ));
+        }
+        (!parts.is_empty()).then(|| format!("Skipped: {}.", parts.join(", ")))
+    }
+}
+
+/// The persistent import banner's current copy.
+pub(crate) struct ImportBanner {
+    pub(crate) title: String,
+    pub(crate) detail: String,
+    pub(crate) fraction: Option<f32>,
+    pub(crate) can_cancel: bool,
 }
 
 /// Import state on [`LuminaApp`]: the dialog and a running copy.
@@ -44,14 +96,93 @@ pub(crate) struct ImportState {
     /// The last import's failure line, kept until the banner is dismissed:
     /// a later error takes the banner's title, and this stays under it.
     pub failure: Option<String>,
+    /// Plan counts kept until the copy finishes, for its summary.
+    pub(crate) pending_skips: Option<ImportSkips>,
+    /// When the copy started, for the progress banner's ETA.
+    started_at: Option<std::time::Instant>,
 }
 
 impl ImportState {
+    /// The persistent banner's text while a plan or copy is running.
+    pub(crate) fn banner(&self) -> Option<ImportBanner> {
+        if self.is_stopping() {
+            return Some(ImportBanner {
+                title: "Stopping import…".to_string(),
+                detail: "Finishing the current file".to_string(),
+                fraction: self
+                    .progress
+                    .map(|(done, total)| done as f32 / total.max(1) as f32),
+                can_cancel: false,
+            });
+        }
+        if let Some((done, total)) = self.progress {
+            let percent = (done * 100).checked_div(total).unwrap_or(0);
+            let mut detail = format!(
+                "{} of {} · {percent}%",
+                crate::i18n::count(done),
+                crate::i18n::count(total)
+            );
+            if let Some(started) = self.started_at {
+                let elapsed = started.elapsed().as_secs_f64();
+                if done > 0 && done < total && elapsed >= 2.0 {
+                    let remaining = (total - done) as f64 / (done as f64 / elapsed);
+                    detail.push_str(&format!(" · {}", eta(remaining)));
+                }
+            }
+            return Some(ImportBanner {
+                title: "Importing…".to_string(),
+                detail,
+                fraction: Some(done as f32 / total.max(1) as f32),
+                can_cancel: true,
+            });
+        }
+        let Some(ImportDialog::Planning { walk, checked, .. }) = self.dialog.as_ref() else {
+            return None;
+        };
+        if let Some((roots_done, roots_total, files_found)) = walk {
+            let detail = if *roots_total > 1 {
+                format!(
+                    "{} of {} sources · {} files found",
+                    crate::i18n::count(*roots_done),
+                    crate::i18n::count(*roots_total),
+                    crate::i18n::count(*files_found)
+                )
+            } else {
+                format!("{} files found", crate::i18n::count(*files_found))
+            };
+            return Some(ImportBanner {
+                title: "Finding files…".to_string(),
+                detail,
+                fraction: None,
+                can_cancel: true,
+            });
+        }
+        if let Some((done, total)) = checked {
+            return Some(ImportBanner {
+                title: "Checking files…".to_string(),
+                detail: format!(
+                    "{} of {}",
+                    crate::i18n::count(*done),
+                    crate::i18n::count(*total)
+                ),
+                fraction: Some(*done as f32 / (*total).max(1) as f32),
+                can_cancel: true,
+            });
+        }
+        Some(ImportBanner {
+            title: "Preparing import…".to_string(),
+            detail: "Looking at the dropped or picked items".to_string(),
+            fraction: None,
+            can_cancel: true,
+        })
+    }
+
     /// A copy in progress without a copy task, for status bar tests.
     #[cfg(test)]
     pub fn pretend_running(&mut self, done: usize, total: usize) {
         self.running = Some(Arc::default());
         self.progress = Some((done, total));
+        self.started_at = Some(std::time::Instant::now());
     }
 
     pub fn is_busy(&self) -> bool {
@@ -225,6 +356,7 @@ impl LuminaApp {
         self.import.plan_cancel = cancel.clone();
         self.import.dialog = Some(ImportDialog::Planning {
             count: paths.len(),
+            walk: None,
             checked: None,
         });
         let mine = cancel.clone();
@@ -276,6 +408,13 @@ impl LuminaApp {
         let cancel = Arc::new(AtomicBool::new(false));
         self.import.running = Some(cancel.clone());
         self.import.progress = Some((0, plan.files.len()));
+        self.import.pending_skips = Some(ImportSkips {
+            duplicates: plan.duplicates,
+            in_library: plan.in_library,
+            unsupported: plan.unsupported,
+            unreadable: plan.unreadable,
+        });
+        self.import.started_at = Some(std::time::Instant::now());
         let mine = cancel.clone();
         let task = cx
             .background_executor()
@@ -307,6 +446,8 @@ impl LuminaApp {
             cancel.store(true, Ordering::Relaxed);
         }
         self.import.progress = None;
+        self.import.started_at = None;
+        self.import.pending_skips = None;
     }
 
     /// "Cancel Import": stops after the current file; copies so far stay.
@@ -325,17 +466,32 @@ impl LuminaApp {
             .import
             .progress
             .map_or(report.copied + report.failed.len(), |(_, total)| total);
+        let skips = self.import.pending_skips.take().unwrap_or_default();
+        let subtitle = skips.subtitle();
         self.import.running = None;
         self.import.progress = None;
+        self.import.started_at = None;
         self.refresh_album_counts();
         let copied = |key: &str| {
             i18n::t(&i18n::plural_key(key, report.copied))
                 .replace("{n}", &report.copied.to_string())
         };
         if report.cancelled {
-            self.show_toast(copied("import.cancelled"), cx);
+            self.show_toast_kind(
+                crate::views::toast::ToastKind::Positive,
+                copied("import.cancelled"),
+                subtitle.as_deref(),
+                None,
+                cx,
+            );
         } else if report.failed.is_empty() {
-            self.show_toast(copied("import.imported"), cx);
+            self.show_toast_kind(
+                crate::views::toast::ToastKind::Positive,
+                copied("import.imported"),
+                subtitle.as_deref(),
+                None,
+                cx,
+            );
         }
         // ponytail: failures only in the banner (it says X of Y); the
         // failed-file panel is a separate plan.

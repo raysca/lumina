@@ -72,6 +72,10 @@ impl LuminaApp {
             }
             return;
         }
+        if cmd_or_ctrl && key == "." && self.grid_state.as_ref().is_some_and(|s| s.is_scanning) {
+            self.stop_first_scan(cx);
+            return;
+        }
         // Welcome: ↑/↓ focus a recent library and ↵ opens it; with none
         // focused ↵ chooses a folder. ⇧↵ uses Pictures (when offered), ⌥↵
         // explores the sample library, ⌫

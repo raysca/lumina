@@ -275,6 +275,155 @@ fn library_switch_stops_a_running_copy() {
 }
 
 #[core::prelude::v1::test]
+fn import_banner_follows_the_walk_and_the_copy() {
+    let (_library, engine) = seed_library("import_banner", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, _| {
+        app.import.dialog = Some(ImportDialog::Planning {
+            count: 2,
+            walk: Some((0, 2, 340)),
+            checked: None,
+        });
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("import-banner").is_some(),
+        "planning has a persistent banner"
+    );
+    assert!(
+        vcx.debug_bounds("import-banner-title-text:Finding files…")
+            .is_some(),
+        "the banner names the walk phase"
+    );
+    assert!(
+        vcx.debug_bounds("import-banner-detail-text:0 of 2 sources · 340 files found")
+            .is_some(),
+        "the banner counts sources and files while walking"
+    );
+
+    view.update(vcx, |app, _| {
+        app.import.dialog = None;
+        app.import.pretend_running(3, 10);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("import-banner-title-text:Importing…")
+            .is_some(),
+        "the banner switches to the copy phase"
+    );
+    assert!(
+        vcx.debug_bounds("import-banner-detail-text:3 of 10 · 30%")
+            .is_some(),
+        "the copy count and percentage are visible"
+    );
+    assert!(
+        vcx.debug_bounds("import-banner-progress").is_some(),
+        "the banner has a progress bar"
+    );
+    click(vcx, "import-banner-cancel");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.import.is_stopping(), "the banner cancel stops the copy");
+        assert_eq!(
+            app.import.banner().map(|banner| banner.title),
+            Some("Stopping import…".to_string())
+        );
+    });
+    assert!(
+        vcx.debug_bounds("import-banner-cancel").is_none(),
+        "a stopping import offers no second cancel"
+    );
+
+    drop(view);
+}
+
+#[core::prelude::v1::test]
+fn import_banner_shows_the_completion_skips() {
+    let (_library, engine) = seed_library("import_banner_skips", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.import.pending_skips = Some(crate::app::import::ImportSkips {
+            duplicates: 2,
+            in_library: 1,
+            unsupported: 4,
+            unreadable: 1,
+        });
+        app.import.progress = Some((2, 3));
+        app.import.pretend_running(2, 3);
+        app.import.progress = Some((2, 3));
+        app.finish_import(
+            lumina_core::import::CopyImportReport {
+                copied: 2,
+                failed: Vec::new(),
+                cancelled: false,
+            },
+            cx,
+        );
+    });
+    render_ui(vcx);
+    let subtitle = view.update(vcx, |app, _| {
+        app.toast.current().and_then(|toast| toast.subtitle.clone())
+    });
+    assert_eq!(
+        subtitle.as_deref(),
+        Some("Skipped: 3 already in the library, 4 unsupported, 1 unreadable."),
+        "the completion toast keeps the plan's skip counts"
+    );
+    assert!(
+        vcx.debug_bounds("import-banner").is_none(),
+        "the banner goes away when the copy is done"
+    );
+}
+
+#[core::prelude::v1::test]
+fn imported_batches_appear_before_the_copy_finishes() {
+    use crate::app::types::UiMessage;
+    use lumina_core::{EngineEvent, MediaId};
+
+    let (_library, engine) = seed_library("import_incremental", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let like = engine.get_item_slice(0..1).remove(0);
+    let path = like.path.with_file_name("imported_while_copying.jpg");
+    std::fs::copy(&like.path, &path).expect("copy a second fixture");
+    let mut item = like.clone();
+    item.id = MediaId(0);
+    item.file_name = "imported_while_copying.jpg".into();
+    item.path = path;
+    item.timestamp_epoch_ms += 86_400_000;
+    let added = engine
+        .catalog()
+        .insert_or_update_batch(&[item])
+        .expect("catalogue the new copy");
+
+    view.update(vcx, |app, cx| {
+        app.import.pretend_running(0, 2);
+        app.grid_state.as_mut().expect("library").is_scanning = false;
+        app.handle_ui_message(
+            UiMessage::Engine(EngineEvent::BatchDiscovered { items: added }),
+            cx,
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.displayed_count(),
+            2,
+            "a copied batch appears while the import is still running"
+        );
+        assert!(
+            app.import.progress.is_some(),
+            "the copy has not finished yet"
+        );
+    });
+
+    drop(view);
+}
+
+#[core::prelude::v1::test]
 fn import_waits_while_a_delete_confirmation_is_open() {
     let (_library, engine) = seed_library("import_vs_delete", 2);
     let source = source_folder("vs_delete", 1);

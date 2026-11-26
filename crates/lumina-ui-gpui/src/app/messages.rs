@@ -119,6 +119,13 @@ impl LuminaApp {
                             }
                             cx.notify();
                         }
+                        EngineEvent::ScanCounting { files_found } => {
+                            state.scan_counting = files_found;
+                            if let Some(scan) = self.first_scan.as_mut() {
+                                scan.counting_found = files_found;
+                            }
+                            cx.notify();
+                        }
                         EngineEvent::ScanProgress {
                             items_found,
                             is_complete,
@@ -126,17 +133,21 @@ impl LuminaApp {
                             skipped,
                             current_file,
                         } => {
-                            state.scan_progress = items_found;
+                            state.scan_progress = items_found + skipped;
+                            state.scan_total = total;
                             if let Some(scan) = self.first_scan.as_mut() {
                                 scan.total = total;
                                 scan.skipped = skipped;
                                 scan.processed = items_found + skipped;
+                                if total > 0 && scan.reading_started.is_none() {
+                                    scan.reading_started = Some(Instant::now());
+                                }
+                                if is_complete {
+                                    scan.finishing = true;
+                                }
                                 if current_file.is_some() {
                                     scan.current_file = current_file;
                                 }
-                            }
-                            if is_complete {
-                                state.is_scanning = false;
                             }
                             cx.notify();
                         }
@@ -145,6 +156,8 @@ impl LuminaApp {
                             self.first_scan = None;
                             state.total_count = total_items;
                             state.is_scanning = false;
+                            state.scan_total = 0;
+                            state.scan_counting = 0;
                             should_refresh_counts = true;
                             // Indices may have shifted while scanning.
                             if had_multi_selection {
@@ -197,6 +210,18 @@ impl LuminaApp {
                                 self.import.dialog.as_mut()
                             {
                                 *shown = Some((checked, total));
+                                cx.notify();
+                            }
+                        }
+                        EngineEvent::ImportWalk {
+                            roots_done,
+                            roots_total,
+                            files_found,
+                        } => {
+                            if let Some(ImportDialog::Planning { walk, .. }) =
+                                self.import.dialog.as_mut()
+                            {
+                                *walk = Some((roots_done, roots_total, files_found));
                                 cx.notify();
                             }
                         }

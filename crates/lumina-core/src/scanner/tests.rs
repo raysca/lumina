@@ -220,3 +220,48 @@ fn file_time_takes_the_older_of_birth_and_mtime_and_keeps_an_mtime_of_zero() {
         "an mtime of 0 stays undated even when the birth time is known (Linux)"
     );
 }
+
+#[test]
+fn first_scan_emits_counting_and_incremental_scan_emits_fast_skip_progress() {
+    let dir = TempDir::new("scan_progress");
+    let count = WALK_PROGRESS_EVERY + 10;
+    let mut known_signatures = HashMap::new();
+    for i in 0..count {
+        let p = dir.0.join(format!("img_{i:04}.jpg"));
+        write_jpeg(&p, None);
+        known_signatures.insert(p.clone(), file_signature(&p).unwrap());
+    }
+
+    // 1. First scan (no known signatures) emits ScanCounting before ScanProgress.
+    let (tx1, rx1) = crossbeam_channel::unbounded();
+    let scanner1 = Scanner::new(dir.0.clone(), tx1);
+    assert_eq!(scanner1.scan_files().unwrap(), count);
+    let events1: Vec<_> = rx1.try_iter().collect();
+    assert!(
+        events1
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ScanCounting { files_found } if *files_found >= WALK_PROGRESS_EVERY)),
+        "first scan must emit ScanCounting during pre-walk: {events1:?}"
+    );
+
+    // 2. Incremental scan (all files unchanged in known_signatures) still emits
+    //    ScanProgress updates instead of staying frozen at 0 items checked.
+    let (tx2, rx2) = crossbeam_channel::unbounded();
+    let scanner2 = Scanner::new(dir.0.clone(), tx2).with_known_signatures(known_signatures);
+    assert_eq!(scanner2.scan_files().unwrap(), count);
+    let mid_progress: Vec<usize> = rx2
+        .try_iter()
+        .filter_map(|e| match e {
+            EngineEvent::ScanProgress {
+                items_found,
+                is_complete: false,
+                ..
+            } if items_found > 0 => Some(items_found),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !mid_progress.is_empty(),
+        "incremental scan must emit non-zero ScanProgress during fast-skips"
+    );
+}

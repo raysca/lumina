@@ -42,19 +42,42 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
 
     let mut bar = None;
     let (title, lines, buttons): (String, Vec<String>, Vec<AnyElement>) = match dialog {
-        ImportDialog::Planning { count, checked } => {
-            let title = match *checked {
-                None => format!("Checking {}…", plural(*count, "item", "items")),
-                Some((done, total)) if done < total => {
-                    bar = Some(done as f32 / total as f32);
-                    format!("Checking… {done} of {}", plural(total, "file", "files"))
+        ImportDialog::Planning {
+            count,
+            walk,
+            checked,
+        } => {
+            let mut lines = Vec::new();
+            let title = match (checked, walk) {
+                (Some((done, total)), _) if done < total => {
+                    bar = Some(*done as f32 / (*total).max(1) as f32);
+                    format!(
+                        "Checking… {} of {}",
+                        crate::i18n::count(*done),
+                        crate::i18n::count(*total)
+                    )
                 }
-                Some(_) => {
+                (Some(_), _) => {
                     bar = Some(1.0);
                     "Looking for duplicates…".to_string()
                 }
+                (None, Some((roots_done, roots_total, files_found))) => {
+                    if *roots_total > 1 {
+                        lines.push(format!(
+                            "{} of {} sources",
+                            crate::i18n::count(*roots_done),
+                            crate::i18n::count(*roots_total)
+                        ));
+                    }
+                    lines.push(format!(
+                        "{} found so far",
+                        plural(*files_found, "file", "files")
+                    ));
+                    "Finding files…".to_string()
+                }
+                (None, None) => format!("Checking {}…", plural(*count, "item", "items")),
             };
-            (title, Vec::new(), vec![cancel("Cancel").into_any_element()])
+            (title, lines, vec![cancel("Cancel").into_any_element()])
         }
         ImportDialog::Ready(plan) => {
             let mut lines = Vec::new();

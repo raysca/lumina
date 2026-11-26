@@ -3,15 +3,45 @@ use gpui::*;
 use crate::app::LuminaApp;
 use crate::theme;
 
-/// Right-hand status text: scan progress takes priority, then the last action,
-/// then a static hint.
+/// Right-hand status text: opening/import/scan progress takes priority,
+/// then the last action, then a static hint.
+#[cfg(test)]
 pub(crate) fn format_status_right(
     is_scanning: bool,
     scan_progress: usize,
     last_action: Option<&str>,
 ) -> String {
+    format_status_right_with_totals(is_scanning, scan_progress, 0, 0, last_action)
+}
+
+pub(crate) fn format_status_right_with_totals(
+    is_scanning: bool,
+    scan_progress: usize,
+    scan_total: usize,
+    scan_counting: usize,
+    last_action: Option<&str>,
+) -> String {
     if is_scanning {
-        return format!("Scanning… {} items found", scan_progress);
+        if scan_total > 0 {
+            return format!(
+                "Scanning… {} of {}",
+                crate::i18n::count(scan_progress),
+                crate::i18n::count(scan_total)
+            );
+        }
+        if scan_counting > 0 {
+            return format!(
+                "Counting files… {} found",
+                crate::i18n::count(scan_counting)
+            );
+        }
+        if scan_progress > 0 {
+            return format!(
+                "Scanning… {} items checked",
+                crate::i18n::count(scan_progress)
+            );
+        }
+        return "Scanning…".to_string();
     }
     if let Some(action) = last_action {
         return action.to_string();
@@ -21,6 +51,9 @@ pub(crate) fn format_status_right(
 
 impl LuminaApp {
     pub(crate) fn status_right_text(&self) -> String {
+        if let Some(path) = self.welcome.opening_path() {
+            return format!("Opening {}…", crate::app::recents::library_name(path));
+        }
         if self.import.is_stopping() {
             return "Stopping import…".to_string();
         }
@@ -30,12 +63,25 @@ impl LuminaApp {
         if let Some(job) = self.jobs.status_text() {
             return job;
         }
-        let (is_scanning, scan_progress) = self
+        let (is_scanning, scan_progress, scan_total, scan_counting) = self
             .grid_state
             .as_ref()
-            .map(|state| (state.is_scanning, state.scan_progress))
-            .unwrap_or((false, 0));
-        format_status_right(is_scanning, scan_progress, self.last_action.as_deref())
+            .map(|state| {
+                (
+                    state.is_scanning,
+                    state.scan_progress,
+                    state.scan_total,
+                    state.scan_counting,
+                )
+            })
+            .unwrap_or((false, 0, 0, 0));
+        format_status_right_with_totals(
+            is_scanning,
+            scan_progress,
+            scan_total,
+            scan_counting,
+            self.last_action.as_deref(),
+        )
     }
 
     pub(crate) fn render_status_bar(
@@ -44,11 +90,12 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let importing = self.import.progress;
-        let (is_scanning, _) = self
+        let opening = self.welcome.opening();
+        let (is_scanning, scan_progress, scan_total) = self
             .grid_state
             .as_ref()
-            .map(|state| (state.is_scanning, state.scan_progress))
-            .unwrap_or((false, 0));
+            .map(|state| (state.is_scanning, state.scan_progress, state.scan_total))
+            .unwrap_or((false, 0, 0));
 
         div()
             .debug_selector(|| "status-bar".to_string())
@@ -91,7 +138,7 @@ impl LuminaApp {
                     .child(
                         div()
                             .text_size(theme::TEXT_SMALL)
-                            .text_color(if is_scanning || importing.is_some() {
+                            .text_color(if opening || is_scanning || importing.is_some() {
                                 theme::t1()
                             } else {
                                 theme::t2()
@@ -104,6 +151,37 @@ impl LuminaApp {
                             done as f32 / total.max(1) as f32,
                             96.0,
                         )
+                    }))
+                    .children(
+                        (!opening && importing.is_none() && is_scanning && scan_total > 0).then(
+                            || {
+                                crate::views::import_dialog::progress_bar(
+                                    "scan-progress",
+                                    scan_progress as f32 / scan_total.max(1) as f32,
+                                    96.0,
+                                )
+                            },
+                        ),
+                    )
+                    .children((!opening && importing.is_none() && is_scanning).then(|| {
+                        div()
+                            .id("scan-stop-running")
+                            .debug_selector(|| "scan-stop-running".to_string())
+                            .role(Role::Button)
+                            .aria_label("Stop scanning")
+                            .px_2()
+                            .rounded(theme::RADIUS_SM)
+                            .cursor_pointer()
+                            .text_size(theme::TEXT_SMALL)
+                            .text_color(theme::t1())
+                            .hover(|s| s.bg(theme::bg_3()))
+                            .tooltip(theme::tooltip_label(
+                                "Stop scanning (⌘.); Rescan (⌘R) later",
+                            ))
+                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.stop_first_scan(cx);
+                            }))
+                            .child("Stop")
                     }))
                     .children(
                         (importing.is_some() && !self.import.is_stopping()).then(|| {
@@ -134,8 +212,16 @@ mod tests {
     #[core::prelude::v1::test]
     fn scan_progress_takes_priority() {
         assert_eq!(
+            format_status_right_with_totals(true, 42, 100, 0, Some("Tag renamed")),
+            "Scanning… 42 of 100"
+        );
+        assert_eq!(
+            format_status_right_with_totals(true, 0, 0, 500, Some("Tag renamed")),
+            "Counting files… 500 found"
+        );
+        assert_eq!(
             format_status_right(true, 42, Some("Tag renamed")),
-            "Scanning… 42 items found"
+            "Scanning… 42 items checked"
         );
     }
 
