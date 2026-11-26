@@ -477,6 +477,7 @@ fn image_menu_rotate_is_refused_behind_sheets() {
         app.select_all(cx);
         app.import.dialog = Some(crate::app::import::ImportDialog::Planning {
             count: 1,
+            walk: None,
             checked: None,
         });
     });

@@ -176,6 +176,14 @@ pub enum EngineEvent {
         checked: usize,
         total: usize,
     },
+    /// Sources walked so far while an import plan is being built, and the
+    /// files found under them. The walk can be long on a large folder, before
+    /// `ImportChecking` can report a file total.
+    ImportWalk {
+        roots_done: usize,
+        roots_total: usize,
+        files_found: usize,
+    },
     /// Files a running import has copied or failed so far, of `total`.
     ImportProgress {
         done: usize,

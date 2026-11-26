@@ -13,6 +13,7 @@ mod columns;
 pub(crate) mod empty_state;
 pub(super) mod error_banner;
 mod grid;
+mod import_banner;
 mod library_actions;
 pub(crate) mod mosaic;
 pub(crate) mod overlays;
@@ -130,6 +131,7 @@ impl Render for LuminaApp {
                 .flex_col()
                 .relative()
                 .child(self.render_error_banner(cx))
+                .child(self.render_import_banner(cx))
                 .child(crate::views::first_scan::render(self, &scan, cx))
                 .child(self.render_toast_overlay(cx))
                 .into_any_element();

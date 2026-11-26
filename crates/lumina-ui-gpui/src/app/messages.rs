@@ -200,6 +200,18 @@ impl LuminaApp {
                                 cx.notify();
                             }
                         }
+                        EngineEvent::ImportWalk {
+                            roots_done,
+                            roots_total,
+                            files_found,
+                        } => {
+                            if let Some(ImportDialog::Planning { walk, .. }) =
+                                self.import.dialog.as_mut()
+                            {
+                                *walk = Some((roots_done, roots_total, files_found));
+                                cx.notify();
+                            }
+                        }
                         EngineEvent::Error(message) => error = Some(message),
                     }
                 }

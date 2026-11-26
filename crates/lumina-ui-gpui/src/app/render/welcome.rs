@@ -61,6 +61,7 @@ impl LuminaApp {
                             // Settings draws the banner while it covers this.
                             .when(!self.preferences_open, |col| {
                                 col.child(self.render_error_banner(cx))
+                                    .child(self.render_import_banner(cx))
                             })
                             .child(crate::views::page_header::page_header(
                                 None,
